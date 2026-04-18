@@ -18,6 +18,7 @@
 #include "Scheduler.h"
 #include "History.h"
 #include "TouchSwitch.h"
+#include "MQTTManager.h"
 
 // =============================================================================
 //                              GLOBAL STATE DEFINITIONS
@@ -98,6 +99,9 @@ void setup() {
     // BLE for mobile app
     bleManager.begin();
 
+    // MQTT remote monitoring
+    initMQTT();
+
     Log(INFO, "=== System Ready ===");
 }
 
@@ -138,6 +142,9 @@ void loop() {
 
     // --- Scheduler ---
     checkSchedules();
+
+    // --- MQTT ---
+    mqttLoop();
 
     // --- Web server ---
     handleWebClients();

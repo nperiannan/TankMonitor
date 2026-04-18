@@ -151,6 +151,20 @@
 // HIST_MAX_RECORDS is computed in History.cpp to avoid sizeof in header macros
 
 // =============================================================================
+//                              MQTT CONFIGURATION
+// =============================================================================
+// Credentials are seeded into NVS on first boot; change via web UI or redefine here.
+#define MQTT_BROKER_DEFAULT   "nperiannan-nas.freemyip.com"
+#define MQTT_PORT_DEFAULT     1883
+#define MQTT_USER_DEFAULT     "tankmonitor"
+#define MQTT_PASS_DEFAULT     "###TankMonitor12345"
+#define MQTT_LOCATION_DEFAULT "home"          // Used in topic: tankmonitor/<location>/...
+
+#define MQTT_NVS_NS           "mqtt_cfg"
+#define MQTT_PUBLISH_MS       30000UL         // Publish status every 30 s
+#define MQTT_RECONNECT_MS     15000UL         // Retry connection every 15 s
+
+// =============================================================================
 //                              WIFI DEFAULTS
 // =============================================================================
 #define DEFAULT_AP_SSID      "TankMonitor"
