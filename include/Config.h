@@ -154,7 +154,7 @@
 //                              MQTT CONFIGURATION
 // =============================================================================
 // Credentials are seeded into NVS on first boot; change via web UI or redefine here.
-#define MQTT_BROKER_DEFAULT   "nperiannan-nas.freemyip.com"
+#define MQTT_BROKER_DEFAULT   "192.168.0.102"
 #define MQTT_PORT_DEFAULT     1883
 #define MQTT_USER_DEFAULT     "tankmonitor"
 #define MQTT_PASS_DEFAULT     "###TankMonitor12345"

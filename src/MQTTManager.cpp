@@ -50,15 +50,15 @@ static void loadConfig() {
 static void seedDefaultsIfEmpty() {
     Preferences prefs;
     prefs.begin(MQTT_NVS_NS, false);
-    if (!prefs.isKey("broker")) {
-        prefs.putString("broker",   MQTT_BROKER_DEFAULT);
-        prefs.putInt   ("port",     MQTT_PORT_DEFAULT);
-        prefs.putString("user",     MQTT_USER_DEFAULT);
-        prefs.putString("pass",     MQTT_PASS_DEFAULT);
-        prefs.putString("location", MQTT_LOCATION_DEFAULT);
-        Log(INFO, "[MQTT] Seeded default config to NVS");
-    }
+    // Always write broker/port from Config.h — no web UI for MQTT settings yet.
+    // Credentials and location are only seeded once so manual NVS edits survive.
+    prefs.putString("broker", MQTT_BROKER_DEFAULT);
+    prefs.putInt   ("port",   MQTT_PORT_DEFAULT);
+    if (!prefs.isKey("user"))     prefs.putString("user",     MQTT_USER_DEFAULT);
+    if (!prefs.isKey("pass"))     prefs.putString("pass",     MQTT_PASS_DEFAULT);
+    if (!prefs.isKey("location")) prefs.putString("location", MQTT_LOCATION_DEFAULT);
     prefs.end();
+    Log(INFO, "[MQTT] Config applied from firmware defaults");
 }
 
 // ---------------------------------------------------------------------------
