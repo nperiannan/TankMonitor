@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.0.0"
+#define FW_VERSION "1.1.0"
 
 // =============================================================================
 //                              I2C CONFIGURATION
@@ -92,6 +92,9 @@
 #define MAX_LORA_RETRIES              3
 #define LORA_REINIT_INTERVAL_MS   60000UL
 #define WIFI_CHECK_INTERVAL_MS    30000UL
+#define WIFI_ATTEMPT_TIMEOUT_MS   10000UL   // wait up to 10 s per connection attempt
+#define WIFI_MAX_ATTEMPTS_PER_NET 3          // attempts per SSID before trying next
+#define WIFI_COOLDOWN_MS          900000UL   // 15-min pause after all SSIDs fail
 #define NTP_SYNC_INTERVAL_MS    3600000UL
 #define BLE_STATUS_INTERVAL_MS    5000UL
 #define BUZZER_MAX_DURATION_MS      35000UL   // Auto-stop buzzer after 35 s
@@ -149,6 +152,20 @@
 #define HIST_HEADER_ADDR   0
 #define HIST_DATA_ADDR     8
 // HIST_MAX_RECORDS is computed in History.cpp to avoid sizeof in header macros
+
+// =============================================================================
+//                              MQTT CONFIGURATION
+// =============================================================================
+// Credentials are seeded into NVS on first boot; change via web UI or redefine here.
+#define MQTT_BROKER_DEFAULT   "nperiannan-nas.freemyip.com"
+#define MQTT_PORT_DEFAULT     1883
+#define MQTT_USER_DEFAULT     "tankmonitor"
+#define MQTT_PASS_DEFAULT     "###TankMonitor12345"
+#define MQTT_LOCATION_DEFAULT "home"          // Used in topic: tankmonitor/<location>/...
+
+#define MQTT_NVS_NS           "mqtt_cfg"
+#define MQTT_PUBLISH_MS       5000UL          // Publish status every 5 s
+#define MQTT_RECONNECT_MS     15000UL         // Retry connection every 15 s
 
 // =============================================================================
 //                              WIFI DEFAULTS
