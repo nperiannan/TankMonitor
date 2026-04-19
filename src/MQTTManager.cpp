@@ -1,12 +1,17 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <Preferences.h>
+#include <esp_system.h>
 
 #include "MQTTManager.h"
 #include "Config.h"
 #include "Globals.h"
 #include "Logger.h"
 #include "MotorControl.h"
+#include "Scheduler.h"
+#include "RTCManager.h"
+#include "WiFiManager.h"
+#include <ArduinoJson.h>
 
 // ---------------------------------------------------------------------------
 // Static state
@@ -50,34 +55,121 @@ static void loadConfig() {
 static void seedDefaultsIfEmpty() {
     Preferences prefs;
     prefs.begin(MQTT_NVS_NS, false);
-    // Always write broker/port from Config.h — no web UI for MQTT settings yet.
-    // Credentials and location are only seeded once so manual NVS edits survive.
-    prefs.putString("broker", MQTT_BROKER_DEFAULT);
-    prefs.putInt   ("port",   MQTT_PORT_DEFAULT);
+    // Migrate old LAN IP to freemyip domain if still stored
+    if (prefs.getString("broker", "") == "192.168.0.102") {
+        prefs.putString("broker", MQTT_BROKER_DEFAULT);
+        Log(INFO, "[MQTT] Migrated broker from LAN IP to " MQTT_BROKER_DEFAULT);
+    }
+    // Seed remaining keys only if not already set
+    if (!prefs.isKey("broker"))   prefs.putString("broker",   MQTT_BROKER_DEFAULT);
+    if (!prefs.isKey("port"))     prefs.putInt   ("port",     MQTT_PORT_DEFAULT);
     if (!prefs.isKey("user"))     prefs.putString("user",     MQTT_USER_DEFAULT);
     if (!prefs.isKey("pass"))     prefs.putString("pass",     MQTT_PASS_DEFAULT);
     if (!prefs.isKey("location")) prefs.putString("location", MQTT_LOCATION_DEFAULT);
     prefs.end();
-    Log(INFO, "[MQTT] Config applied from firmware defaults");
+    Log(INFO, "[MQTT] Config seeded");
 }
 
 // ---------------------------------------------------------------------------
-// MQTT callback — inbound control messages
+// Pending command queue — executed from loop(), not from callback stack
+// ---------------------------------------------------------------------------
+struct PendingCmd {
+    char msg[128];
+    bool active;
+};
+static PendingCmd s_pending = {"", false};
+
+// ---------------------------------------------------------------------------
+// MQTT callback — only copies payload into queue, returns immediately
 // ---------------------------------------------------------------------------
 static void onMessage(char* topic, byte* payload, unsigned int len) {
     if (len == 0 || len > 127) return;
+    if (s_pending.active) return;  // drop if previous not yet consumed
+    memcpy(s_pending.msg, payload, len);
+    s_pending.msg[len] = '\0';
+    s_pending.active   = true;
+}
 
+// ---------------------------------------------------------------------------
+// Process one queued command — called from mqttLoop() inside loop()
+// ---------------------------------------------------------------------------
+static void processPendingMQTT() {
+    if (!s_pending.active) return;
     char msg[128];
-    memcpy(msg, payload, len);
-    msg[len] = '\0';
+    strncpy(msg, s_pending.msg, sizeof(msg));
+    s_pending.active = false;   // mark consumed before processing
+
     Log(INFO, "[MQTT] Control rx: " + String(msg));
 
-    if      (strstr(msg, "\"oh_on\""))  { turnOnOHMotor();  }
-    else if (strstr(msg, "\"oh_off\"")) { turnOffOHMotor(); }
-    else if (strstr(msg, "\"ug_on\""))  { turnOnUGMotor();  }
-    else if (strstr(msg, "\"ug_off\"")) { turnOffUGMotor(); }
+    StaticJsonDocument<256> doc;
+    if (deserializeJson(doc, msg) != DeserializationError::Ok) {
+        Log(WARN, "[MQTT] Bad JSON: " + String(msg));
+        return;
+    }
+    const char* cmd = doc["cmd"] | "";
+
+    if      (strcmp(cmd, "oh_on")  == 0) { turnOnOHMotor();  }
+    else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(); }
+    else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor();  }
+    else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(); }
+    else if (strcmp(cmd, "sched_add") == 0) {
+        int slot = -1;
+        for (int i = 0; i < MAX_SCHEDULES; i++) {
+            if (!schedules[i].enabled) { slot = i; break; }
+        }
+        if (slot < 0) {
+            Log(WARN, "[MQTT] sched_add: no free slots");
+        } else {
+            schedules[slot].enabled   = true;
+            schedules[slot].motorType = (uint8_t)(doc["motor"] | 0);
+            schedules[slot].time      = doc["time"]     | "00:00";
+            schedules[slot].duration  = (uint16_t)(doc["duration"] | 2);
+            schedules[slot].isRunning = false;
+            schedules[slot].startTime = 0;
+            saveSchedules();
+            Log(INFO, "[MQTT] sched_add slot=" + String(slot) + " " + schedules[slot].time);
+        }
+    }
+    else if (strcmp(cmd, "sched_remove") == 0) {
+        int idx = doc["index"] | -1;
+        if (idx >= 0 && idx < MAX_SCHEDULES) {
+            schedules[idx].enabled   = false;
+            schedules[idx].isRunning = false;
+            schedules[idx].time      = "00:00";
+            saveSchedules();
+            Log(INFO, "[MQTT] sched_remove index=" + String(idx));
+        } else {
+            Log(WARN, "[MQTT] sched_remove: bad index");
+        }
+    }
+    else if (strcmp(cmd, "sched_clear") == 0) {
+        clearAllSchedules();
+        Log(INFO, "[MQTT] sched_clear");
+    }
+    else if (strcmp(cmd, "set_setting") == 0) {
+        const char* key = doc["key"] | "";
+        bool val = doc["value"] | false;
+        bool changed = true;
+        if      (strcmp(key, "oh_disp_only") == 0) ohDisplayOnly      = val;
+        else if (strcmp(key, "ug_disp_only") == 0) ugDisplayOnly      = val;
+        else if (strcmp(key, "ug_ignore")    == 0) ugIgnoreForOH      = val;
+        else if (strcmp(key, "buzzer_delay") == 0) buzzerDelayEnabled = val;
+        else changed = false;
+        if (changed) { saveMotorConfig(); Log(INFO, "[MQTT] set_setting " + String(key) + "=" + String(val)); }
+        else          Log(WARN, "[MQTT] set_setting unknown key: " + String(key));
+    }
+    else if (strcmp(cmd, "sync_ntp") == 0) {
+        synchronizeTime();
+        Log(INFO, "[MQTT] sync_ntp triggered");
+    }
+    else if (strcmp(cmd, "reboot") == 0) {
+        Log(INFO, "[MQTT] reboot commanded");
+        publishMQTTStatus();
+        delay(300);
+        esp_restart();
+    }
     else {
-        Log(WARN, "[MQTT] Unknown control command: " + String(msg));
+        Log(WARN, "[MQTT] Unknown cmd: " + String(cmd));
     }
 }
 
@@ -111,7 +203,7 @@ void initMQTT() {
     s_mqtt.setCallback(onMessage);
     s_mqtt.setKeepAlive(60);
     s_mqtt.setSocketTimeout(10);
-    s_mqtt.setBufferSize(512);
+    s_mqtt.setBufferSize(1024);
 
     Log(INFO, "[MQTT] Init. Broker=" + String(s_broker) + ":" + String(s_port) + " topic=" + String(s_topicStatus));
 }
@@ -130,6 +222,9 @@ void mqttLoop() {
 
     s_mqtt.loop();
 
+    // Process any command queued by the callback (runs on loop() stack, not callback stack)
+    processPendingMQTT();
+
     unsigned long now = millis();
     if (now - s_lastPublishMs >= MQTT_PUBLISH_MS) {
         s_lastPublishMs = now;
@@ -140,12 +235,43 @@ void mqttLoop() {
 void publishMQTTStatus() {
     if (!s_mqtt.connected()) return;
 
-    char payload[256];
+    // Current time
+    struct tm ti;
+    char timeStr[12] = "??:??:??";
+    if (getLocalTime(&ti)) {
+        snprintf(timeStr, sizeof(timeStr), "%02d:%02d:%02d", ti.tm_hour, ti.tm_min, ti.tm_sec);
+    }
+
+    // Build compact schedules JSON array (enabled entries only)
+    char schedJson[400] = "[";
+    bool firstSched = true;
+    for (int i = 0; i < MAX_SCHEDULES; i++) {
+        if (!schedules[i].enabled) continue;
+        char entry[96];
+        snprintf(entry, sizeof(entry), "%s{\"i\":%d,\"m\":\"%s\",\"t\":\"%s\",\"d\":%u,\"on\":%s}",
+            firstSched ? "" : ",",
+            i,
+            schedules[i].motorType == 0 ? "OH" : "UG",
+            schedules[i].time.c_str(),
+            schedules[i].duration,
+            schedules[i].isRunning ? "true" : "false");
+        if (strlen(schedJson) + strlen(entry) + 2 < sizeof(schedJson)) {
+            strcat(schedJson, entry);
+            firstSched = false;
+        }
+    }
+    strcat(schedJson, "]");
+
+    char payload[1024];
     snprintf(payload, sizeof(payload),
         "{\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
         "\"lora_ok\":%s,\"wifi_rssi\":%d,"
-        "\"uptime_s\":%lu,\"fw\":\"%s\"}",
+        "\"uptime_s\":%lu,\"fw\":\"%s\","
+        "\"time\":\"%s\","
+        "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
+        "\"ug_ignore\":%s,\"buzzer_delay\":%s,"
+        "\"schedules\":%s}",
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
         ohMotorRunning ? "true" : "false",
@@ -153,7 +279,13 @@ void publishMQTTStatus() {
         loraOperational ? "true" : "false",
         wifiRSSI,
         millis() / 1000UL,
-        FW_VERSION
+        FW_VERSION,
+        timeStr,
+        ohDisplayOnly      ? "true" : "false",
+        ugDisplayOnly      ? "true" : "false",
+        ugIgnoreForOH      ? "true" : "false",
+        buzzerDelayEnabled ? "true" : "false",
+        schedJson
     );
 
     if (s_mqtt.publish(s_topicStatus, payload, true)) {

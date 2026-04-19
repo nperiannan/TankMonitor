@@ -96,9 +96,6 @@ void setup() {
     // Scheduler
     initScheduler();
 
-    // BLE for mobile app
-    bleManager.begin();
-
     // MQTT remote monitoring
     initMQTT();
 
@@ -148,15 +145,6 @@ void loop() {
 
     // --- Web server ---
     handleWebClients();
-
-    // --- BLE: process queued commands + status broadcast ---
-    bleManager.update();
-
-    static unsigned long lastBleStatus = 0;
-    if (bleManager.isConnected() && millis() - lastBleStatus >= BLE_STATUS_INTERVAL_MS) {
-        lastBleStatus = millis();
-        bleManager.sendStatus();
-    }
 
     // --- NTP resync hourly ---
     static unsigned long lastNtp = 0;

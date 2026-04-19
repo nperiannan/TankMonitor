@@ -36,6 +36,14 @@ static int           networkCount     = 0;
 static bool          staConnected     = false;
 static bool          otaReady         = false;
 
+// Reconnect state machine (priority-ordered, 3 attempts/SSID, 15-min cooldown)
+static int           smTryIdx          = 0;
+static int           smTryAttempts     = 0;
+static unsigned long smNextActionMs    = 0;
+static bool          smInCooldown      = false;
+static unsigned long smCooldownUntilMs = 0;
+static bool          smScanPending     = false; // async scan in progress
+
 // NTP
 static WiFiUDP       ntpUDP;
 static NTPClient     ntpClient(ntpUDP, "pool.ntp.org", 19800, 3600000);
@@ -162,34 +170,46 @@ static void setupOTA() {
 // ---------------------------------------------------------------------------
 
 static void handleAddNetwork(const char* ssid, const char* password) {
+    // Update password if already exists — never drop an active connection
     for (int i = 0; i < networkCount; i++) {
         if (networks[i].ssid == ssid) {
             networks[i].password = password;
             saveNetworks();
-            Log(INFO, "[WiFi] Updated: " + String(ssid));
-            WiFi.disconnect(false);
-            WiFi.begin(ssid, password);
+            Log(INFO, "[WiFi] Updated password for: " + String(ssid));
             return;
         }
     }
     if (networkCount >= MAX_WIFI_NETWORKS) return;
-    for (int i = networkCount; i > 0; i--) networks[i] = networks[i-1];
-    networks[0].ssid     = ssid;
-    networks[0].password = password;
+    // Append at lowest priority; user can raise it via the up-arrow in the UI
+    networks[networkCount].ssid     = ssid;
+    networks[networkCount].password = password;
     networkCount++;
     saveNetworks();
-    Log(INFO, "[WiFi] Added (priority 1): " + String(ssid));
-    WiFi.disconnect(false);
-    WiFi.begin(ssid, password);
+    Log(INFO, "[WiFi] Added (priority " + String(networkCount) + "): " + String(ssid));
+    // If not connected, restart state machine so it tries the new network too
+    if (WiFi.status() != WL_CONNECTED) {
+        smTryIdx       = 0;
+        smTryAttempts  = 0;
+        smInCooldown   = false;
+        smNextActionMs = millis() + 1000;
+    }
 }
 
 static void handleRemoveNetwork(const char* ssid) {
     for (int i = 0; i < networkCount; i++) {
         if (networks[i].ssid == ssid) {
+            bool wasConn = (WiFi.status() == WL_CONNECTED && WiFi.SSID() == String(ssid));
             for (int j = i; j < networkCount - 1; j++) networks[j] = networks[j+1];
             networkCount--;
             saveNetworks();
             Log(INFO, "[WiFi] Removed: " + String(ssid));
+            if (wasConn) {
+                WiFi.disconnect(false);
+                smTryIdx       = 0;
+                smTryAttempts  = 0;
+                smInCooldown   = false;
+                smNextActionMs = millis() + 2000;
+            }
             return;
         }
     }
@@ -218,8 +238,7 @@ static void wifiTask(void* /*param*/) {
     // AP setup
     WiFi.mode(WIFI_AP_STA);
     WiFi.setAutoReconnect(false);   // disable built-in 3s scan loop — we manage reconnects manually
-    esp_wifi_set_ps(WIFI_PS_NONE);
-    WiFi.setSleep(false);
+    esp_wifi_set_country_code("IN", true);  // India: channels 1-13, prevents missing ch13 APs
 
     WiFi.softAP(DEFAULT_AP_SSID, DEFAULT_AP_PASSWORD);
     vTaskDelay(pdMS_TO_TICKS(200));
@@ -247,13 +266,12 @@ static void wifiTask(void* /*param*/) {
     // Delay STA start so AP beacons stabilise first
     vTaskDelay(pdMS_TO_TICKS(5000));
 
-    if (networkCount > 0) {
-        Log(INFO, "[WiFi] STA connecting -> " + networks[0].ssid);
-        WiFi.begin(networks[0].ssid.c_str(), networks[0].password.c_str());
-    }
+    // Initialise state machine — first attempt fires on first loop tick
+    smTryIdx       = 0;
+    smTryAttempts  = 0;
+    smInCooldown   = false;
+    smNextActionMs = millis();
 
-    unsigned long lastReconnectMs = millis();
-    int reconnectIdx = 0;
     bool prevConnected = false;
 
     for (;;) {
@@ -271,10 +289,12 @@ static void wifiTask(void* /*param*/) {
         bool nowConnected = (WiFi.status() == WL_CONNECTED);
 
         if (nowConnected && !prevConnected) {
-            prevConnected = true;
-            staConnected  = true;
-            isAPMode      = false;
-            reconnectIdx  = 0;
+            prevConnected     = true;
+            staConnected      = true;
+            isAPMode          = false;
+            smTryIdx          = 0;
+            smTryAttempts     = 0;
+            smInCooldown      = false;
             xSemaphoreTake(wifiMutex, portMAX_DELAY);
             wifiSSID = WiFi.SSID();
             wifiRSSI = WiFi.RSSI();
@@ -282,14 +302,16 @@ static void wifiTask(void* /*param*/) {
             Log(INFO, "[WiFi] STA connected. IP=" + WiFi.localIP().toString());
             setupOTA();
             doSynchronizeTime();
-            lastReconnectMs = millis();
         }
 
         if (!nowConnected && prevConnected) {
-            prevConnected = false;
-            staConnected  = false;
+            prevConnected     = false;
+            staConnected      = false;
             Log(WARN, "[WiFi] STA disconnected.");
-            lastReconnectMs = millis();
+            smTryIdx          = 0;
+            smTryAttempts     = 0;
+            smInCooldown      = false;
+            smNextActionMs    = millis() + 5000; // brief pause before first reconnect
         }
 
         if (nowConnected) {
@@ -309,16 +331,76 @@ static void wifiTask(void* /*param*/) {
                 doSynchronizeTime();
             }
         } else {
-            if (networkCount > 0
-                && millis() - lastReconnectMs >= WIFI_CHECK_INTERVAL_MS) {
-                lastReconnectMs = millis();
-                reconnectIdx = reconnectIdx % networkCount;
-                Log(WARN, "[WiFi] Reconnect -> " + networks[reconnectIdx].ssid);
-                // Do NOT call WiFi.disconnect() here — it triggers a channel scan
-                // that suppresses AP beacons. WiFi.begin() handles reconnection.
-                WiFi.begin(networks[reconnectIdx].ssid.c_str(),
-                           networks[reconnectIdx].password.c_str());
-                reconnectIdx++;
+            // Priority-ordered reconnect: 3 attempts per SSID, then 15-min cooldown
+            if (networkCount > 0) {
+                if (smInCooldown) {
+                    if (millis() >= smCooldownUntilMs) {
+                        smInCooldown   = false;
+                        smTryIdx       = 0;
+                        smTryAttempts  = 0;
+                        smNextActionMs = millis();
+                        Log(INFO, "[WiFi] Cooldown ended, retrying all networks");
+                    }
+                } else if (smScanPending) {
+                    // Async scan in progress — poll without blocking so AP stays alive
+                    int found = WiFi.scanComplete();
+                    if (found == WIFI_SCAN_RUNNING) {
+                        // not done yet, check again next tick
+                    } else {
+                        smScanPending = false;
+                        if (found <= 0) {
+                            Log(WARN, "[WiFi] Scan found no networks");
+                        } else {
+                            for (int s = 0; s < found; s++) {
+                                Log(INFO, "[WiFi] Scan: " + WiFi.SSID(s)
+                                          + " ch=" + String(WiFi.channel(s))
+                                          + " RSSI=" + String(WiFi.RSSI(s)));
+                            }
+                        }
+                        WiFi.scanDelete();
+                        // Proceed with first connection attempt
+                        smTryAttempts++;
+                        Log(INFO, "[WiFi] Attempt " + String(smTryAttempts) + "/" + String(WIFI_MAX_ATTEMPTS_PER_NET)
+                                  + " -> " + networks[smTryIdx].ssid);
+                        WiFi.begin(networks[smTryIdx].ssid.c_str(), networks[smTryIdx].password.c_str());
+                        smNextActionMs = millis() + WIFI_ATTEMPT_TIMEOUT_MS;
+                    }
+                } else if (millis() >= smNextActionMs) {
+                    // Previous attempt window expired — log why it failed then advance
+                    if (smTryAttempts > 0) {
+                        wl_status_t ws = WiFi.status();
+                        String reason;
+                        if      (ws == WL_NO_SSID_AVAIL)  reason = "SSID not found (wrong name or 5GHz-only?)";
+                        else if (ws == WL_CONNECT_FAILED)  reason = "Auth failed (wrong password?)";
+                        else                               reason = "status=" + String((int)ws);
+                        Log(WARN, "[WiFi] Attempt timed out -> " + networks[smTryIdx].ssid + " | " + reason);
+                    }
+                    // Advance if limit reached
+                    if (smTryAttempts >= WIFI_MAX_ATTEMPTS_PER_NET) {
+                        smTryIdx++;
+                        smTryAttempts = 0;
+                    }
+                    if (smTryIdx >= networkCount) {
+                        smInCooldown      = true;
+                        smCooldownUntilMs = millis() + WIFI_COOLDOWN_MS;
+                        smTryIdx          = 0;
+                        Log(WARN, "[WiFi] All " + String(networkCount) + " SSID(s) failed. Cooling down 15 min.");
+                    } else {
+                        // Kick off async scan before first attempt of each round
+                        if (smTryAttempts == 0 && smTryIdx == 0) {
+                            WiFi.scanNetworks(true, true); // async=true — AP stays alive during scan
+                            smScanPending = true;
+                            Log(INFO, "[WiFi] Async scan started");
+                            // smNextActionMs not updated here; scan completion drives next step
+                        } else {
+                            smTryAttempts++;
+                            Log(INFO, "[WiFi] Attempt " + String(smTryAttempts) + "/" + String(WIFI_MAX_ATTEMPTS_PER_NET)
+                                      + " -> " + networks[smTryIdx].ssid);
+                            WiFi.begin(networks[smTryIdx].ssid.c_str(), networks[smTryIdx].password.c_str());
+                            smNextActionMs = millis() + WIFI_ATTEMPT_TIMEOUT_MS;
+                        }
+                    }
+                }
             }
         }
 

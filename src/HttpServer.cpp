@@ -6,7 +6,6 @@
 #include "Buzzer.h"
 #include "LoRaManager.h"
 #include "WiFiManager.h"
-#include "BLEManager.h"
 #include "Display.h"
 #include "Scheduler.h"
 #include "History.h"
@@ -244,8 +243,11 @@ input:checked+.sld::before{transform:translateX(18px)}
   <div style="display:flex;gap:6px;flex-wrap:wrap">
     <input id="wSsid" class="inp" type="text"     placeholder="SSID"     style="flex:1;min-width:100px">
     <input id="wPass" class="inp" type="password" placeholder="Password" style="flex:1;min-width:100px">
+    <button class="btn btn-o" style="flex:none;padding:7px 14px" onclick="scanWifi()">&#128268; Scan</button>
     <button class="btn btn-p" style="flex:none;padding:7px 14px" onclick="addWifi()">Add</button>
   </div>
+  <!-- Scan results dropdown -->
+  <div id="scanDrop" style="display:none;margin-top:6px;background:var(--inp-bg);border:1px solid var(--bd2);border-radius:6px;max-height:200px;overflow-y:auto"></div>
 </div>
 
 <!-- Actions -->
@@ -419,11 +421,43 @@ function addWifi(){
       document.getElementById('wSsid').value='';
       document.getElementById('wPass').value='';
       refreshWifiList();
-      toast(d.ok?'Network added – connecting...':'Failed',d.ok?'ok':'err');
+      toast(d.ok?'Network saved':'Failed',d.ok?'ok':'err');
     }).catch(function(){toast('Failed','err');});
 }
 function delWifi(ssid){
   fetch('/deletewifi?ssid='+encodeURIComponent(ssid)).then(function(){refreshWifiList();});
+}
+function scanWifi(){
+  var btn=event.target;btn.disabled=true;btn.textContent='Scanning\u2026';
+  var drop=document.getElementById('scanDrop');
+  drop.style.display='block';drop.innerHTML='<div style="padding:10px;font-size:12px;color:var(--tx2)">Scanning\u2026</div>';
+  fetch('/wifiscan').then(function(r){return r.json();}).then(function(nets){
+    btn.disabled=false;btn.textContent='\ud83d\udd08 Scan';
+    if(!nets.length){drop.innerHTML='<div style="padding:10px;font-size:12px;color:var(--tx2)">No networks found</div>';return;}
+    nets.sort(function(a,b){return b.rssi-a.rssi;});
+    var h='';
+    nets.forEach(function(n){
+      var bars=n.rssi>=-60?4:n.rssi>=-70?3:n.rssi>=-80?2:1;
+      var sig='';for(var i=1;i<=4;i++)sig+='<span style="opacity:'+(i<=bars?'1':'0.25')+'">&#9646;</span>';
+      var lock=n.open?'':'&#128274; ';
+      h+='<div onclick="pickSsid(\''+n.ssid.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')" '
+        +'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;font-size:13px" '
+        +'onmouseover="this.style.background=\'var(--inp-bg2,#eee)\'" onmouseout="this.style.background=\'\'">'
+        +'<span style="letter-spacing:1px;font-size:10px;color:var(--tx2)">'+sig+'</span>'
+        +'<span style="flex:1">'+lock+n.ssid+'</span>'
+        +'<span style="font-size:11px;color:var(--tx2)">ch'+n.ch+' '+n.rssi+'dBm</span>'
+        +'</div>';
+    });
+    drop.innerHTML=h;
+  }).catch(function(){
+    btn.disabled=false;btn.textContent='\ud83d\udd08 Scan';
+    drop.innerHTML='<div style="padding:10px;font-size:12px;color:var(--tx2)">Scan failed</div>';
+  });
+}
+function pickSsid(ssid){
+  document.getElementById('wSsid').value=ssid;
+  document.getElementById('scanDrop').style.display='none';
+  document.getElementById('wPass').focus();
 }
 function setWifiPri(ssid,pri){
   fetch('/setwifipriority',{method:'POST',body:new URLSearchParams({ssid:ssid,priority:String(pri)})})
@@ -520,6 +554,7 @@ function delSchedRow(i){
     if(btn)btn.setAttribute('onclick','delSchedRow('+ni+')');
   });
   updateAddBtn();
+  saveSchedules();
 }
 function saveSchedules(){
   var body=new URLSearchParams();
@@ -652,7 +687,6 @@ static void handleStatus() {
     doc["ugDisplayOnly"]     = ugDisplayOnly;
     doc["ugIgnore"]          = ugIgnoreForOH;
     doc["buzzerDelay"]       = buzzerDelayEnabled;
-    doc["loraOk"]            = isLoraOperational();
     doc["loraRSSI"]          = getLoraRSSI();
     doc["loraSNR"]           = getLoraSNR();
     doc["lastLoraReceived"]  = lastLoraReceivedTime > 0
@@ -663,8 +697,8 @@ static void handleStatus() {
     doc["wifiIP"]            = WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : "";
     doc["time"]              = getFormattedTime();
     doc["fwVersion"]         = FW_VERSION;
-    doc["bleEnabled"]        = bleManager.isEnabled();
-    doc["bleConnected"]      = bleManager.isConnected();
+    doc["bleEnabled"]        = false;
+    doc["bleConnected"]      = false;
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();
     doc["ntpSyncAge"]        = (uint32_t)getNtpSyncAgeSeconds();
@@ -697,6 +731,29 @@ static void handleUGMotor() {
     else if (state == "off") turnOffUGMotor();
     else { sendError("Invalid state param"); return; }
     sendOk();
+}
+
+// ---------------------------------------------------------------------------
+//  GET /wifiscan  – run a fresh scan and return visible APs as JSON
+// ---------------------------------------------------------------------------
+
+static void handleWifiScan() {
+    int found = WiFi.scanNetworks(false, true);   // blocking, show hidden
+    String json = "[";
+    for (int i = 0; i < found; i++) {
+        if (i > 0) json += ",";
+        // Escape SSID for JSON
+        String s = WiFi.SSID(i);
+        s.replace("\\", "\\\\"); s.replace("\"", "\\\"");
+        bool open = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+        json += "{\"ssid\":\"" + s + "\","
+                "\"rssi\":"    + String(WiFi.RSSI(i)) + ","
+                "\"ch\":"      + String(WiFi.channel(i)) + ","
+                "\"open\":"    + (open ? "true" : "false") + "}";
+    }
+    json += "]";
+    WiFi.scanDelete();
+    server.send(200, "application/json", json);
 }
 
 // ---------------------------------------------------------------------------
@@ -799,7 +856,7 @@ static void handleSystemInfo() {
     doc["fwVersion"]  = FW_VERSION;
     doc["freeHeap"]   = (int)ESP.getFreeHeap();
     doc["uptime"]     = (uint32_t)(millis() / 1000);
-    doc["bleConn"]    = bleManager.isConnected();
+    doc["bleConn"]    = false;
     doc["apMode"]     = isAPMode;
     String out;
     serializeJson(doc, out);
@@ -811,8 +868,6 @@ static void handleSystemInfo() {
 // ---------------------------------------------------------------------------
 
 static void handleSetBleEnabled() {
-    bool en = server.arg("enabled") == "1";
-    bleManager.setEnabled(en);
     sendOk();
 }
 
@@ -949,6 +1004,7 @@ void setupWebServer() {
     server.on("/status",             HTTP_GET,  handleStatus);
     server.on("/motor",              HTTP_GET,  handleOHMotor);
     server.on("/undergroundmotor",   HTTP_GET,  handleUGMotor);
+    server.on("/wifiscan",            HTTP_GET,  handleWifiScan);
     server.on("/wifilist",           HTTP_GET,  handleWifiList);
     server.on("/addwifi",            HTTP_POST, handleAddWifi);
     server.on("/setwifipriority",    HTTP_POST, handleSetWifiPriority);
