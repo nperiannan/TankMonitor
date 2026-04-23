@@ -15,11 +15,18 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
+const mobileAppVersion = '1.2.0';
+
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
   String? authToken;
   bool unauthorized = false;  // ── Version info ────────────────────────────────────────────────────
-  String? webAppVersion;  // ── URL configuration ────────────────────────────────────────────────────
+  String? webAppVersion;
+
+  // ── Update check ─────────────────────────────────────────────────────────
+  String? latestAppVersion;
+  bool updateAvailable = false;
+  String? latestApkUrl;  // ── URL configuration ────────────────────────────────────────────────────
   String wifiUrl   = defaultWifiUrl;
   String mobileUrl = defaultMobileUrl;
   String _activeUrl = '';
@@ -252,6 +259,45 @@ class TankService extends ChangeNotifier {
         notifyListeners();
       }
     } catch (_) {}
+  }
+
+  Future<void> checkForUpdate() async {
+    try {
+      final res = await http.get(
+        Uri.parse('https://api.github.com/repos/nperiannan/TankMonitor-App/releases/latest'),
+        headers: {'Accept': 'application/vnd.github+json'},
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final tag = ((data['tag_name'] as String?) ?? '').replaceFirst('v', '');
+        final assets = data['assets'] as List<dynamic>? ?? [];
+        for (final a in assets) {
+          if ((a['name'] as String).endsWith('.apk')) {
+            latestApkUrl = a['browser_download_url'] as String;
+            break;
+          }
+        }
+        latestAppVersion = tag;
+        updateAvailable = _isNewerVersion(tag, mobileAppVersion);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  bool _isNewerVersion(String latest, String current) {
+    try {
+      final l = latest.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+      final c = current.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+      for (var i = 0; i < 3; i++) {
+        final lv = i < l.length ? l[i] : 0;
+        final cv = i < c.length ? c[i] : 0;
+        if (lv > cv) return true;
+        if (lv < cv) return false;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
   Future<void> sendControl(Map<String, dynamic> cmd) async {
     try {

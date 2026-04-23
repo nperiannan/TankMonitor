@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:http/http.dart' as http;
 import 'models.dart';
 import 'tank_service.dart';
 import 'schedule_sheet.dart';
@@ -17,7 +21,6 @@ const _blue    = Color(0xFF1890ff);
 const _green   = Color(0xFF52c41a);
 const _orange  = Color(0xFFfa8c16);
 const _red     = Color(0xFFff4d4f);
-const mobileAppVersion = '1.1.0';
 // ─── Tank arc circle ─────────────────────────────────────────────────────────
 class _TankCircle extends StatelessWidget {
   final String state;
@@ -186,10 +189,15 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen>
     with WidgetsBindingObserver {
 
+  double? _downloadProgress; // null = idle, 0.0–1.0 = downloading
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TankService>().checkForUpdate();
+    });
   }
 
   @override
@@ -203,6 +211,40 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (state == AppLifecycleState.resumed) {
       // Reconnect when app comes back from background
       context.read<TankService>().reconnectIfNeeded();
+    }
+  }
+
+  Future<void> _downloadAndInstall() async {
+    final svc = context.read<TankService>();
+    final url = svc.latestApkUrl;
+    if (url == null) return;
+    setState(() => _downloadProgress = 0);
+    try {
+      final client = http.Client();
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+      final total = response.contentLength ?? 0;
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/TankMonitor-update.apk');
+      final sink = file.openWrite();
+      int received = 0;
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (mounted) setState(() => _downloadProgress = total > 0 ? received / total : null);
+      }
+      await sink.flush();
+      await sink.close();
+      client.close();
+      if (mounted) setState(() => _downloadProgress = null);
+      await OpenFilex.open(file.path);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _downloadProgress = null);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download failed: $e')),
+        );
+      }
     }
   }
 
@@ -280,6 +322,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           : ListView(
               padding: const EdgeInsets.all(12),
               children: [
+
+                if (svc.updateAvailable)
+                  _UpdateBanner(
+                    latestVersion: svc.latestAppVersion ?? '',
+                    downloading: _downloadProgress != null,
+                    progress: _downloadProgress,
+                    onUpdate: _downloadAndInstall,
+                  ),
 
                 if (!svc.connected)
                   const _Banner('Disconnected — reconnecting…', isError: false),
@@ -466,6 +516,78 @@ String _formatUptime(int s) {
   if (s < 60)   return '${s}s';
   if (s < 3600) return '${s ~/ 60}m ${s % 60}s';
   return '${s ~/ 3600}h ${(s % 3600) ~/ 60}m';
+}
+
+class _UpdateBanner extends StatelessWidget {
+  final String latestVersion;
+  final bool downloading;
+  final double? progress;
+  final VoidCallback onUpdate;
+
+  const _UpdateBanner({
+    required this.latestVersion,
+    required this.downloading,
+    required this.progress,
+    required this.onUpdate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF162312),
+        border: Border.all(color: _green),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: downloading
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Downloading v$latestVersion…',
+                    style: const TextStyle(color: _green, fontSize: 13)),
+                const SizedBox(height: 8),
+                LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: const Color(0xFF274916),
+                  color: _green,
+                ),
+                if (progress != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text('${(progress! * 100).toStringAsFixed(0)}%',
+                        style: const TextStyle(color: _label, fontSize: 11)),
+                  ),
+              ],
+            )
+          : Row(
+              children: [
+                const Icon(Icons.system_update, color: _green, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Update available: v$latestVersion  (current v$mobileAppVersion)',
+                    style: const TextStyle(color: _green, fontSize: 13),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: onUpdate,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF274916),
+                      border: Border.all(color: _green),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Text('Update',
+                        style: TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
 }
 
 class _Banner extends StatelessWidget {
