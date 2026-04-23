@@ -264,7 +264,7 @@ class TankService extends ChangeNotifier {
   Future<void> checkForUpdate() async {
     try {
       final res = await http.get(
-        Uri.parse('https://api.github.com/repos/nperiannan/TankMonitor-App/releases/latest'),
+        Uri.parse('https://api.github.com/repos/nperiannan/TankMonitor/releases/latest'),
         headers: {'Accept': 'application/vnd.github+json'},
       ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
