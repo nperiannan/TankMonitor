@@ -1,22 +1,24 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
 import {
   Alert, Badge, Button, Card, Col, ConfigProvider, Form, Input, InputNumber,
-  Modal, Popconfirm, Row, Select, Space, Switch, Table, Tag, TimePicker,
-  Typography, theme as antTheme, type TableColumnsType,
+  Modal, Popconfirm, Progress, Row, Select, Space, Switch, Table, Tag, TimePicker,
+  Typography, Upload, theme as antTheme, type TableColumnsType,
 } from 'antd'
 import {
   WifiOutlined, ClockCircleOutlined,
-  PlusOutlined, DeleteOutlined, ClearOutlined,
+  PlusOutlined, DeleteOutlined, ClearOutlined, EditOutlined,
   BulbOutlined, BulbFilled, SyncOutlined, PoweroffOutlined,
   UserOutlined, LockOutlined, LogoutOutlined,
+  UploadOutlined, ThunderboltOutlined, RollbackOutlined,
 } from '@ant-design/icons'
-import type { Schedule, Status, ControlCmd } from './types'
-import { login, sendControl } from './api'
+import type { Schedule, Status, ControlCmd, OtaStatus } from './types'
+import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, triggerRollback } from './api'
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.1.0'
+const WEB_APP_VERSION = '1.2.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -242,7 +244,7 @@ function TankCard({ title, tankState, motorOn, onOn, onOff, darkMode }: TankCard
 }
 
 // ---------------------------------------------------------------------------
-// Form type for Add Schedule modal
+// Form types for Schedule modals
 // ---------------------------------------------------------------------------
 
 interface AddForm {
@@ -250,6 +252,8 @@ interface AddForm {
   time:     Dayjs
   duration: number
 }
+
+type EditForm = AddForm
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -261,9 +265,16 @@ export default function App() {
   const [connected,  setConnected]  = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [addOpen,    setAddOpen]    = useState(false)
+  const [editRow,    setEditRow]    = useState<Schedule | null>(null)
   const [ctrlError,  setCtrlError]  = useState<string | null>(null)
   const [darkMode,   setDarkMode]   = useState(true)
-  const [form] = Form.useForm<AddForm>()
+  const [form]     = Form.useForm<AddForm>()
+  const [editForm] = Form.useForm<EditForm>()
+  // OTA state
+  const [otaStatus,    setOtaStatus]    = useState<OtaStatus | null>(null)
+  const [uploadPct,    setUploadPct]    = useState<number | null>(null)
+  const [otaError,     setOtaError]     = useState<string | null>(null)
+  const [otaBusy,      setOtaBusy]      = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   const handleLogout = () => {
@@ -273,6 +284,15 @@ export default function App() {
     setConnected(false)
     setStatus(null)
   }
+
+  const loadOtaStatus = useCallback(() => {
+    if (!token) return
+    fetchOtaStatus(token)
+      .then(setOtaStatus)
+      .catch((e: Error) => { if (e.message !== 'SESSION_EXPIRED') console.warn('OTA status:', e) })
+  }, [token])
+
+  useEffect(() => { loadOtaStatus() }, [loadOtaStatus])
 
   // ── WebSocket connection ──────────────────────────────────────────────────
   useEffect(() => {
@@ -318,15 +338,28 @@ export default function App() {
     { title: 'Time', dataIndex: 't', width: 90, render: (t: string) => to12hr(t) },
     { title: 'Duration', dataIndex: 'd', render: (d: number) => `${d} min` },
     {
-      title: '', key: 'del', width: 48,
+      title: '', key: 'actions', width: 80,
       render: (_: unknown, r: Schedule) => (
-        <Popconfirm
-          title="Remove this schedule?"
-          onConfirm={() => ctrl({ cmd: 'sched_remove', index: r.i })}
-          okText="Yes" cancelText="No"
-        >
-          <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-        </Popconfirm>
+        <Space size={2}>
+          <Button
+            type="text" size="small" icon={<EditOutlined />}
+            onClick={() => {
+              setEditRow(r)
+              editForm.setFieldsValue({
+                motor: r.m === 'OH' ? 0 : 1,
+                time: dayjs(r.t, 'HH:mm'),
+                duration: r.d,
+              })
+            }}
+          />
+          <Popconfirm
+            title="Remove this schedule?"
+            onConfirm={() => ctrl({ cmd: 'sched_remove', index: r.i })}
+            okText="Yes" cancelText="No"
+          >
+            <Button type="text" danger size="small" icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
       ),
     },
   ]
@@ -336,6 +369,59 @@ export default function App() {
     await ctrl({ cmd: 'sched_add', motor: v.motor, time: v.time.format('HH:mm'), duration: v.duration })
     setAddOpen(false)
     form.resetFields()
+  }
+
+  // ── Edit schedule form submit ─────────────────────────────────────────────
+  const onEdit = async (v: EditForm) => {
+    if (!editRow) return
+    // Delete old then add new — atomic from user perspective
+    await ctrl({ cmd: 'sched_remove', index: editRow.i })
+    await ctrl({ cmd: 'sched_add', motor: v.motor, time: v.time.format('HH:mm'), duration: v.duration })
+    setEditRow(null)
+    editForm.resetFields()
+  }
+
+  // ── OTA handlers ─────────────────────────────────────────────────────────
+  const onOtaUpload = async (file: File) => {
+    if (!token) return
+    setOtaError(null)
+    setUploadPct(0)
+    setOtaBusy(true)
+    try {
+      await uploadFirmware(file, token, setUploadPct)
+      await loadOtaStatus()
+    } catch (e: unknown) {
+      setOtaError(e instanceof Error ? e.message : 'Upload failed')
+    } finally {
+      setUploadPct(null)
+      setOtaBusy(false)
+    }
+  }
+
+  const onOtaTrigger = async () => {
+    if (!token) return
+    setOtaError(null)
+    setOtaBusy(true)
+    try {
+      await triggerOta(token)
+    } catch (e: unknown) {
+      setOtaError(e instanceof Error ? e.message : 'Trigger failed')
+    } finally {
+      setOtaBusy(false)
+    }
+  }
+
+  const onOtaRollback = async () => {
+    if (!token) return
+    setOtaError(null)
+    setOtaBusy(true)
+    try {
+      await triggerRollback(token)
+    } catch (e: unknown) {
+      setOtaError(e instanceof Error ? e.message : 'Rollback failed')
+    } finally {
+      setOtaBusy(false)
+    }
   }
 
   const s = status
@@ -528,6 +614,88 @@ export default function App() {
           </Space>
         </Card>
 
+        {/* ── Firmware OTA ── */}
+        <Card
+          size="small"
+          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Firmware Update (OTA)</span>}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+        >
+          {otaError && (
+            <Alert message={otaError} type="error" showIcon closable style={{ marginBottom: 10 }}
+              onClose={() => setOtaError(null)} />
+          )}
+
+          {/* Current staged firmware info */}
+          {otaStatus?.has_firmware ? (
+            <Alert
+              type="info" showIcon style={{ marginBottom: 10 }}
+              message={
+                <span>
+                  <strong>{otaStatus.filename}</strong>
+                  {' — '}
+                  {(otaStatus.size / 1024).toFixed(0)} KB
+                  {' — uploaded '}
+                  {new Date(otaStatus.uploaded_at).toLocaleString()}
+                </span>
+              }
+            />
+          ) : (
+            <Alert type="warning" showIcon message="No firmware staged. Upload a .bin file to flash." style={{ marginBottom: 10 }} />
+          )}
+
+          {/* Upload progress */}
+          {uploadPct !== null && (
+            <Progress percent={uploadPct} style={{ marginBottom: 10 }} />
+          )}
+
+          <Space wrap>
+            <Upload
+              accept=".bin"
+              showUploadList={false}
+              beforeUpload={(file) => { void onOtaUpload(file); return false }}
+            >
+              <Button icon={<UploadOutlined />} loading={uploadPct !== null} disabled={otaBusy}>
+                {uploadPct !== null ? `Uploading ${uploadPct}%` : 'Upload firmware.bin'}
+              </Button>
+            </Upload>
+
+            <Popconfirm
+              title="Flash this firmware to the ESP32?"
+              description="The device will reboot and apply the update."
+              onConfirm={onOtaTrigger}
+              okText="Flash" cancelText="Cancel"
+              disabled={!otaStatus?.has_firmware || otaBusy}
+            >
+              <Button
+                icon={<ThunderboltOutlined />}
+                type="primary"
+                disabled={!otaStatus?.has_firmware || otaBusy}
+                loading={otaBusy && uploadPct === null}
+              >
+                Flash to ESP32
+              </Button>
+            </Popconfirm>
+
+            <Popconfirm
+              title="Rollback to previous firmware?"
+              description="ESP32 will reboot into the previous OTA partition."
+              onConfirm={onOtaRollback}
+              okText="Rollback" cancelText="Cancel"
+              okButtonProps={{ danger: true }}
+              disabled={!s || otaBusy}
+            >
+              <Button icon={<RollbackOutlined />} danger disabled={!s || otaBusy}>
+                Rollback
+              </Button>
+            </Popconfirm>
+          </Space>
+
+          <div style={{ marginTop: 10, fontSize: 11, color: labelClr }}>
+            Current firmware: <strong>{s?.fw ?? '—'}</strong>
+            {' · '}Rollback reverts to the previous OTA partition on the ESP32.
+          </div>
+        </Card>
+
         {/* ── System Info (bottom) ── */}
         <Card
           size="small"
@@ -562,6 +730,37 @@ export default function App() {
             layout="vertical"
             onFinish={onAdd}
             initialValues={{ motor: 0, duration: 30 }}
+          >
+            <Form.Item name="motor" label="Motor" rules={[{ required: true }]}>
+              <Select
+                options={[
+                  { value: 0, label: 'OH — Overhead' },
+                  { value: 1, label: 'UG — Underground' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item name="time" label="Start Time" rules={[{ required: true, message: 'Please select a time' }]}>
+              <TimePicker format="HH:mm" minuteStep={5} style={{ width: '100%' }} />
+            </Form.Item>
+            <Form.Item name="duration" label="Duration (minutes)" rules={[{ required: true }]}>
+              <InputNumber min={1} max={480} style={{ width: '100%' }} addonAfter="min" />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* ── Edit Schedule Modal ── */}
+        <Modal
+          title="Edit Schedule"
+          open={editRow !== null}
+          onOk={() => editForm.submit()}
+          onCancel={() => { setEditRow(null); editForm.resetFields() }}
+          okText="Save"
+          destroyOnClose
+        >
+          <Form
+            form={editForm}
+            layout="vertical"
+            onFinish={onEdit}
           >
             <Form.Item name="motor" label="Motor" rules={[{ required: true }]}>
               <Select

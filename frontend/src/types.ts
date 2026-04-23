@@ -33,3 +33,10 @@ export interface ControlCmd {
   key?:      string
   value?:    boolean
 }
+
+export interface OtaStatus {
+  has_firmware: boolean
+  filename:     string
+  size:         number
+  uploaded_at:  string
+}

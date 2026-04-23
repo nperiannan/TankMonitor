@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -24,7 +25,7 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-const webVersion = "1.1.0"
+const webVersion = "1.2.0"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,6 +57,25 @@ type Status struct {
 }
 
 // ---------------------------------------------------------------------------
+// OTA state
+// ---------------------------------------------------------------------------
+
+type OtaInfo struct {
+	HasFirmware bool   `json:"has_firmware"`
+	Filename    string `json:"filename"`
+	Size        int64  `json:"size"`
+	UploadedAt  string `json:"uploaded_at"`
+}
+
+var (
+	otaMu   sync.RWMutex
+	otaInfo OtaInfo
+)
+
+const otaDir = "/tmp/ota"
+const otaFile = "/tmp/ota/firmware.bin"
+
+// ---------------------------------------------------------------------------
 // App state
 // ---------------------------------------------------------------------------
 
@@ -78,6 +98,7 @@ var (
 		"ug_on": true, "ug_off": true,
 		"sched_add": true, "sched_remove": true, "sched_clear": true,
 		"set_setting": true, "sync_ntp": true, "reboot": true,
+		"ota_start": true, "ota_rollback": true,
 	}
 
 	authSecret []byte
@@ -386,6 +407,154 @@ func handleControl(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
+// OTA handlers
+// ---------------------------------------------------------------------------
+
+func handleOtaStatus(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	otaMu.RLock()
+	info := otaInfo
+	otaMu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info) //nolint:errcheck
+}
+
+func handleOtaUpload(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	// 64 MB limit
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		http.Error(w, "file too large or invalid form", http.StatusBadRequest)
+		return
+	}
+	file, header, err := r.FormFile("firmware")
+	if err != nil {
+		http.Error(w, "missing firmware field", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	// Validate extension
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".bin") {
+		http.Error(w, "only .bin files accepted", http.StatusBadRequest)
+		return
+	}
+
+	if err := os.MkdirAll(otaDir, 0755); err != nil {
+		http.Error(w, "storage error", http.StatusInternalServerError)
+		return
+	}
+	dest, err := os.Create(otaFile)
+	if err != nil {
+		http.Error(w, "storage error", http.StatusInternalServerError)
+		return
+	}
+	defer dest.Close()
+	written, err := io.Copy(dest, file)
+	if err != nil {
+		http.Error(w, "write error", http.StatusInternalServerError)
+		return
+	}
+
+	otaMu.Lock()
+	otaInfo = OtaInfo{
+		HasFirmware: true,
+		Filename:    filepath.Base(header.Filename),
+		Size:        written,
+		UploadedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
+	otaMu.Unlock()
+
+	log.Printf("[OTA] Firmware uploaded: %s (%d bytes)", header.Filename, written)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
+}
+
+func handleOtaTrigger(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	otaMu.RLock()
+	has := otaInfo.HasFirmware
+	otaMu.RUnlock()
+	if !has {
+		http.Error(w, "no firmware staged", http.StatusBadRequest)
+		return
+	}
+	// Build the URL the ESP32 should fetch from
+	// Use X-Forwarded-Host or Host header so it works behind any proxy
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	scheme := "http"
+	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
+		scheme = "https"
+	}
+	firmwareURL := fmt.Sprintf("%s://%s/api/ota/firmware.bin", scheme, host)
+
+	payload, _ := json.Marshal(map[string]interface{}{
+		"cmd": "ota_start",
+		"url": firmwareURL,
+	})
+	if err := publishControl(payload); err != nil {
+		http.Error(w, "MQTT error: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	log.Printf("[OTA] Triggered flash — URL: %s", firmwareURL)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
+}
+
+func handleOtaRollback(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	payload, _ := json.Marshal(map[string]string{"cmd": "ota_rollback"})
+	if err := publishControl(payload); err != nil {
+		http.Error(w, "MQTT error: "+err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	log.Printf("[OTA] Rollback triggered")
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
+}
+
+func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
+	// No auth here intentionally — ESP32 fetches this without token support
+	otaMu.RLock()
+	has := otaInfo.HasFirmware
+	filename := otaInfo.Filename
+	otaMu.RUnlock()
+	if !has {
+		http.Error(w, "no firmware", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	http.ServeFile(w, r, otaFile)
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -402,6 +571,12 @@ func main() {
 	mux.HandleFunc("/api/status", requireAuth(handleStatus))
 	mux.HandleFunc("/api/control", requireAuth(handleControl))
 	mux.HandleFunc("/ws", requireAuth(handleWS))
+	// OTA endpoints
+	mux.HandleFunc("/api/ota/status", requireAuth(handleOtaStatus))
+	mux.HandleFunc("/api/ota/upload", requireAuth(handleOtaUpload))
+	mux.HandleFunc("/api/ota/trigger", requireAuth(handleOtaTrigger))
+	mux.HandleFunc("/api/ota/rollback", requireAuth(handleOtaRollback))
+	mux.HandleFunc("/api/ota/firmware.bin", handleOtaServeFirmware)
 
 	// Serve the React SPA — fall back to index.html for unknown paths.
 	fs := http.FileServer(http.Dir(staticDir))
