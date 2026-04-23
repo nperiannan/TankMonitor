@@ -2,6 +2,9 @@
 #include <PubSubClient.h>
 #include <Preferences.h>
 #include <esp_system.h>
+#include <esp_ota_ops.h>
+#include <HTTPClient.h>
+#include <Update.h>
 
 #include "MQTTManager.h"
 #include "Config.h"
@@ -101,7 +104,7 @@ static void processPendingMQTT() {
 
     Log(INFO, "[MQTT] Control rx: " + String(msg));
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     if (deserializeJson(doc, msg) != DeserializationError::Ok) {
         Log(WARN, "[MQTT] Bad JSON: " + String(msg));
         return;
@@ -161,6 +164,63 @@ static void processPendingMQTT() {
     else if (strcmp(cmd, "sync_ntp") == 0) {
         synchronizeTime();
         Log(INFO, "[MQTT] sync_ntp triggered");
+    }
+    else if (strcmp(cmd, "ota_start") == 0) {
+        const char* url = doc["url"] | "";
+        if (strlen(url) == 0) {
+            Log(WARN, "[MQTT] ota_start: no url provided");
+        } else {
+            Log(INFO, "[MQTT] OTA start — URL: " + String(url));
+            publishMQTTStatus();
+
+            HTTPClient http;
+            http.begin(url);
+            http.setTimeout(30000);
+            int httpCode = http.GET();
+            if (httpCode != HTTP_CODE_OK) {
+                Log(WARN, "[MQTT] OTA HTTP error: " + String(httpCode));
+                http.end();
+            } else {
+                int contentLen = http.getSize();
+                Log(INFO, "[MQTT] OTA firmware size: " + String(contentLen));
+
+                if (!Update.begin(contentLen > 0 ? contentLen : UPDATE_SIZE_UNKNOWN)) {
+                    Log(WARN, "[MQTT] OTA Update.begin failed: " + String(Update.errorString()));
+                    http.end();
+                } else {
+                    WiFiClient* stream = http.getStreamPtr();
+                    size_t written = Update.writeStream(*stream);
+                    http.end();
+
+                    if (Update.end(true)) {
+                        Log(INFO, "[MQTT] OTA success — " + String(written) + " bytes written, rebooting…");
+                        publishMQTTStatus();
+                        delay(500);
+                        esp_restart();
+                    } else {
+                        Log(WARN, "[MQTT] OTA Update.end failed: " + String(Update.errorString()));
+                    }
+                }
+            }
+        }
+    }
+    else if (strcmp(cmd, "ota_rollback") == 0) {
+        Log(INFO, "[MQTT] OTA rollback requested");
+        const esp_partition_t* running  = esp_ota_get_running_partition();
+        const esp_partition_t* previous = esp_ota_get_next_update_partition(NULL);
+        if (previous == NULL || previous == running) {
+            Log(WARN, "[MQTT] OTA rollback: no alternate partition found");
+        } else {
+            esp_err_t err = esp_ota_set_boot_partition(previous);
+            if (err == ESP_OK) {
+                Log(INFO, "[MQTT] OTA rollback: boot set to previous partition, rebooting…");
+                publishMQTTStatus();
+                delay(500);
+                esp_restart();
+            } else {
+                Log(WARN, "[MQTT] OTA rollback failed: " + String(esp_err_to_name(err)));
+            }
+        }
     }
     else if (strcmp(cmd, "reboot") == 0) {
         Log(INFO, "[MQTT] reboot commanded");
