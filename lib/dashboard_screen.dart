@@ -193,6 +193,12 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   // OTA state
   bool _otaBusy = false;
+  String _otaPhase = ''; // idle | triggered | downloading | success | failed
+
+  // Device logs state
+  List<String> _deviceLogs = [];
+  String?      _logsAt;
+  bool         _logsLoading = false;
 
   @override
   void initState() {
@@ -263,8 +269,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(
           onPressed: () async {
             Navigator.pop(ctx);
-            setState(() => _otaBusy = true);
+            setState(() { _otaBusy = true; _otaPhase = 'triggered'; });
             await svc.triggerOta();
+            // Poll for phase changes
+            for (int i = 0; i < 40; i++) {
+              await Future.delayed(const Duration(seconds: 3));
+              if (!mounted) return;
+              final st = await svc.fetchOtaStatus();
+              if (st == null) break;
+              final phase = (st['phase'] as String?) ?? '';
+              setState(() => _otaPhase = phase);
+              if (phase == 'success' || phase == 'failed' || phase == 'idle' || phase.isEmpty) break;
+            }
             if (mounted) setState(() => _otaBusy = false);
           },
           child: const Text('Flash', style: TextStyle(color: _blue)),
@@ -443,7 +459,32 @@ class _DashboardScreenState extends State<DashboardScreen>
                     _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_disp_only', 'value': v})),
                     _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_disp_only', 'value': v})),
                     _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_ignore',    'value': v})),
-                    _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendControl({'cmd': 'set_setting', 'key': 'buzzer_delay', 'value': v}), last: true),
+                    _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendControl({'cmd': 'set_setting', 'key': 'buzzer_delay', 'value': v})),
+                    // LCD Backlight mode
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('LCD Backlight', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          DropdownButton<int>(
+                            value: s?.lcdBlMode ?? 0,
+                            isDense: true,
+                            dropdownColor: const Color(0xFF1f1f1f),
+                            style: const TextStyle(color: Colors.white, fontSize: 13),
+                            underline: const SizedBox(),
+                            items: const [
+                              DropdownMenuItem(value: 0, child: Text('Auto')),
+                              DropdownMenuItem(value: 1, child: Text('On')),
+                              DropdownMenuItem(value: 2, child: Text('Off')),
+                            ],
+                            onChanged: s != null
+                              ? (v) { if (v != null) svc.setLcdMode(v); }
+                              : null,
+                          ),
+                        ],
+                      ),
+                    ),
                   ]),
                 ),
                 const SizedBox(height: 10),
@@ -490,10 +531,56 @@ class _DashboardScreenState extends State<DashboardScreen>
                         'Upload a firmware.bin via the web app, then trigger flash here.',
                         style: TextStyle(color: _label, fontSize: 11),
                       ),
+                      // OTA phase message
+                      if (_otaPhase.isNotEmpty && _otaPhase != 'idle') ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: _otaPhase == 'success'
+                                ? Colors.green.withAlpha(30)
+                                : _otaPhase == 'failed'
+                                    ? Colors.red.withAlpha(30)
+                                    : Colors.blue.withAlpha(30),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: _otaPhase == 'success'
+                                  ? Colors.green.withAlpha(80)
+                                  : _otaPhase == 'failed'
+                                      ? Colors.red.withAlpha(80)
+                                      : Colors.blue.withAlpha(80),
+                            ),
+                          ),
+                          child: Row(children: [
+                            if (_otaBusy) ...[
+                              const SizedBox(width: 14, height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
+                              const SizedBox(width: 8),
+                            ],
+                            Expanded(child: Text(
+                              _otaPhase == 'triggered'   ? '⚡ Flash triggered — ESP32 is starting download…'
+                            : _otaPhase == 'downloading' ? '⬇️ ESP32 is downloading firmware…'
+                            : _otaPhase == 'success'     ? '✅ Update successful! Device rebooted.'
+                            : _otaPhase == 'failed'      ? '❌ Update failed — try serial flash.'
+                            : '',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _otaPhase == 'success' ? Colors.greenAccent
+                                     : _otaPhase == 'failed'  ? Colors.redAccent
+                                     : Colors.white70,
+                              ),
+                            )),
+                          ]),
+                        ),
+                      ],
                       const SizedBox(height: 10),
                       Row(children: [
                         Expanded(child: _ActionButton(
-                          label: _otaBusy ? 'Working…' : 'Flash Firmware',
+                          label: _otaBusy
+                              ? (_otaPhase == 'triggered'   ? 'Triggering…'
+                                : _otaPhase == 'downloading' ? 'Downloading…'
+                                : 'Flashing…')
+                              : 'Flash Firmware',
                           icon: Icons.bolt,
                           enabled: s != null && !_otaBusy,
                           onTap: () => _confirmFlash(context, svc),
@@ -507,6 +594,70 @@ class _DashboardScreenState extends State<DashboardScreen>
                           onTap: () => _confirmRollback(context, svc),
                         )),
                       ]),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // ── Device Logs ──
+                _SectionCard(
+                  title: 'DEVICE LOGS',
+                  trailing: IconButton(
+                    icon: _logsLoading
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
+                        : const Icon(Icons.refresh, size: 18, color: Colors.white54),
+                    onPressed: s == null || _logsLoading ? null : () async {
+                      svc.sendControl({'cmd': 'get_logs'});
+                      await Future.delayed(const Duration(seconds: 2));
+                      if (!mounted) return;
+                      setState(() => _logsLoading = true);
+                      final data = await svc.fetchLogs();
+                      if (!mounted) return;
+                      setState(() {
+                        _logsLoading = false;
+                        if (data != null) {
+                          _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
+                          _logsAt = data['received_at'] as String?;
+                        }
+                      });
+                    },
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (_logsAt != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            'Last received: ${DateTime.tryParse(_logsAt!)?.toLocal().toString().substring(0, 19) ?? _logsAt}',
+                            style: const TextStyle(color: _label, fontSize: 11),
+                          ),
+                        ),
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0d0d0d),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(8),
+                          child: _deviceLogs.isEmpty
+                            ? const Text('No logs — tap Refresh to load.', style: TextStyle(color: _label, fontSize: 11))
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: _deviceLogs.reversed.map((line) => Text(
+                                  line,
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 10,
+                                    color: line.contains('[WARN]') ? Colors.orange
+                                         : line.contains('[ERROR]') ? Colors.red
+                                         : Colors.white60,
+                                  ),
+                                )).toList(),
+                              ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

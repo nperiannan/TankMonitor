@@ -15,7 +15,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.3.0';
+const mobileAppVersion = '1.4.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -321,8 +321,47 @@ class TankService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> sendControl(Map<String, dynamic> cmd) async {
+  Future<void> setLcdMode(int mode) async {
+    const modes = ['auto', 'always_on', 'always_off'];
+    await sendControl({'cmd': 'set_lcd_mode', 'mode': modes[mode.clamp(0, 2)]});
+  }
+
+  Future<Map<String, dynamic>?> fetchOtaStatus() async {
     try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl/api/ota/status'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {}
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> fetchLogs() async {
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl/api/logs'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 401) {
+        unauthorized = true;
+        authToken = null;
+        SharedPreferences.getInstance().then((p) => p.remove(_kAuthToken));
+        notifyListeners();
+        return null;
+      }
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> sendControl(Map<String, dynamic> cmd) async {    try {
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.post(
