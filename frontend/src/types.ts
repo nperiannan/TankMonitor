@@ -22,6 +22,7 @@ export interface Status {
   ug_disp_only:  boolean
   ug_ignore:     boolean
   buzzer_delay:  boolean
+  lcd_bl_mode:   number   // 0=auto, 1=always_on, 2=always_off
 }
 
 export interface ControlCmd {
@@ -32,6 +33,8 @@ export interface ControlCmd {
   index?:    number
   key?:      string
   value?:    boolean
+  mode?:     string
+  url?:      string
 }
 
 export interface OtaStatus {

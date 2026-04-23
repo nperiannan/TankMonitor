@@ -80,3 +80,12 @@ export async function triggerRollback(token: string): Promise<void> {
   if (!res.ok) throw new Error('Failed to trigger rollback')
 }
 
+export async function fetchDeviceLogs(token: string): Promise<{ logs: string[], received_at?: string, note?: string }> {
+  const res = await fetch('/api/logs', {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new Error('SESSION_EXPIRED')
+  if (!res.ok) throw new Error('Failed to fetch logs')
+  return res.json() as Promise<{ logs: string[], received_at?: string, note?: string }>
+}
+

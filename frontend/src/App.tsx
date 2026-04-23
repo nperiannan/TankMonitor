@@ -14,11 +14,11 @@ import {
   UploadOutlined, ThunderboltOutlined, RollbackOutlined,
 } from '@ant-design/icons'
 import type { Schedule, Status, ControlCmd, OtaStatus } from './types'
-import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, triggerRollback } from './api'
+import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, triggerRollback, fetchDeviceLogs } from './api'
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.2.0'
+const WEB_APP_VERSION = '1.3.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -275,6 +275,10 @@ export default function App() {
   const [uploadPct,    setUploadPct]    = useState<number | null>(null)
   const [otaError,     setOtaError]     = useState<string | null>(null)
   const [otaBusy,      setOtaBusy]      = useState(false)
+  // Device logs state
+  const [deviceLogs,   setDeviceLogs]   = useState<string[]>([])
+  const [logsAt,       setLogsAt]       = useState<string | null>(null)
+  const [logsLoading,  setLogsLoading]  = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   const handleLogout = () => {
@@ -293,6 +297,18 @@ export default function App() {
   }, [token])
 
   useEffect(() => { loadOtaStatus() }, [loadOtaStatus])
+
+  const loadDeviceLogs = useCallback(() => {
+    if (!token) return
+    setLogsLoading(true)
+    fetchDeviceLogs(token)
+      .then((data) => {
+        setDeviceLogs(data.logs ?? [])
+        setLogsAt(data.received_at ?? null)
+      })
+      .catch((e: Error) => { if (e.message !== 'SESSION_EXPIRED') console.warn('Logs:', e) })
+      .finally(() => setLogsLoading(false))
+  }, [token])
 
   // ── WebSocket connection ──────────────────────────────────────────────────
   useEffect(() => {
@@ -585,6 +601,26 @@ export default function App() {
               />
             </div>
           ))}
+
+          {/* LCD Backlight Mode */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', fontSize: 13,
+          }}>
+            <span>LCD Backlight</span>
+            <Select
+              size="small"
+              style={{ width: 170 }}
+              disabled={!s}
+              value={s?.lcd_bl_mode ?? 0}
+              onChange={(v: number) => ctrl({ cmd: 'set_lcd_mode', mode: ['auto', 'always_on', 'always_off'][v] } as unknown as ControlCmd)}
+              options={[
+                { value: 0, label: 'Auto (Off 7AM–5:30PM)' },
+                { value: 1, label: 'Always On' },
+                { value: 2, label: 'Always Off' },
+              ]}
+            />
+          </div>
         </Card>
 
         {/* ── Actions ── */}
@@ -693,6 +729,48 @@ export default function App() {
           <div style={{ marginTop: 10, fontSize: 11, color: labelClr }}>
             Current firmware: <strong>{s?.fw ?? '—'}</strong>
             {' · '}Rollback reverts to the previous OTA partition on the ESP32.
+          </div>
+        </Card>
+
+        {/* ── Device Logs ── */}
+        <Card
+          size="small"
+          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Device Logs</span>}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          extra={
+            <Button size="small" icon={<SyncOutlined spin={logsLoading} />}
+              disabled={!s || logsLoading}
+              onClick={() => { ctrl({ cmd: 'get_logs' } as ControlCmd); setTimeout(loadDeviceLogs, 2000) }}
+            >
+              Refresh
+            </Button>
+          }
+        >
+          {logsAt && (
+            <div style={{ fontSize: 11, color: labelClr, marginBottom: 6 }}>
+              Last received: {new Date(logsAt).toLocaleString()}
+            </div>
+          )}
+          <div style={{
+            background: darkMode ? '#0d0d0d' : '#f5f5f5',
+            border: `1px solid ${rowBd}`, borderRadius: 6,
+            padding: '8px 10px', maxHeight: 240, overflowY: 'auto',
+            fontFamily: 'monospace', fontSize: 11,
+          }}>
+            {deviceLogs.length === 0
+              ? <span style={{ color: labelClr }}>No logs — press Refresh to load.</span>
+              : [...deviceLogs].reverse().map((line, i) => (
+                  <div key={i} style={{
+                    color: line.includes('[WARN]') ? '#fa8c16'
+                         : line.includes('[ERROR]') ? '#ff4d4f'
+                         : darkMode ? '#b3b3b3' : '#333',
+                    marginBottom: 2,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+                  }}>
+                    {line}
+                  </div>
+                ))
+            }
           </div>
         </Card>
 

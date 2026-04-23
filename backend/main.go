@@ -25,7 +25,7 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-const webVersion = "1.2.0"
+const webVersion = "1.3.0"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -54,6 +54,7 @@ type Status struct {
 	UGDispOnly  bool       `json:"ug_disp_only"`
 	UGIgnore    bool       `json:"ug_ignore"`
 	BuzzerDelay bool       `json:"buzzer_delay"`
+	LcdBlMode   uint8      `json:"lcd_bl_mode"`
 }
 
 // ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ var (
 		"ug_on": true, "ug_off": true,
 		"sched_add": true, "sched_remove": true, "sched_clear": true,
 		"set_setting": true, "sync_ntp": true, "reboot": true,
+		"set_lcd_mode": true, "get_logs": true,
 		"ota_start": true, "ota_rollback": true,
 	}
 
@@ -212,7 +214,8 @@ func startMQTT() {
 	pass := env("MQTT_PASS", "###TankMonitor12345")
 	location := env("MQTT_LOCATION", "home")
 
-	statusTopic := fmt.Sprintf("tankmonitor/%s/status", location)
+	statusT := fmt.Sprintf("tankmonitor/%s/status", location)
+	logsT   := fmt.Sprintf("tankmonitor/%s/logs",   location)
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(fmt.Sprintf("tcp://%s:%s", broker, port)).
@@ -222,8 +225,9 @@ func startMQTT() {
 		SetKeepAlive(60 * time.Second).
 		SetAutoReconnect(true).
 		SetOnConnectHandler(func(c mqtt.Client) {
-			log.Printf("[MQTT] Connected — subscribing %s", statusTopic)
-			c.Subscribe(statusTopic, 1, onStatusMsg)
+			log.Printf("[MQTT] Connected — subscribing %s %s", statusT, logsT)
+			c.Subscribe(statusT, 1, onStatusMsg)
+			c.Subscribe(logsT,   0, onLogsMsg)
 		}).
 		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
 			log.Printf("[MQTT] Connection lost: %v", err)
@@ -555,6 +559,54 @@ func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
 }
 
 // ---------------------------------------------------------------------------
+// Device logs cache (populated by MQTT subscription to logs topic)
+// ---------------------------------------------------------------------------
+
+var (
+	logsMu     sync.RWMutex
+	lastLogs   []byte // raw JSON blob from ESP32 {"logs":[...]}
+	logsSeenAt time.Time
+)
+
+func logsTopic() string {
+	return fmt.Sprintf("tankmonitor/%s/logs", env("MQTT_LOCATION", "home"))
+}
+
+func onLogsMsg(_ mqtt.Client, msg mqtt.Message) {
+	raw := make([]byte, len(msg.Payload()))
+	copy(raw, msg.Payload())
+	logsMu.Lock()
+	lastLogs = raw
+	logsSeenAt = time.Now()
+	logsMu.Unlock()
+}
+
+func handleLogs(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	logsMu.RLock()
+	blob := lastLogs
+	seen := logsSeenAt
+	logsMu.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	if len(blob) == 0 {
+		w.Write([]byte(`{"logs":[],"note":"No logs received yet"}`)) //nolint:errcheck
+		return
+	}
+	// Inject a received_at field
+	trimmed := strings.TrimSuffix(strings.TrimSpace(string(blob)), "}")
+	out := trimmed + fmt.Sprintf(`,"received_at":"%s"}`, seen.UTC().Format(time.RFC3339))
+	w.Write([]byte(out)) //nolint:errcheck
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -576,8 +628,8 @@ func main() {
 	mux.HandleFunc("/api/ota/upload", requireAuth(handleOtaUpload))
 	mux.HandleFunc("/api/ota/trigger", requireAuth(handleOtaTrigger))
 	mux.HandleFunc("/api/ota/rollback", requireAuth(handleOtaRollback))
-	mux.HandleFunc("/api/ota/firmware.bin", handleOtaServeFirmware)
-
+	mux.HandleFunc("/api/ota/firmware.bin", handleOtaServeFirmware)	// Device logs
+	mux.HandleFunc("/api/logs",            requireAuth(handleLogs))
 	// Serve the React SPA — fall back to index.html for unknown paths.
 	fs := http.FileServer(http.Dir(staticDir))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
