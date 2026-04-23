@@ -166,7 +166,7 @@
 #define MQTT_BROKER_DEFAULT   "nperiannan-nas.freemyip.com"
 #define MQTT_PORT_DEFAULT     1883
 #define MQTT_USER_DEFAULT     "tankmonitor"
-#define MQTT_PASS_DEFAULT     "###TankMonitor12345"
+#define MQTT_PASS_DEFAULT     "Tank32!"
 #define MQTT_LOCATION_DEFAULT "home"          // Used in topic: tankmonitor/<location>/...
 
 #define MQTT_NVS_NS           "mqtt_cfg"
