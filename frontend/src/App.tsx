@@ -16,6 +16,8 @@ import { login, sendControl } from './api'
 
 const { Text } = Typography
 
+const WEB_APP_VERSION = '1.1.0'
+
 // ---------------------------------------------------------------------------
 // Login page
 // ---------------------------------------------------------------------------
@@ -95,6 +97,37 @@ function formatUptime(s: number): string {
   if (s < 60)   return `${s}s`
   if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`
   return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`
+}
+
+/** Convert 24-hr "HH:MM" or "HH:MM:SS" to "H:MM AM/PM" */
+function to12hr(t: string): string {
+  try {
+    const parts = t.split(':')
+    let h = parseInt(parts[0], 10)
+    const m = parts[1].padStart(2, '0')
+    const ampm = h >= 12 ? 'PM' : 'AM'
+    h = h % 12 || 12
+    return `${h}:${m} ${ampm}`
+  } catch {
+    return t
+  }
+}
+
+/** Return the schedule index (i) of the next upcoming schedule for a motor */
+function getNextSchedIdx(schedules: Schedule[], motor: string, currentTime: string): number | null {
+  const filtered = schedules.filter(s => s.m === motor)
+  if (!filtered.length || !currentTime) return null
+  const [ch, cm] = currentTime.split(':').map(Number)
+  const nowMins = ch * 60 + (cm || 0)
+  let nextIdx: number | null = null
+  let minDiff = Infinity
+  for (const sch of filtered) {
+    const [sh, sm] = sch.t.split(':').map(Number)
+    let diff = sh * 60 + sm - nowMins
+    if (diff <= 0) diff += 24 * 60
+    if (diff < minDiff) { minDiff = diff; nextIdx = sch.i }
+  }
+  return nextIdx
 }
 
 // ---------------------------------------------------------------------------
@@ -282,14 +315,8 @@ export default function App() {
       title: 'Motor', dataIndex: 'm', width: 70,
       render: (m: string) => <Tag color={m === 'OH' ? 'blue' : 'purple'}>{m}</Tag>,
     },
-    { title: 'Time',     dataIndex: 't', width: 70 },
+    { title: 'Time', dataIndex: 't', width: 90, render: (t: string) => to12hr(t) },
     { title: 'Duration', dataIndex: 'd', render: (d: number) => `${d} min` },
-    {
-      title: 'Status', dataIndex: 'on',
-      render: (on: boolean) => on
-        ? <Badge status="processing" text="Running" />
-        : <Badge status="default"    text="Idle" />,
-    },
     {
       title: '', key: 'del', width: 48,
       render: (_: unknown, r: Schedule) => (
@@ -313,12 +340,18 @@ export default function App() {
 
   const s = status
 
+  // Enabled schedules only; next upcoming per motor for row highlight
+  const activeSchedules = (s?.schedules ?? []).filter(sch => sch.on)
+  const nextOH = s?.time ? getNextSchedIdx(activeSchedules, 'OH', s.time) : null
+  const nextUG = s?.time ? getNextSchedIdx(activeSchedules, 'UG', s.time) : null
+
   // ── System info rows ──────────────────────────────────────────────────────
   const sysRows: [string, React.ReactNode][] = [
     ['WiFi',        s?.wifi_rssi != null ? `${s.wifi_rssi} dBm` : '—'],
     ['LoRa',        <Tag color={s?.lora_ok ? 'success' : (s ? 'error' : 'default')}>{s?.lora_ok ? 'OK' : (s ? 'FAIL' : '—')}</Tag>],
     ['Uptime',      s ? formatUptime(s.uptime_s) : '—'],
     ['Firmware',    s?.fw ?? '—'],
+    ['Web App',     WEB_APP_VERSION],
     ['Last update', lastUpdate ? lastUpdate.toLocaleTimeString() : '—'],
   ]
 
@@ -345,7 +378,7 @@ export default function App() {
           <Space size={12}>
             {s?.time && (
               <Text style={{ color: labelClr, fontSize: 12 }}>
-                <ClockCircleOutlined /> {s.time}
+                <ClockCircleOutlined /> {to12hr(s.time)}
               </Text>
             )}
             <Badge
@@ -427,12 +460,17 @@ export default function App() {
           }
         >
           <Table<Schedule>
-            dataSource={s?.schedules ?? []}
+            dataSource={activeSchedules}
             columns={schedCols}
             rowKey="i"
             size="small"
             pagination={false}
             locale={{ emptyText: 'No schedules configured' }}
+            onRow={(record) => ({
+              style: record.i === nextOH || record.i === nextUG
+                ? { background: '#162312', borderLeft: '3px solid #52c41a' }
+                : {},
+            })}
           />
         </Card>
 

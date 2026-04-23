@@ -21,6 +21,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// Version
+// ---------------------------------------------------------------------------
+
+const webVersion = "1.1.0"
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -327,6 +333,12 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"web_version": webVersion}) //nolint:errcheck
+}
+
 func handleStatus(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 	w.Header().Set("Content-Type", "application/json")
@@ -385,10 +397,11 @@ func main() {
 	staticDir := env("STATIC_DIR", "/app/static")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/login",   handleLogin)
-	mux.HandleFunc("/api/status",  requireAuth(handleStatus))
+	mux.HandleFunc("/api/login", handleLogin)
+	mux.HandleFunc("/api/version", requireAuth(handleVersion))
+	mux.HandleFunc("/api/status", requireAuth(handleStatus))
 	mux.HandleFunc("/api/control", requireAuth(handleControl))
-	mux.HandleFunc("/ws",          requireAuth(handleWS))
+	mux.HandleFunc("/ws", requireAuth(handleWS))
 
 	// Serve the React SPA — fall back to index.html for unknown paths.
 	fs := http.FileServer(http.Dir(staticDir))
