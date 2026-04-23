@@ -25,7 +25,7 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-const webVersion = "1.3.0"
+const webVersion = "1.3.1"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -66,7 +66,7 @@ type OtaInfo struct {
 	Filename    string `json:"filename"`
 	Size        int64  `json:"size"`
 	UploadedAt  string `json:"uploaded_at"`
-	Phase       string `json:"phase"`       // idle | triggered | downloading | success | failed
+	Phase       string `json:"phase"` // idle | triggered | downloading | success | failed
 	PrevFw      string `json:"prev_fw,omitempty"`
 }
 
@@ -217,7 +217,7 @@ func startMQTT() {
 	location := env("MQTT_LOCATION", "home")
 
 	statusT := fmt.Sprintf("tankmonitor/%s/status", location)
-	logsT   := fmt.Sprintf("tankmonitor/%s/logs",   location)
+	logsT := fmt.Sprintf("tankmonitor/%s/logs", location)
 
 	opts := mqtt.NewClientOptions().
 		AddBroker(fmt.Sprintf("tcp://%s:%s", broker, port)).
@@ -229,7 +229,7 @@ func startMQTT() {
 		SetOnConnectHandler(func(c mqtt.Client) {
 			log.Printf("[MQTT] Connected — subscribing %s %s", statusT, logsT)
 			c.Subscribe(statusT, 1, onStatusMsg)
-			c.Subscribe(logsT,   0, onLogsMsg)
+			c.Subscribe(logsT, 0, onLogsMsg)
 		}).
 		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
 			log.Printf("[MQTT] Connection lost: %v", err)
@@ -541,7 +541,7 @@ func handleOtaTrigger(w http.ResponseWriter, r *http.Request) {
 	stateMu.RUnlock()
 
 	otaMu.Lock()
-	otaInfo.Phase  = "triggered"
+	otaInfo.Phase = "triggered"
 	otaInfo.PrevFw = curSt.FW
 	otaMu.Unlock()
 
@@ -671,8 +671,8 @@ func main() {
 	mux.HandleFunc("/api/ota/upload", requireAuth(handleOtaUpload))
 	mux.HandleFunc("/api/ota/trigger", requireAuth(handleOtaTrigger))
 	mux.HandleFunc("/api/ota/rollback", requireAuth(handleOtaRollback))
-	mux.HandleFunc("/api/ota/firmware.bin", handleOtaServeFirmware)	// Device logs
-	mux.HandleFunc("/api/logs",            requireAuth(handleLogs))
+	mux.HandleFunc("/api/ota/firmware.bin", handleOtaServeFirmware) // Device logs
+	mux.HandleFunc("/api/logs", requireAuth(handleLogs))
 	// Serve the React SPA — fall back to index.html for unknown paths.
 	fs := http.FileServer(http.Dir(staticDir))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
