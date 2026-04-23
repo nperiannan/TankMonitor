@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.3.1'
+const WEB_APP_VERSION = '1.3.2'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -280,6 +280,9 @@ export default function App() {
   const [deviceLogs,   setDeviceLogs]   = useState<string[]>([])
   const [logsAt,       setLogsAt]       = useState<string | null>(null)
   const [logsLoading,  setLogsLoading]  = useState(false)
+  // MQTT credential change
+  const [mqttPassInput, setMqttPassInput] = useState('')
+  const [mqttPassBusy,  setMqttPassBusy]  = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   const handleLogout = () => {
@@ -638,6 +641,40 @@ export default function App() {
                 { value: 2, label: 'Off' },
               ]}
             />
+          </div>
+
+          {/* MQTT Password */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', borderTop: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
+          }}>
+            <span style={{ whiteSpace: 'nowrap' }}>MQTT Password</span>
+            <Space.Compact style={{ flex: 1 }}>
+              <Input.Password
+                size="small"
+                placeholder="New password"
+                value={mqttPassInput}
+                onChange={e => setMqttPassInput(e.target.value)}
+                disabled={!s || mqttPassBusy}
+                style={{ flex: 1 }}
+              />
+              <Popconfirm
+                title="Update MQTT password on the device?"
+                description="Do this before changing the broker password."
+                onConfirm={async () => {
+                  if (!mqttPassInput.trim()) return
+                  setMqttPassBusy(true)
+                  await ctrl({ cmd: 'set_mqtt_creds', pass: mqttPassInput.trim() })
+                  setMqttPassInput('')
+                  setMqttPassBusy(false)
+                }}
+                okText="Update" cancelText="Cancel"
+              >
+                <Button size="small" disabled={!s || !mqttPassInput.trim() || mqttPassBusy} loading={mqttPassBusy}>
+                  Set
+                </Button>
+              </Popconfirm>
+            </Space.Compact>
           </div>
         </Card>
 

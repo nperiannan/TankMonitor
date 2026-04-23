@@ -243,6 +243,22 @@ static void processPendingMQTT() {
             }
         }
     }
+    else if (strcmp(cmd, "set_mqtt_creds") == 0) {
+        const char* newPass = doc["pass"] | "";
+        const char* newUser = doc["user"] | "";
+        if (strlen(newPass) == 0) {
+            Log(WARN, "[MQTT] set_mqtt_creds: empty pass, ignoring");
+        } else {
+            Preferences prefs;
+            prefs.begin(MQTT_NVS_NS, false);
+            prefs.putString("pass", newPass);
+            if (strlen(newUser) > 0) prefs.putString("user", newUser);
+            prefs.end();
+            loadConfig();   // reload s_pass / s_user into memory
+            Log(INFO, "[MQTT] set_mqtt_creds: credentials saved, reconnecting with new creds…");
+            s_mqtt.disconnect();  // mqttLoop() will reconnect using new NVS creds
+        }
+    }
     else if (strcmp(cmd, "reboot") == 0) {
         Log(INFO, "[MQTT] reboot commanded");
         publishMQTTStatus();

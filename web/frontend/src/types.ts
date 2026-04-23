@@ -35,6 +35,7 @@ export interface ControlCmd {
   value?:    boolean
   mode?:     string
   url?:      string
+  pass?:     string
 }
 
 export interface OtaStatus {

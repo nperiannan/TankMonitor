@@ -485,6 +485,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ],
                       ),
                     ),
+                    // MQTT Password
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('MQTT Password', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          TextButton(
+                            onPressed: s != null ? () => _changeMqttPassword(context, svc) : null,
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: const Text('Change', style: TextStyle(fontSize: 12)),
+                          ),
+                        ],
+                      ),
+                    ),
                   ]),
                 ),
                 const SizedBox(height: 10),
@@ -708,6 +727,59 @@ class _DashboardScreenState extends State<DashboardScreen>
         ),
       ],
     ));
+  }
+
+  void _changeMqttPassword(BuildContext ctx, TankService svc) {
+    final ctrl = TextEditingController();
+    bool obscure = true;
+    showDialog(
+      context: ctx,
+      builder: (dCtx) => StatefulBuilder(
+        builder: (dCtx, setState) => AlertDialog(
+          backgroundColor: _cardBg,
+          title: const Text('Change MQTT Password', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Enter new password. The device will save it and reconnect.\nChange the broker password after.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: ctrl,
+                obscureText: obscure,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'New password',
+                  labelStyle: const TextStyle(color: Colors.white54),
+                  enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue)),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white54, size: 18),
+                    onPressed: () => setState(() => obscure = !obscure),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dCtx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () {
+                final pass = ctrl.text.trim();
+                if (pass.isEmpty) return;
+                Navigator.pop(dCtx);
+                svc.setMqttCreds(pass);
+              },
+              child: const Text('Update'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 } // end _DashboardScreenState
 

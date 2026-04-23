@@ -25,7 +25,7 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-const webVersion = "1.3.1"
+const webVersion = "1.3.2"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -102,6 +102,7 @@ var (
 		"sched_add": true, "sched_remove": true, "sched_clear": true,
 		"set_setting": true, "sync_ntp": true, "reboot": true,
 		"set_lcd_mode": true, "get_logs": true,
+		"set_mqtt_creds": true,
 		"ota_start": true, "ota_rollback": true,
 	}
 
