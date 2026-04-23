@@ -103,7 +103,7 @@ var (
 		"set_setting": true, "sync_ntp": true, "reboot": true,
 		"set_lcd_mode": true, "get_logs": true,
 		"set_mqtt_creds": true,
-		"ota_start": true, "ota_rollback": true,
+		"ota_start":      true, "ota_rollback": true,
 	}
 
 	authSecret []byte
