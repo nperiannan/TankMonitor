@@ -225,8 +225,19 @@ input:checked+.sld::before{transform:translateX(18px)}
     <label class="sw"><input type="checkbox" id="buzz_del" onchange="saveSetting()"><span class="sld"></span></label>
   </div>
   <div class="trow">
-    <span class="tlbl">BLE (Bluetooth)</span>
-    <label class="sw"><input type="checkbox" id="ble_en" onchange="setBle(this.checked)"><span class="sld"></span></label>
+    <span class="tlbl">LCD Backlight</span>
+    <select id="lcd_bl_mode" onchange="setLcdMode(this.value)" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px">
+      <option value="auto">Auto (night on)</option>
+      <option value="always_on">Always On</option>
+      <option value="always_off">Always Off</option>
+    </select>
+  </div>
+  <div class="trow" style="gap:8px">
+    <span class="tlbl" style="white-space:nowrap">MQTT Password</span>
+    <div style="display:flex;gap:6px;flex:1">
+      <input id="mqtt_pass_inp" class="inp" type="password" placeholder="New password" style="flex:1">
+      <button class="btn btn-o" style="flex:none;padding:6px 14px;font-size:13px" onclick="setMqttPass()">Set</button>
+    </div>
   </div>
 </div>
 
@@ -390,10 +401,13 @@ function refreshStatus(){
     }
     var o=document.getElementById('oh_disp'),u=document.getElementById('ug_disp');
     var i=document.getElementById('ug_ign'),b=document.getElementById('buzz_del');
-    var bl=document.getElementById('ble_en');
     if(o)o.checked=d.ohDisplayOnly;if(u)u.checked=d.ugDisplayOnly;
     if(i)i.checked=d.ugIgnore;if(b)b.checked=d.buzzerDelay;
-    if(bl)bl.checked=d.bleEnabled;
+    var lcdSel=document.getElementById('lcd_bl_mode');
+    if(lcdSel){
+      var modes=['auto','always_on','always_off'];
+      lcdSel.value=modes[d.lcdBlMode]||'auto';
+    }
     // Scheduler active alert
     var sa=document.getElementById('schedAlert');
     if(sa)sa.style.display=d.schedRunning?'flex':'none';
@@ -495,11 +509,21 @@ function refreshWifiList(){
     } else if(ar){ar.style.display='none';}
   }).catch(function(){});
 }
-// ---- BLE toggle ----
-function setBle(en){
-  fetch('/setbleenabled',{method:'POST',body:new URLSearchParams({enabled:en?'1':'0'})})
+// ---- LCD mode ----
+function setLcdMode(mode){
+  fetch('/setlcdmode',{method:'POST',body:new URLSearchParams({mode:mode})})
     .then(function(r){return r.json();}).then(function(d){
-      toast(d.ok?(en?'BLE enabled':'BLE disabled'):'Failed',d.ok?'ok':'err');
+      toast(d.ok?'LCD mode saved':'Failed',d.ok?'ok':'err');
+    }).catch(function(){toast('Failed','err');});
+}
+// ---- MQTT password ----
+function setMqttPass(){
+  var p=document.getElementById('mqtt_pass_inp').value;
+  if(!p){toast('Password required','err');return;}
+  fetch('/setmqttpass',{method:'POST',body:new URLSearchParams({pass:p})})
+    .then(function(r){return r.json();}).then(function(d){
+      if(d.ok){document.getElementById('mqtt_pass_inp').value='';toast('MQTT password updated','ok');}
+      else toast(d.error||'Failed','err');
     }).catch(function(){toast('Failed','err');});
 }
 // ---- Scheduler ----
@@ -699,6 +723,7 @@ static void handleStatus() {
     doc["fwVersion"]         = FW_VERSION;
     doc["bleEnabled"]        = false;
     doc["bleConnected"]      = false;
+    doc["lcdBlMode"]         = (int)lcdBacklightMode;
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();
     doc["ntpSyncAge"]        = (uint32_t)getNtpSyncAgeSeconds();
@@ -995,6 +1020,35 @@ static void handleClearHistory() {
 }
 
 // ---------------------------------------------------------------------------
+//  POST /setlcdmode  – set LCD backlight mode (auto / always_on / always_off)
+// ---------------------------------------------------------------------------
+
+static void handleSetLcdMode() {
+    String mode = server.arg("mode");
+    if      (mode == "always_on")  lcdBacklightMode = LCD_BL_ALWAYS_ON;
+    else if (mode == "always_off") lcdBacklightMode = LCD_BL_ALWAYS_OFF;
+    else                           lcdBacklightMode = LCD_BL_AUTO;
+    saveMotorConfig();
+    applyBacklightMode();
+    sendOk();
+}
+
+// ---------------------------------------------------------------------------
+//  POST /setmqttpass  – update MQTT password in NVS and reconnect
+// ---------------------------------------------------------------------------
+
+static void handleSetMqttPass() {
+    String newPass = server.arg("pass");
+    if (newPass.isEmpty()) { sendError("pass required"); return; }
+    Preferences prefs;
+    prefs.begin(MQTT_NVS_NS, false);
+    prefs.putString("pass", newPass);
+    prefs.end();
+    Log(INFO, "[Web] MQTT password updated via HTTP");
+    sendOk();
+}
+
+// ---------------------------------------------------------------------------
 //  Setup & loop
 // ---------------------------------------------------------------------------
 
@@ -1014,6 +1068,8 @@ void setupWebServer() {
     server.on("/factoryreset",       HTTP_POST, handleFactoryReset);
     server.on("/systeminfo",         HTTP_GET,  handleSystemInfo);
     server.on("/setbleenabled",      HTTP_POST, handleSetBleEnabled);
+    server.on("/setlcdmode",         HTTP_POST, handleSetLcdMode);
+    server.on("/setmqttpass",        HTTP_POST, handleSetMqttPass);
     server.on("/schedulelist",       HTTP_GET,  handleScheduleList);
     server.on("/updateAllSchedules", HTTP_POST, handleUpdateAllSchedules);
     server.on("/cancelSchedule",     HTTP_POST, handleCancelSchedule);
