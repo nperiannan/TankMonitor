@@ -17,7 +17,7 @@ const _blue    = Color(0xFF1890ff);
 const _green   = Color(0xFF52c41a);
 const _orange  = Color(0xFFfa8c16);
 const _red     = Color(0xFFff4d4f);
-
+const mobileAppVersion = '1.1.0';
 // ─── Tank arc circle ─────────────────────────────────────────────────────────
 class _TankCircle extends StatelessWidget {
   final String state;
@@ -222,6 +222,12 @@ class _DashboardScreenState extends State<DashboardScreen>
     final svc = context.watch<TankService>();
     final s   = svc.status;
 
+    // Enabled schedules & next-upcoming index per motor
+    final enabledScheds = s?.schedules.where((sc) => sc.on).toList() ?? [];
+    final nextOHIdx = _nextScheduleIdx(
+        enabledScheds.where((sc) => sc.m == 'OH').toList(), s?.time ?? '');
+    final nextUGIdx = _nextScheduleIdx(
+        enabledScheds.where((sc) => sc.m == 'UG').toList(), s?.time ?? '');
     // Navigate to login if token was invalidated
     if (svc.unauthorized) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -316,15 +322,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                       onTap: () => _confirmClear(context, svc),
                     ),
                   ]),
-                  child: s == null || s.schedules.isEmpty
+                  child: s == null || enabledScheds.isEmpty
                       ? const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
                           child: Center(child: Text('No schedules configured',
                             style: TextStyle(color: _label, fontSize: 13))),
                         )
                       : Column(
-                          children: s.schedules.map((sch) =>
-                            _ScheduleRow(sch: sch, svc: svc)).toList(),
+                          children: enabledScheds.map((sch) =>
+                            _ScheduleRow(
+                              sch: sch,
+                              svc: svc,
+                              isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
+                            )).toList(),
                         ),
                 ),
                 const SizedBox(height: 10),
@@ -374,6 +384,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                     _InfoRow('LoRa',        null, loraOk: s?.loraOk),
                     _InfoRow('Uptime',      s != null ? _formatUptime(s.uptimeS) : '—'),
                     _InfoRow('Firmware',    s?.fw ?? '—'),
+                    _InfoRow('Web App',     svc.webAppVersion ?? '—'),
+                    _InfoRow('Mobile App',  mobileAppVersion),
                     _InfoRow('Last update', svc.connected ? 'Live' : '—', last: true),
                   ]),
                 ),
@@ -426,6 +438,27 @@ String _to12hr(String t) {
     return '$h:$m $period';
   } catch (_) {
     return t;
+  }
+}
+
+/// Returns the index (i) of the next upcoming schedule in [scheds] relative to [currentTime] (HH:MM[:SS]).
+int? _nextScheduleIdx(List<Schedule> scheds, String currentTime) {
+  if (scheds.isEmpty || currentTime.isEmpty) return null;
+  try {
+    final parts = currentTime.split(':');
+    final nowMins = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+    int? nextIdx;
+    int minDiff = 999999;
+    for (final sch in scheds) {
+      final tp = sch.t.split(':');
+      final schedMins = int.parse(tp[0]) * 60 + int.parse(tp[1]);
+      int diff = schedMins - nowMins;
+      if (diff <= 0) diff += 24 * 60;
+      if (diff < minDiff) { minDiff = diff; nextIdx = sch.i; }
+    }
+    return nextIdx;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -536,11 +569,22 @@ class _ActionButton extends StatelessWidget {
 class _ScheduleRow extends StatelessWidget {
   final Schedule sch;
   final TankService svc;
-  const _ScheduleRow({required this.sch, required this.svc});
+  final bool isNext;
+  const _ScheduleRow({required this.sch, required this.svc, this.isNext = false});
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 3),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+    decoration: isNext
+        ? BoxDecoration(
+            color: const Color(0xFF162312),
+            border: const Border(
+              left: BorderSide(color: _green, width: 3),
+            ),
+            borderRadius: BorderRadius.circular(4),
+          )
+        : const BoxDecoration(),
     child: Row(children: [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -555,21 +599,14 @@ class _ScheduleRow extends StatelessWidget {
             fontSize: 11, fontWeight: FontWeight.w700)),
       ),
       const SizedBox(width: 8),
-      Text(sch.t, style: const TextStyle(color: Colors.white, fontSize: 13)),
+      Text(_to12hr(sch.t), style: const TextStyle(color: Colors.white, fontSize: 13)),
       const SizedBox(width: 6),
       Text('${sch.d} min', style: const TextStyle(color: _label, fontSize: 12)),
+      if (isNext) ...[        
+        const SizedBox(width: 6),
+        const Text('Next', style: TextStyle(color: _green, fontSize: 11, fontWeight: FontWeight.w600)),
+      ],
       const Spacer(),
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: sch.on ? const Color(0xFF162312) : const Color(0xFF1f1f1f),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(sch.on ? 'Running' : 'Idle',
-          style: TextStyle(
-            color: sch.on ? _green : _label, fontSize: 11)),
-      ),
-      const SizedBox(width: 6),
       IconButton(
         icon: const Icon(Icons.delete_outline, color: _red, size: 18),
         padding: EdgeInsets.zero, constraints: const BoxConstraints(),

@@ -18,8 +18,8 @@ const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
   String? authToken;
-  bool unauthorized = false;
-  // ── URL configuration ────────────────────────────────────────────────────
+  bool unauthorized = false;  // ── Version info ────────────────────────────────────────────────────
+  String? webAppVersion;  // ── URL configuration ────────────────────────────────────────────────────
   String wifiUrl   = defaultWifiUrl;
   String mobileUrl = defaultMobileUrl;
   String _activeUrl = '';
@@ -136,6 +136,7 @@ class TankService extends ChangeNotifier {
     _reconnecting = false;
     _closeChannel();
     _activeUrl = url.trimRight().replaceAll(RegExp(r'/$'), '');
+    webAppVersion = null; // reset on reconnect
 
     var wsUrl = _activeUrl
         .replaceFirst(RegExp(r'^http://'), 'ws://')
@@ -154,7 +155,10 @@ class TankService extends ChangeNotifier {
           if (_disposed) return;
           try {
             status = Status.fromJson(jsonDecode(data as String) as Map<String, dynamic>);
-            connected = true;
+            if (!connected) {
+              connected = true;
+              fetchVersion(); // fire and forget
+            }
             error = null;
             notifyListeners();
           } catch (_) {}
@@ -234,7 +238,21 @@ class TankService extends ChangeNotifier {
   }
 
   // ── Control API ──────────────────────────────────────────────────────────
-
+  Future<void> fetchVersion() async {
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl/api/version'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        webAppVersion = data['web_version'] as String?;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
   Future<void> sendControl(Map<String, dynamic> cmd) async {
     try {
       final headers = <String, String>{'Content-Type': 'application/json'};
