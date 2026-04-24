@@ -23,6 +23,7 @@ export interface Status {
   ug_ignore:     boolean
   buzzer_delay:  boolean
   lcd_bl_mode:   number   // 0=auto, 1=always_on, 2=always_off
+  log_level:     string   // 'info' | 'debug'
 }
 
 export interface ControlCmd {
@@ -36,6 +37,7 @@ export interface ControlCmd {
   mode?:     string
   url?:      string
   pass?:     string
+  level?:    string   // for set_log_level
 }
 
 export interface OtaStatus {

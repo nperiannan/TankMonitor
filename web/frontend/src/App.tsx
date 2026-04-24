@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.3.3'
+const WEB_APP_VERSION = '1.3.4'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -812,12 +812,25 @@ export default function App() {
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Device Logs</span>}
           style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
           extra={
-            <Button size="small" icon={<SyncOutlined spin={logsLoading} />}
-              disabled={!s || logsLoading}
-              onClick={() => { ctrl({ cmd: 'get_logs' } as ControlCmd); setTimeout(loadDeviceLogs, 2000) }}
-            >
-              Refresh
-            </Button>
+            <Space size={6}>
+              <Select
+                size="small"
+                value={s?.log_level ?? 'info'}
+                disabled={!s}
+                style={{ width: 160 }}
+                onChange={(v: string) => ctrl({ cmd: 'set_log_level', level: v } as ControlCmd)}
+                options={[
+                  { value: 'info',  label: 'Info (Warn + Error)' },
+                  { value: 'debug', label: 'Debug (All)' },
+                ]}
+              />
+              <Button size="small" icon={<SyncOutlined spin={logsLoading} />}
+                disabled={!s || logsLoading}
+                onClick={() => { ctrl({ cmd: 'get_logs' } as ControlCmd); setTimeout(loadDeviceLogs, 2000) }}
+              >
+                Refresh
+              </Button>
+            </Space>
           }
         >
           {logsAt && (
