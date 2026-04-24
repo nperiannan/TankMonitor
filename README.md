@@ -6,18 +6,18 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 
 ```
 TankMonitor/
-├── firmware/   ESP32-S3 firmware (PlatformIO + Arduino framework)
-├── web/        Go backend + React/Ant Design frontend (Docker-deployed on TNAS)
-└── app/        Flutter Android mobile app
+├── controller_firmware/   ESP32-S3 firmware (PlatformIO + Arduino framework)
+├── web/                   Go backend + React/Ant Design frontend (Docker-deployed on TNAS)
+└── app/                   Flutter Android mobile app
 ```
 
 ## Versions
 
 | Component   | Latest |
 |-------------|--------|
-| Firmware    | v1.3.2 |
-| Web App     | v1.3.3 |
-| Mobile App  | v1.4.1 |
+| Firmware    | v1.3.6 |
+| Web App     | v1.3.4 |
+| Mobile App  | v1.4.3 |
 
 ---
 
@@ -204,7 +204,7 @@ $docker = "/Volume1/@apps/DockerEngine/dockerd/bin/docker"
 ### Serial flash (USB, first-time or recovery)
 
 ```bash
-cd firmware
+cd controller_firmware
 pio run -e nebulas3_serial -t upload   # COM7 on Windows
 ```
 
@@ -212,7 +212,7 @@ pio run -e nebulas3_serial -t upload   # COM7 on Windows
 
 1. Build firmware locally:
    ```bash
-   cd firmware
+   cd controller_firmware
    pio run -e nebulas3_serial
    # Binary at: .pio/build/nebulas3_serial/firmware.bin
    ```
@@ -263,8 +263,7 @@ git clone https://github.com/nperiannan/TankMonitor.git
 cd TankMonitor
 
 # Work on firmware
-cd firmware && pio run ...
-
+ cd controller_firmware && pio run ...
 # Work on web app
 cd web/frontend && npm run dev     # dev server
 cd web && docker build ...         # production
@@ -285,7 +284,7 @@ git push origin master
 ### Sync a subfolder from its old repo (one-off)
 
 ```bash
-git subtree pull --prefix=firmware https://github.com/nperiannan/Tank-Monitor-Float.git master
+git subtree pull --prefix=controller_firmware https://github.com/nperiannan/Tank-Monitor-Float.git master
 git subtree pull --prefix=web      https://github.com/nperiannan/TankMonitor-Web.git master
 git subtree pull --prefix=app      https://github.com/nperiannan/TankMonitor-App.git master
 ```

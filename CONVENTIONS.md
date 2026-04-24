@@ -1,7 +1,7 @@
 # TankMonitor Repo Conventions
 
 ## Repository
-- Monorepo: `firmware/`, `web/`, `app/`
+- Monorepo: `controller_firmware/`, `web/`, `app/`
 - Remote: https://github.com/nperiannan/TankMonitor.git
 - Branch: `master`
 
@@ -19,10 +19,10 @@
 - **Never let version strings drift** — the binary version, git tag, README table, and CHANGELOG must all agree
 
 ## Versioning & Tags
-- Tag format: `firmware/vX.Y.Z`, `web/vX.Y.Z`, `app/vX.Y.Z`
+- Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `app/vX.Y.Z`
 - Tags must be **annotated** (not lightweight): `git tag -a web/vX.Y.Z -m "..."`
 - Version strings live in:
-  - Firmware: `firmware/include/Config.h` → `#define FW_VERSION`
+  - Firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
   - Web backend: `web/backend/main.go` → `const webVersion`
   - Web frontend: `web/frontend/src/App.tsx` → `const WEB_APP_VERSION` ← must ALSO be bumped (hardcoded, not fetched from server)
   - App: Flutter `app/pubspec.yaml` → `version:`
@@ -47,7 +47,7 @@
 - Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
 
 ## OTA Flash Flow
-1. Build firmware locally: `pio run -e nebulas3_serial` → binary at `firmware/.pio/build/nebulas3_serial/firmware.bin`
+1. Build firmware locally: `pio run -e nebulas3_serial` → binary at `controller_firmware/.pio/build/nebulas3_serial/firmware.bin`
 2. Upload via web app **Firmware Update (OTA)** → **Upload firmware.bin**
 3. Click **Flash to ESP32**
 4. Backend publishes `ota_start` MQTT command with `OTA_BASE_URL`-based download URL
