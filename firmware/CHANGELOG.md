@@ -4,6 +4,17 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [1.3.2] — 2026-04-24
+
+### Added
+- **LCD backlight mode selector** — Web UI setting to choose `Auto`, `Always On`, or `Always Off`. Persisted in NVS, applied immediately.
+- **MQTT password change from web UI** — Settings card with password input and confirm dialog. Sends `set_mqtt_creds` command over MQTT to update NVS credentials on the ESP32 — no reflash needed.
+
+### Removed
+- **BLE (Bluetooth Low Energy) toggle removed from web UI** — BLE was already removed from firmware in v1.1.0; the toggle in the settings page has now been removed to match.
+
+---
+
 ## [1.1.0] — 2026-04-19
 
 ### Fixed
