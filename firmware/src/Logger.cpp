@@ -1,5 +1,6 @@
 #include "Logger.h"
 #include <Arduino.h>
+#include <time.h>
 
 static LogLevel activeLogLevel = INFO;
 
@@ -23,11 +24,30 @@ static const char* levelStr(LogLevel level) {
     }
 }
 
+// Returns a human-readable timestamp: "HH:MM:SS" (wall clock if NTP synced,
+// "+HH:MM:SS" uptime otherwise).
+static void fmtTimestamp(char* buf, size_t len) {
+    struct tm ti;
+    if (getLocalTime(&ti, 0)) {
+        // Wall-clock time from NTP
+        snprintf(buf, len, "%02d:%02d:%02d",
+                 ti.tm_hour, ti.tm_min, ti.tm_sec);
+    } else {
+        // Uptime fallback – prefix with '+' so it's distinguishable
+        unsigned long ms = millis();
+        unsigned long s  = ms / 1000;
+        snprintf(buf, len, "+%02lu:%02lu:%02lu",
+                 s / 3600, (s % 3600) / 60, s % 60);
+    }
+}
+
 void Log(LogLevel level, const String& message) {
     if (level < activeLogLevel) return;
+    char ts[12];
+    fmtTimestamp(ts, sizeof(ts));
     char entry[LOG_ENTRY_LEN];
-    snprintf(entry, sizeof(entry), "[%lu][%s] %s",
-             millis(), levelStr(level), message.c_str());
+    snprintf(entry, sizeof(entry), "[%s][%s] %s",
+             ts, levelStr(level), message.c_str());
     // Write to ring buffer
     strncpy(logBuf[logHead], entry, LOG_ENTRY_LEN - 1);
     logBuf[logHead][LOG_ENTRY_LEN - 1] = '\0';

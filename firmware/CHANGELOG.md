@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [1.3.5] — 2026-04-24
+
+### Changed
+- **Log timestamp** — Replaced raw milliseconds (`[3219719]`) with human-readable `[HH:MM:SS]` format. Wall-clock time is used when NTP is synced; uptime `[+HH:MM:SS]` is shown before first sync.
+
+---
+
 ## [1.3.4] — 2026-04-24
 
 ### Added
