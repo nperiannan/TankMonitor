@@ -13,6 +13,7 @@
 #include "MotorControl.h"
 #include "Scheduler.h"
 #include "RTCManager.h"
+#include "Buzzer.h"
 #include "WiFiManager.h"
 #include "Display.h"
 #include <ArduinoJson.h>
@@ -386,6 +387,7 @@ void publishMQTTStatus() {
         "\"ug_ignore\":%s,\"buzzer_delay\":%s,"
         "\"lcd_bl_mode\":%u,"
         "\"log_level\":\"%s\","
+        "\"buzzer_active\":%s,"
         "\"schedules\":%s}",
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
@@ -402,6 +404,7 @@ void publishMQTTStatus() {
         buzzerDelayEnabled ? "true" : "false",
         (unsigned)lcdBacklightMode,
         getLogLevel() == DEBUG ? "debug" : "info",
+        isBuzzerActive() ? "true" : "false",
         schedJson
     );
 

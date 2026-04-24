@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [1.3.6] — 2026-04-24
+
+### Added
+- **`buzzer_active` in MQTT and HTTP status** — Boolean field indicating whether the buzzer is currently sounding. Consumed by mobile app to show an animated buzzer icon.
+
+---
+
 ## [1.3.5] — 2026-04-24
 
 ### Changed

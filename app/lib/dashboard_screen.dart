@@ -108,17 +108,53 @@ class _MotorPill extends StatelessWidget {
 }
 
 // ─── Tank card ────────────────────────────────────────────────────────────────
-class _TankCard extends StatelessWidget {
+class _TankCard extends StatefulWidget {
   final String title;
   final String tankState;
   final bool motorOn;
+  final bool buzzerActive;
   final VoidCallback onOn;
   final VoidCallback onOff;
 
   const _TankCard({
     required this.title, required this.tankState, required this.motorOn,
-    required this.onOn, required this.onOff,
+    required this.buzzerActive, required this.onOn, required this.onOff,
   });
+
+  @override
+  State<_TankCard> createState() => _TankCardState();
+}
+
+class _TankCardState extends State<_TankCard> with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 550),
+    );
+    if (widget.buzzerActive) _pulseCtrl.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_TankCard old) {
+    super.didUpdateWidget(old);
+    if (widget.buzzerActive && !old.buzzerActive) {
+      _pulseCtrl.repeat(reverse: true);
+    } else if (!widget.buzzerActive && old.buzzerActive) {
+      _pulseCtrl
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,10 +167,10 @@ class _TankCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(title.toUpperCase(),
+          Text(widget.title.toUpperCase(),
             style: const TextStyle(color: _label, fontSize: 10, letterSpacing: 1)),
           const SizedBox(height: 10),
-          _TankCircle(tankState),
+          _TankCircle(widget.tankState),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -145,14 +181,37 @@ class _TankCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Motor', style: TextStyle(color: _label, fontSize: 11)),
-                _MotorPill(motorOn),
+                Row(children: [
+                  // ── Buzzer indicator ──
+                  AnimatedBuilder(
+                    animation: _pulseCtrl,
+                    builder: (_, __) {
+                      final active = widget.buzzerActive;
+                      return Opacity(
+                        opacity: active ? (0.35 + 0.65 * _pulseCtrl.value) : 1.0,
+                        child: Tooltip(
+                          message: active ? 'Buzzer active' : 'Buzzer off',
+                          child: Icon(
+                            active
+                              ? Icons.notifications_active
+                              : Icons.notifications_off_outlined,
+                            color: active ? _orange : const Color(0xFF434343),
+                            size: 17,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _MotorPill(widget.motorOn),
+                ]),
               ],
             ),
           ),
           const SizedBox(height: 8),
           Row(children: [
             Expanded(child: ElevatedButton(
-              onPressed: onOn,
+              onPressed: widget.onOn,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _blue, foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -162,7 +221,7 @@ class _TankCard extends StatelessWidget {
             )),
             const SizedBox(width: 6),
             Expanded(child: ElevatedButton(
-              onPressed: onOff,
+              onPressed: widget.onOff,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2a1215), foregroundColor: _red,
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -408,6 +467,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         title: 'Underground',
                         tankState: s?.ugState ?? '',
                         motorOn: s?.ugMotor ?? false,
+                        buzzerActive: s?.buzzerActive ?? false,
                         onOn:  () => svc.sendControl({'cmd': 'ug_on'}),
                         onOff: () => svc.sendControl({'cmd': 'ug_off'}),
                       )),
@@ -416,6 +476,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         title: 'Overhead',
                         tankState: s?.ohState ?? '',
                         motorOn: s?.ohMotor ?? false,
+                        buzzerActive: s?.buzzerActive ?? false,
                         onOn:  () => svc.sendControl({'cmd': 'oh_on'}),
                         onOff: () => svc.sendControl({'cmd': 'oh_off'}),
                       )),
