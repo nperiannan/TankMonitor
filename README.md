@@ -120,17 +120,43 @@ Configure these rules on your home router (ER605 or similar):
 > **Note**: Hairpin NAT is not supported on ER605. On the local network always
 > use `192.168.0.102` directly, not the public domain name.
 
+### First-time NAS git setup (sparse checkout — `web/` only)
+
+Run once on the NAS (via SSH or plink) to clone only the `web/` folder:
+
+```bash
+GIT=/home/nperiannan/miniconda3/bin/git
+
+# Remove old manually-copied directory if it exists
+rm -rf /Volume1/docker/TankMonitor
+
+# Sparse clone — fetches objects only for web/
+$GIT clone --no-checkout --filter=blob:none \
+  https://github.com/nperiannan/TankMonitor.git \
+  /Volume1/docker/TankMonitor
+
+cd /Volume1/docker/TankMonitor
+$GIT sparse-checkout init --cone
+$GIT sparse-checkout set web
+$GIT checkout master
+```
+
+After this the layout is `/Volume1/docker/TankMonitor/web/{Dockerfile,backend/,frontend/}`.
+Future `git pull` calls from that directory automatically download only `web/` changes.
+
+---
+
 ### Deploy / Update the Web App
 
 Connect to TNAS via SSH, then:
 
 ```bash
-# Pull latest code from GitHub
-cd /Volume1/docker/TankMonitor-Web
+# Pull latest web/ changes from GitHub
+cd /Volume1/docker/TankMonitor
 /home/nperiannan/miniconda3/bin/git pull
 
-# Rebuild the Docker image
-/Volume1/@apps/DockerEngine/dockerd/bin/docker build -t tankmonitor-web .
+# Rebuild the Docker image (build context is web/ subfolder)
+/Volume1/@apps/DockerEngine/dockerd/bin/docker build -t tankmonitor-web web/
 
 # Stop and remove old container
 /Volume1/@apps/DockerEngine/dockerd/bin/docker stop tankmonitor-web
@@ -162,7 +188,7 @@ $pw    = "<tnas-ssh-password>"
 $docker = "/Volume1/@apps/DockerEngine/dockerd/bin/docker"
 
 & $plink -ssh -pw $pw -hostkey $hk nperiannan@192.168.0.102 `
-  "cd /Volume1/docker/TankMonitor-Web && /home/nperiannan/miniconda3/bin/git pull && $docker build -t tankmonitor-web . && $docker stop tankmonitor-web && $docker rm tankmonitor-web && $docker run -d --name tankmonitor-web --restart unless-stopped -p 1880:8080 -e MQTT_BROKER=192.168.0.102 -e MQTT_PORT=1883 -e MQTT_USER=tankmonitor -e 'MQTT_PASS=<mqtt-password>' -e MQTT_LOCATION=home -e AUTH_USER=admin -e 'AUTH_PASS=<web-password>' -e 'AUTH_SECRET=<secret>' -e OTA_BASE_URL=http://192.168.0.102:1880 tankmonitor-web && echo DONE"
+  "cd /Volume1/docker/TankMonitor && /home/nperiannan/miniconda3/bin/git pull && $docker build -t tankmonitor-web web/ && $docker stop tankmonitor-web && $docker rm tankmonitor-web && $docker run -d --name tankmonitor-web --restart unless-stopped -p 1880:8080 -e MQTT_BROKER=192.168.0.102 -e MQTT_PORT=1883 -e MQTT_USER=tankmonitor -e 'MQTT_PASS=<mqtt-password>' -e MQTT_LOCATION=home -e AUTH_USER=admin -e 'AUTH_PASS=<web-password>' -e 'AUTH_SECRET=<secret>' -e OTA_BASE_URL=http://192.168.0.102:1880 tankmonitor-web && echo DONE"
 ```
 
 ### Check container logs
