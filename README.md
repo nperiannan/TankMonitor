@@ -175,7 +175,7 @@ cd /Volume1/docker/TankMonitor
   -e AUTH_USER=admin \
   -e 'AUTH_PASS=<web-password>' \
   -e 'AUTH_SECRET=<secret>' \
-  -e OTA_BASE_URL=http://192.168.0.102:1880 \
+  -e OTA_BASE_URL=http://nperiannan-nas.freemyip.com:1880 \
   tankmonitor-web
 ```
 
@@ -188,7 +188,7 @@ $pw    = "<tnas-ssh-password>"
 $docker = "/Volume1/@apps/DockerEngine/dockerd/bin/docker"
 
 & $plink -ssh -pw $pw -hostkey $hk nperiannan@192.168.0.102 `
-  "cd /Volume1/docker/TankMonitor && /home/nperiannan/miniconda3/bin/git pull && $docker build -t tankmonitor-web web/ && $docker stop tankmonitor-web && $docker rm tankmonitor-web && $docker run -d --name tankmonitor-web --restart unless-stopped -p 1880:8080 -e MQTT_BROKER=192.168.0.102 -e MQTT_PORT=1883 -e MQTT_USER=tankmonitor -e 'MQTT_PASS=<mqtt-password>' -e MQTT_LOCATION=home -e AUTH_USER=admin -e 'AUTH_PASS=<web-password>' -e 'AUTH_SECRET=<secret>' -e OTA_BASE_URL=http://192.168.0.102:1880 tankmonitor-web && echo DONE"
+  "cd /Volume1/docker/TankMonitor && /home/nperiannan/miniconda3/bin/git pull && $docker build -t tankmonitor-web web/ && $docker stop tankmonitor-web && $docker rm tankmonitor-web && $docker run -d --name tankmonitor-web --restart unless-stopped -p 1880:8080 -e MQTT_BROKER=192.168.0.102 -e MQTT_PORT=1883 -e MQTT_USER=tankmonitor -e 'MQTT_PASS=<mqtt-password>' -e MQTT_LOCATION=home -e AUTH_USER=admin -e 'AUTH_PASS=<web-password>' -e 'AUTH_SECRET=<secret>' -e OTA_BASE_URL=http://nperiannan-nas.freemyip.com:1880 tankmonitor-web && echo DONE"
 ```
 
 ### Check container logs
