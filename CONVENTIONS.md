@@ -57,6 +57,15 @@
 > If OTA shows "failed" after 120 s — check that `FW_VERSION` in `Config.h` was actually bumped.  
 > The backend detects success by watching for a version change; if the version didn't change, it times out.
 
+## Keeping This File in Sync
+- This file (`CONVENTIONS.md`) mirrors the AI session memory for this repo
+- **Whenever a new rule or convention is established, update this file and push immediately**:
+  ```bash
+  git add CONVENTIONS.md
+  git commit -m "docs: update CONVENTIONS.md — <what changed>"
+  git push origin master
+  ```
+
 ## Git Notes
 - `credential-winced` warning on push is harmless (typo in git credential helper config)
 - Flutter auto-generated files (`app/linux/`, `app/macos/`, `app/windows/`) are not committed unless intentionally changed
