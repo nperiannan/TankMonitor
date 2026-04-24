@@ -308,6 +308,13 @@ input:checked+.sld::before{transform:translateX(18px)}
       <button class="btn btn-d" style="padding:4px 10px;font-size:11px" onclick="clearLogs()">&#128465; Clear</button>
     </div>
   </div>
+  <div class="trow" style="margin-bottom:6px">
+    <span class="tlbl">Log Level</span>
+    <select id="log_level_sel" onchange="setLogLevel(this.value)" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px">
+      <option value="info">Info (Info + Warn + Error)</option>
+      <option value="debug">Debug (All)</option>
+    </select>
+  </div>
   <div id="logBox" style="font-family:monospace;font-size:11px;background:var(--inp-bg);border:1px solid var(--bd2);border-radius:6px;padding:10px;max-height:220px;overflow-y:auto;color:var(--tx2);white-space:pre-wrap;word-break:break-all">Loading...</div>
 </div>
 
@@ -408,6 +415,8 @@ function refreshStatus(){
       var modes=['auto','always_on','always_off'];
       lcdSel.value=modes[d.lcdBlMode]||'auto';
     }
+    var lls=document.getElementById('log_level_sel');
+    if(lls&&d.logLevel)lls.value=d.logLevel;
     // Scheduler active alert
     var sa=document.getElementById('schedAlert');
     if(sa)sa.style.display=d.schedRunning?'flex':'none';
@@ -514,6 +523,13 @@ function setLcdMode(mode){
   fetch('/setlcdmode',{method:'POST',body:new URLSearchParams({mode:mode})})
     .then(function(r){return r.json();}).then(function(d){
       toast(d.ok?'LCD mode saved':'Failed',d.ok?'ok':'err');
+    }).catch(function(){toast('Failed','err');});
+}
+// ---- Log level ----
+function setLogLevel(level){
+  fetch('/setloglevel',{method:'POST',body:new URLSearchParams({level:level})})
+    .then(function(r){return r.json();}).then(function(d){
+      toast(d.ok?'Log level: '+level:'Failed',d.ok?'ok':'err');
     }).catch(function(){toast('Failed','err');});
 }
 // ---- MQTT password ----
@@ -724,6 +740,7 @@ static void handleStatus() {
     doc["bleEnabled"]        = false;
     doc["bleConnected"]      = false;
     doc["lcdBlMode"]         = (int)lcdBacklightMode;
+    doc["logLevel"]          = getLogLevel() == DEBUG ? "debug" : "info";
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();
     doc["ntpSyncAge"]        = (uint32_t)getNtpSyncAgeSeconds();
@@ -1034,6 +1051,22 @@ static void handleSetLcdMode() {
 }
 
 // ---------------------------------------------------------------------------
+//  POST /setloglevel  – set log level (info / debug)
+// ---------------------------------------------------------------------------
+
+static void handleSetLogLevel() {
+    String level = server.arg("level");
+    if (level == "debug") {
+        setLogLevel(DEBUG);
+        Log(INFO, "[Web] Log level set to DEBUG");
+    } else {
+        setLogLevel(INFO);
+        Log(INFO, "[Web] Log level set to INFO");
+    }
+    sendOk();
+}
+
+// ---------------------------------------------------------------------------
 //  POST /setmqttpass  – update MQTT password in NVS and reconnect
 // ---------------------------------------------------------------------------
 
@@ -1069,6 +1102,7 @@ void setupWebServer() {
     server.on("/systeminfo",         HTTP_GET,  handleSystemInfo);
     server.on("/setbleenabled",      HTTP_POST, handleSetBleEnabled);
     server.on("/setlcdmode",         HTTP_POST, handleSetLcdMode);
+    server.on("/setloglevel",        HTTP_POST, handleSetLogLevel);
     server.on("/setmqttpass",        HTTP_POST, handleSetMqttPass);
     server.on("/schedulelist",       HTTP_GET,  handleScheduleList);
     server.on("/updateAllSchedules", HTTP_POST, handleUpdateAllSchedules);

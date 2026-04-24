@@ -38,6 +38,7 @@ class Status {
   final bool ugIgnore;
   final bool buzzerDelay;
   final int  lcdBlMode;   // 0=auto, 1=always_on, 2=always_off
+  final String logLevel;  // 'info' | 'debug'
 
   const Status({
     required this.ohState,
@@ -55,6 +56,7 @@ class Status {
     required this.ugIgnore,
     required this.buzzerDelay,
     required this.lcdBlMode,
+    required this.logLevel,
   });
 
   factory Status.fromJson(Map<String, dynamic> j) => Status(
@@ -75,5 +77,6 @@ class Status {
         ugIgnore:   j['ug_ignore']    as bool? ?? false,
         buzzerDelay:j['buzzer_delay'] as bool? ?? false,
         lcdBlMode:  j['lcd_bl_mode']  as int?  ?? 0,
+        logLevel:   j['log_level']    as String? ?? 'info',
       );
 }

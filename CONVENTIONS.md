@@ -66,6 +66,11 @@
   git push origin master
   ```
 
+## Security — NEVER commit credentials without approval
+- **NEVER commit passwords, tokens, secrets, or credentials to git without explicit user approval**
+- Before committing any file that contains a password/secret (README, CONVENTIONS, docker-compose, shell scripts, `.env.example`), ask the user first
+- Prefer placeholders: `YOUR_PASSWORD_HERE`, `<secret>`, etc.
+
 ## Git Notes
 - `credential-winced` warning on push is harmless (typo in git credential helper config)
 - Flutter auto-generated files (`app/linux/`, `app/macos/`, `app/windows/`) are not committed unless intentionally changed

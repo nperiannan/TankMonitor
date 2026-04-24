@@ -4,6 +4,17 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [1.3.4] — 2026-04-24
+
+### Added
+- **Configurable log level** — Log level can be set to `Info` (Info + Warn + Error, default) or `Debug` (all messages). Configurable from the ESP32 built-in web page (Logs card), mobile app (System tab), and web app. Setting is applied instantly via HTTP POST `/setloglevel` or MQTT `set_log_level` command.
+- **`log_level` in MQTT status** — Every status publish now includes the current log level so all clients can reflect it.
+
+### Changed
+- **MQTT status publish log** — The periodic `[MQTT] Published status` message is now a `DEBUG`-level log (suppressed in `Info` mode) to reduce noise.
+
+---
+
 ## [1.3.3] — 2026-04-24
 
 ### Fixed

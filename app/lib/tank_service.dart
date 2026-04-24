@@ -15,7 +15,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.4.1';
+const mobileAppVersion = '1.4.2';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -335,6 +335,10 @@ class TankService extends ChangeNotifier {
 
   Future<void> setMqttCreds(String pass) async {
     await sendControl({'cmd': 'set_mqtt_creds', 'pass': pass});
+  }
+
+  Future<void> setLogLevel(String level) async {
+    await sendControl({'cmd': 'set_log_level', 'level': level});
   }
 
   Future<Map<String, dynamic>?> fetchOtaStatus() async {

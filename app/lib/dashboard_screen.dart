@@ -200,6 +200,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   String?      _logsAt;
   bool         _logsLoading = false;
 
+  // Bottom nav tab
+  int _tabIndex = 0;
+
   @override
   void initState() {
     super.initState();
@@ -382,322 +385,390 @@ class _DashboardScreenState extends State<DashboardScreen>
       ),
       body: svc.error != null
           ? _ErrorBanner(svc.error!)
-          : ListView(
-              padding: const EdgeInsets.all(12),
+          : IndexedStack(
+              index: _tabIndex,
               children: [
-
-                if (svc.updateAvailable)
-                  _UpdateBanner(
-                    latestVersion: svc.latestAppVersion ?? '',
-                    downloading: _downloadProgress != null,
-                    progress: _downloadProgress,
-                    onUpdate: _downloadAndInstall,
-                  ),
-
-                if (!svc.connected)
-                  const _Banner('Disconnected — reconnecting…', isError: false),
-
-                // ── Tank cards ──
-                Row(children: [
-                  Expanded(child: _TankCard(
-                    title: 'Underground',
-                    tankState: s?.ugState ?? '',
-                    motorOn: s?.ugMotor ?? false,
-                    onOn:  () => svc.sendControl({'cmd': 'ug_on'}),
-                    onOff: () => svc.sendControl({'cmd': 'ug_off'}),
-                  )),
-                  const SizedBox(width: 10),
-                  Expanded(child: _TankCard(
-                    title: 'Overhead',
-                    tankState: s?.ohState ?? '',
-                    motorOn: s?.ohMotor ?? false,
-                    onOn:  () => svc.sendControl({'cmd': 'oh_on'}),
-                    onOff: () => svc.sendControl({'cmd': 'oh_off'}),
-                  )),
-                ]),
-                const SizedBox(height: 12),
-
-                // ── Schedules ──
-                _SectionCard(
-                  title: 'MOTOR SCHEDULER',
-                  trailing: Row(children: [
-                    _SmallButton(
-                      label: '+ Add',
-                      onTap: () => showModalBottomSheet(
-                        context: context, isScrollControlled: true,
-                        backgroundColor: _cardBg,
-                        builder: (_) => ScheduleSheet(svc: svc),
+                // ── Tab 0: Dashboard ──────────────────────────────────────
+                ListView(
+                  key: const PageStorageKey('dashboard'),
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    if (svc.updateAvailable)
+                      _UpdateBanner(
+                        latestVersion: svc.latestAppVersion ?? '',
+                        downloading: _downloadProgress != null,
+                        progress: _downloadProgress,
+                        onUpdate: _downloadAndInstall,
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    _SmallButton(
-                      label: 'Clear All', danger: true,
-                      onTap: () => _confirmClear(context, svc),
-                    ),
-                  ]),
-                  child: s == null || s.schedules.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 12),
-                          child: Center(child: Text('No schedules configured',
-                            style: TextStyle(color: _label, fontSize: 13))),
-                        )
-                      : Column(
-                          children: enabledScheds.map((sch) =>
-                            _ScheduleRow(
-                              sch: sch,
-                              svc: svc,
-                              isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
-                            )).toList(),
-                        ),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Settings ──
-                _SectionCard(
-                  title: 'SETTINGS',
-                  child: Column(children: [
-                    _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_disp_only', 'value': v})),
-                    _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_disp_only', 'value': v})),
-                    _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_ignore',    'value': v})),
-                    _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendControl({'cmd': 'set_setting', 'key': 'buzzer_delay', 'value': v})),
-                    // LCD Backlight mode
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('LCD Backlight', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                          DropdownButton<int>(
-                            value: s?.lcdBlMode ?? 0,
-                            isDense: true,
-                            dropdownColor: const Color(0xFF1f1f1f),
-                            style: const TextStyle(color: Colors.white, fontSize: 13),
-                            underline: const SizedBox(),
-                            items: const [
-                              DropdownMenuItem(value: 0, child: Text('Auto')),
-                              DropdownMenuItem(value: 1, child: Text('On')),
-                              DropdownMenuItem(value: 2, child: Text('Off')),
-                            ],
-                            onChanged: s != null
-                              ? (v) { if (v != null) svc.setLcdMode(v); }
-                              : null,
-                          ),
-                        ],
-                      ),
-                    ),
-                    // MQTT Password
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('MQTT Password', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                          TextButton(
-                            onPressed: s != null ? () => _changeMqttPassword(context, svc) : null,
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text('Change', style: TextStyle(fontSize: 12)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Actions ──
-                _SectionCard(
-                  title: 'ACTIONS',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(children: [
-                      _ActionButton(
-                        label: 'Sync NTP',
-                        icon: Icons.sync,
-                        enabled: s != null,
-                        onTap: () => svc.sendControl({'cmd': 'sync_ntp'}),
-                      ),
+                    if (!svc.connected)
+                      const _Banner('Disconnected — reconnecting…', isError: false),
+                    // ── Tank cards ──
+                    Row(children: [
+                      Expanded(child: _TankCard(
+                        title: 'Underground',
+                        tankState: s?.ugState ?? '',
+                        motorOn: s?.ugMotor ?? false,
+                        onOn:  () => svc.sendControl({'cmd': 'ug_on'}),
+                        onOff: () => svc.sendControl({'cmd': 'ug_off'}),
+                      )),
                       const SizedBox(width: 10),
-                      _ActionButton(
-                        label: 'Reboot',
-                        icon: Icons.power_settings_new,
-                        danger: true,
-                        enabled: s != null,
-                        onTap: () => _confirmReboot(context, svc),
-                      ),
+                      Expanded(child: _TankCard(
+                        title: 'Overhead',
+                        tankState: s?.ohState ?? '',
+                        motorOn: s?.ohMotor ?? false,
+                        onOn:  () => svc.sendControl({'cmd': 'oh_on'}),
+                        onOff: () => svc.sendControl({'cmd': 'oh_off'}),
+                      )),
                     ]),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Firmware OTA ──
-                _SectionCard(
-                  title: 'FIRMWARE UPDATE (OTA)',
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Expanded(child: Text(
-                          'Current: ${s?.fw ?? '—'}',
-                          style: const TextStyle(color: _label, fontSize: 12),
-                        )),
-                      ]),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Upload a firmware.bin via the web app, then trigger flash here.',
-                        style: TextStyle(color: _label, fontSize: 11),
-                      ),
-                      // OTA phase message
-                      if (_otaPhase.isNotEmpty && _otaPhase != 'idle') ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _otaPhase == 'success'
-                                ? Colors.green.withAlpha(30)
-                                : _otaPhase == 'failed'
-                                    ? Colors.red.withAlpha(30)
-                                    : Colors.blue.withAlpha(30),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: _otaPhase == 'success'
-                                  ? Colors.green.withAlpha(80)
-                                  : _otaPhase == 'failed'
-                                      ? Colors.red.withAlpha(80)
-                                      : Colors.blue.withAlpha(80),
-                            ),
+                    const SizedBox(height: 12),
+                    // ── Schedules ──
+                    _SectionCard(
+                      title: 'MOTOR SCHEDULER',
+                      trailing: Row(children: [
+                        _SmallButton(
+                          label: '+ Add',
+                          onTap: () => showModalBottomSheet(
+                            context: context, isScrollControlled: true,
+                            backgroundColor: _cardBg,
+                            builder: (_) => ScheduleSheet(svc: svc),
                           ),
-                          child: Row(children: [
-                            if (_otaBusy) ...[
-                              const SizedBox(width: 14, height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
-                              const SizedBox(width: 8),
-                            ],
-                            Expanded(child: Text(
-                              _otaPhase == 'triggered'   ? '⚡ Flash triggered — ESP32 is starting download…'
-                            : _otaPhase == 'downloading' ? '⬇️ ESP32 is downloading firmware…'
-                            : _otaPhase == 'success'     ? '✅ Update successful! Device rebooted.'
-                            : _otaPhase == 'failed'      ? '❌ Update failed — try serial flash.'
-                            : '',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: _otaPhase == 'success' ? Colors.greenAccent
-                                     : _otaPhase == 'failed'  ? Colors.redAccent
-                                     : Colors.white70,
+                        ),
+                        const SizedBox(width: 6),
+                        _SmallButton(
+                          label: 'Clear All', danger: true,
+                          onTap: () => _confirmClear(context, svc),
+                        ),
+                      ]),
+                      child: s == null || s.schedules.isEmpty
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Center(child: Text('No schedules configured',
+                                style: TextStyle(color: _label, fontSize: 13))),
+                            )
+                          : Column(
+                              children: enabledScheds.map((sch) =>
+                                _ScheduleRow(
+                                  sch: sch,
+                                  svc: svc,
+                                  isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
+                                )).toList(),
+                            ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+
+                // ── Tab 1: Settings ───────────────────────────────────────
+                ListView(
+                  key: const PageStorageKey('settings'),
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    // ── Settings ──
+                    _SectionCard(
+                      title: 'SETTINGS',
+                      child: Column(children: [
+                        _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_disp_only', 'value': v})),
+                        _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_disp_only', 'value': v})),
+                        _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_ignore',    'value': v})),
+                        _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendControl({'cmd': 'set_setting', 'key': 'buzzer_delay', 'value': v})),
+                        // LCD Backlight mode
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('LCD Backlight', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              DropdownButton<int>(
+                                value: s?.lcdBlMode ?? 0,
+                                isDense: true,
+                                dropdownColor: const Color(0xFF1f1f1f),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                underline: const SizedBox(),
+                                items: const [
+                                  DropdownMenuItem(value: 0, child: Text('Auto')),
+                                  DropdownMenuItem(value: 1, child: Text('On')),
+                                  DropdownMenuItem(value: 2, child: Text('Off')),
+                                ],
+                                onChanged: s != null
+                                  ? (v) { if (v != null) svc.setLcdMode(v); }
+                                  : null,
                               ),
+                            ],
+                          ),
+                        ),
+                        // MQTT Password
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('MQTT Password', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              TextButton(
+                                onPressed: s != null ? () => _changeMqttPassword(context, svc) : null,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('Change', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── Actions ──
+                    _SectionCard(
+                      title: 'ACTIONS',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(children: [
+                          _ActionButton(
+                            label: 'Sync NTP',
+                            icon: Icons.sync,
+                            enabled: s != null,
+                            onTap: () => svc.sendControl({'cmd': 'sync_ntp'}),
+                          ),
+                          const SizedBox(width: 10),
+                          _ActionButton(
+                            label: 'Reboot',
+                            icon: Icons.power_settings_new,
+                            danger: true,
+                            enabled: s != null,
+                            onTap: () => _confirmReboot(context, svc),
+                          ),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── Firmware OTA ──
+                    _SectionCard(
+                      title: 'FIRMWARE UPDATE (OTA)',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Expanded(child: Text(
+                              'Current: ${s?.fw ?? '—'}',
+                              style: const TextStyle(color: _label, fontSize: 12),
                             )),
                           ]),
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      Row(children: [
-                        Expanded(child: _ActionButton(
-                          label: _otaBusy
-                              ? (_otaPhase == 'triggered'   ? 'Triggering…'
-                                : _otaPhase == 'downloading' ? 'Downloading…'
-                                : 'Flashing…')
-                              : 'Flash Firmware',
-                          icon: Icons.bolt,
-                          enabled: s != null && !_otaBusy,
-                          onTap: () => _confirmFlash(context, svc),
-                        )),
-                        const SizedBox(width: 10),
-                        Expanded(child: _ActionButton(
-                          label: 'Rollback',
-                          icon: Icons.history,
-                          danger: true,
-                          enabled: s != null && !_otaBusy,
-                          onTap: () => _confirmRollback(context, svc),
-                        )),
-                      ]),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Device Logs ──
-                _SectionCard(
-                  title: 'DEVICE LOGS',
-                  trailing: IconButton(
-                    icon: _logsLoading
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
-                        : const Icon(Icons.refresh, size: 18, color: Colors.white54),
-                    onPressed: s == null || _logsLoading ? null : () async {
-                      svc.sendControl({'cmd': 'get_logs'});
-                      await Future.delayed(const Duration(seconds: 2));
-                      if (!mounted) return;
-                      setState(() => _logsLoading = true);
-                      final data = await svc.fetchLogs();
-                      if (!mounted) return;
-                      setState(() {
-                        _logsLoading = false;
-                        if (data != null) {
-                          _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
-                          _logsAt = data['received_at'] as String?;
-                        }
-                      });
-                    },
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_logsAt != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 4),
-                          child: Text(
-                            'Last received: ${DateTime.tryParse(_logsAt!)?.toLocal().toString().substring(0, 19) ?? _logsAt}',
-                            style: const TextStyle(color: _label, fontSize: 11),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Upload a firmware.bin via the web app, then trigger flash here.',
+                            style: TextStyle(color: _label, fontSize: 11),
                           ),
-                        ),
-                      Container(
-                        constraints: const BoxConstraints(maxHeight: 200),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0d0d0d),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(8),
-                          child: _deviceLogs.isEmpty
-                            ? const Text('No logs — tap Refresh to load.', style: TextStyle(color: _label, fontSize: 11))
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: _deviceLogs.reversed.map((line) => Text(
-                                  line,
-                                  style: TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 10,
-                                    color: line.contains('[WARN]') ? Colors.orange
-                                         : line.contains('[ERROR]') ? Colors.red
-                                         : Colors.white60,
-                                  ),
-                                )).toList(),
+                          // OTA phase message
+                          if (_otaPhase.isNotEmpty && _otaPhase != 'idle') ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: _otaPhase == 'success'
+                                    ? Colors.green.withAlpha(30)
+                                    : _otaPhase == 'failed'
+                                        ? Colors.red.withAlpha(30)
+                                        : Colors.blue.withAlpha(30),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: _otaPhase == 'success'
+                                      ? Colors.green.withAlpha(80)
+                                      : _otaPhase == 'failed'
+                                          ? Colors.red.withAlpha(80)
+                                          : Colors.blue.withAlpha(80),
+                                ),
                               ),
-                        ),
+                              child: Row(children: [
+                                if (_otaBusy) ...[
+                                  const SizedBox(width: 14, height: 14,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
+                                  const SizedBox(width: 8),
+                                ],
+                                Expanded(child: Text(
+                                  _otaPhase == 'triggered'   ? '⚡ Flash triggered — ESP32 is starting download…'
+                                : _otaPhase == 'downloading' ? '⬇️ ESP32 is downloading firmware…'
+                                : _otaPhase == 'success'     ? '✅ Update successful! Device rebooted.'
+                                : _otaPhase == 'failed'      ? '❌ Update failed — try serial flash.'
+                                : '',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: _otaPhase == 'success' ? Colors.greenAccent
+                                         : _otaPhase == 'failed'  ? Colors.redAccent
+                                         : Colors.white70,
+                                  ),
+                                )),
+                              ]),
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Row(children: [
+                            _ActionButton(
+                              label: _otaBusy
+                                  ? (_otaPhase == 'triggered'   ? 'Triggering…'
+                                    : _otaPhase == 'downloading' ? 'Downloading…'
+                                    : 'Flashing…')
+                                  : 'Flash Firmware',
+                              icon: Icons.bolt,
+                              enabled: s != null && !_otaBusy,
+                              onTap: () => _confirmFlash(context, svc),
+                            ),
+                            const SizedBox(width: 10),
+                            _ActionButton(
+                              label: 'Rollback',
+                              icon: Icons.history,
+                              danger: true,
+                              enabled: s != null && !_otaBusy,
+                              onTap: () => _confirmRollback(context, svc),
+                            ),
+                          ]),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-                const SizedBox(height: 10),
 
-                // ── System info ──
-                _SectionCard(
-                  title: 'SYSTEM',
-                  child: Column(children: [
-                    _InfoRow('WiFi',        s != null ? '${s.wifiRssi} dBm' : '—'),
-                    _InfoRow('LoRa',        null, loraOk: s?.loraOk),
-                    _InfoRow('Uptime',      s != null ? _formatUptime(s.uptimeS) : '—'),
-                    _InfoRow('Firmware',    s?.fw ?? '—'),
-                    _InfoRow('Web App',     svc.webAppVersion ?? '—'),
-                    _InfoRow('Mobile App',  mobileAppVersion),
-                    _InfoRow('Last update', svc.connected ? 'Live' : '—', last: true),
-                  ]),
+                // ── Tab 2: System ─────────────────────────────────────────
+                ListView(
+                  key: const PageStorageKey('system'),
+                  padding: const EdgeInsets.all(12),
+                  children: [
+                    // ── System info ──
+                    _SectionCard(
+                      title: 'SYSTEM',
+                      child: Column(children: [
+                        _InfoRow('WiFi',        s != null ? '${s.wifiRssi} dBm' : '—'),
+                        _InfoRow('LoRa',        null, loraOk: s?.loraOk),
+                        _InfoRow('Uptime',      s != null ? _formatUptime(s.uptimeS) : '—'),
+                        _InfoRow('Firmware',    s?.fw ?? '—'),
+                        _InfoRow('Web App',     svc.webAppVersion ?? '—'),
+                        _InfoRow('Mobile App',  mobileAppVersion, last: true),
+                      ]),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── Device Logs ──
+                    _SectionCard(
+                      title: 'DEVICE LOGS',
+                      trailing: IconButton(
+                        icon: _logsLoading
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
+                            : const Icon(Icons.refresh, size: 18, color: Colors.white54),
+                        onPressed: s == null || _logsLoading ? null : () async {
+                          svc.sendControl({'cmd': 'get_logs'});
+                          await Future.delayed(const Duration(seconds: 2));
+                          if (!mounted) return;
+                          setState(() => _logsLoading = true);
+                          final data = await svc.fetchLogs();
+                          if (!mounted) return;
+                          setState(() {
+                            _logsLoading = false;
+                            if (data != null) {
+                              _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
+                              _logsAt = data['received_at'] as String?;
+                            }
+                          });
+                        },
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Log level selector
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Log Level',
+                                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                DropdownButton<String>(
+                                  value: s?.logLevel ?? 'info',
+                                  isDense: true,
+                                  dropdownColor: const Color(0xFF1f1f1f),
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  underline: const SizedBox(),
+                                  items: const [
+                                    DropdownMenuItem(
+                                      value: 'info',
+                                      child: Text('Info (Warn + Error)'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'debug',
+                                      child: Text('Debug (All)'),
+                                    ),
+                                  ],
+                                  onChanged: s != null
+                                    ? (v) { if (v != null) svc.setLogLevel(v); }
+                                    : null,
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_logsAt != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: Text(
+                                'Last received: ${DateTime.tryParse(_logsAt!)?.toLocal().toString().substring(0, 19) ?? _logsAt}',
+                                style: const TextStyle(color: _label, fontSize: 11),
+                              ),
+                            ),
+                          Container(
+                            constraints: const BoxConstraints(maxHeight: 200),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0d0d0d),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: SingleChildScrollView(
+                              padding: const EdgeInsets.all(8),
+                              child: _deviceLogs.isEmpty
+                                ? const Text('No logs — tap Refresh to load.', style: TextStyle(color: _label, fontSize: 11))
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: _deviceLogs.reversed.map((line) => Text(
+                                      line,
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 10,
+                                        color: line.contains('[WARN]') ? Colors.orange
+                                             : line.contains('[ERROR]') ? Colors.red
+                                             : Colors.white60,
+                                      ),
+                                    )).toList(),
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
-                const SizedBox(height: 20),
               ],
             ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _tabIndex,
+        onTap: (i) => setState(() => _tabIndex = i),
+        backgroundColor: _cardBg,
+        selectedItemColor: _blue,
+        unselectedItemColor: _label,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            activeIcon: Icon(Icons.settings),
+            label: 'Settings',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.monitor_heart_outlined),
+            activeIcon: Icon(Icons.monitor_heart),
+            label: 'System',
+          ),
+        ],
+      ),
     );
   }
 

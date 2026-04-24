@@ -259,6 +259,16 @@ static void processPendingMQTT() {
             s_mqtt.disconnect();  // mqttLoop() will reconnect using new NVS creds
         }
     }
+    else if (strcmp(cmd, "set_log_level") == 0) {
+        const char* level = doc["level"] | "info";
+        if (strcmp(level, "debug") == 0) {
+            setLogLevel(DEBUG);
+            Log(INFO, "[MQTT] Log level set to DEBUG");
+        } else {
+            setLogLevel(INFO);
+            Log(INFO, "[MQTT] Log level set to INFO");
+        }
+    }
     else if (strcmp(cmd, "reboot") == 0) {
         Log(INFO, "[MQTT] reboot commanded");
         publishMQTTStatus();
@@ -375,6 +385,7 @@ void publishMQTTStatus() {
         "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
         "\"ug_ignore\":%s,\"buzzer_delay\":%s,"
         "\"lcd_bl_mode\":%u,"
+        "\"log_level\":\"%s\","
         "\"schedules\":%s}",
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
@@ -390,11 +401,12 @@ void publishMQTTStatus() {
         ugIgnoreForOH      ? "true" : "false",
         buzzerDelayEnabled ? "true" : "false",
         (unsigned)lcdBacklightMode,
+        getLogLevel() == DEBUG ? "debug" : "info",
         schedJson
     );
 
     if (s_mqtt.publish(s_topicStatus, payload, true)) {
-        Log(INFO, "[MQTT] Published status");
+        Log(DEBUG, "[MQTT] Published status");
     } else {
         Log(WARN, "[MQTT] Publish failed (buffer too small?)");
     }
