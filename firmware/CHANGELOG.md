@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [1.3.3] — 2026-04-24
+
+### Fixed
+- **LCD splash screen** — Startup message now shows the actual firmware version (`FW: 1.3.3`) instead of hardcoded `Float v1.0`.
+
+---
+
 ## [1.3.2] — 2026-04-24
 
 ### Added

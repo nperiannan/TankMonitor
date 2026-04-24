@@ -120,7 +120,7 @@ void initDisplay() {
     lcd.setCursor(0, 0);
     lcd.print("Tank Monitor");
     lcd.setCursor(0, 1);
-    lcd.print("  Float v1.0  ");
+    lcd.print("  FW: " FW_VERSION "  ");
     lcdInitOk   = true;
     backlightOn = true;
     applyBacklightMode();  // apply persisted mode at startup
