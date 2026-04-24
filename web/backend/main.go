@@ -25,7 +25,7 @@ import (
 // Version
 // ---------------------------------------------------------------------------
 
-const webVersion = "1.3.2"
+const webVersion = "1.3.3"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -513,17 +513,26 @@ func handleOtaTrigger(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no firmware staged", http.StatusBadRequest)
 		return
 	}
-	// Build the URL the ESP32 should fetch from
-	// Use X-Forwarded-Host or Host header so it works behind any proxy
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
+	// Build the URL the ESP32 should fetch from.
+	// OTA_BASE_URL must be set to the LAN address (e.g. http://192.168.0.102:1880)
+	// because the ESP32 is on the local network and hairpin NAT is not supported
+	// on the router — using the public domain would cause the download to fail.
+	var firmwareURL string
+	if base := env("OTA_BASE_URL", ""); base != "" {
+		firmwareURL = strings.TrimRight(base, "/") + "/api/ota/firmware.bin"
+	} else {
+		// Fall back to deriving from request Host (works only when accessed from LAN)
+		host := r.Header.Get("X-Forwarded-Host")
+		if host == "" {
+			host = r.Host
+		}
+		scheme := "http"
+		if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
+			scheme = "https"
+		}
+		firmwareURL = fmt.Sprintf("%s://%s/api/ota/firmware.bin", scheme, host)
+		log.Printf("[OTA] Warning: OTA_BASE_URL not set — using request Host %q. If accessed via public URL, the ESP32 download will fail (no hairpin NAT).", host)
 	}
-	scheme := "http"
-	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
-		scheme = "https"
-	}
-	firmwareURL := fmt.Sprintf("%s://%s/api/ota/firmware.bin", scheme, host)
 
 	payload, _ := json.Marshal(map[string]interface{}{
 		"cmd": "ota_start",
