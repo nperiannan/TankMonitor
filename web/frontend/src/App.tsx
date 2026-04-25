@@ -335,7 +335,7 @@ export default function App() {
             if (now < p.expiresAt) raw[k] = p.value
             else pendingRef.current.delete(k)
           }
-          setStatus(raw as Status)
+          setStatus(raw as unknown as Status)
           setLastUpdate(new Date())
         } catch { /* ignore malformed */ }
       }
