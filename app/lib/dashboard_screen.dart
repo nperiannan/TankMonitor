@@ -405,6 +405,13 @@ class _DashboardScreenState extends State<DashboardScreen>
       });
     }
 
+    // Backward compat: if firmware hasn't sent per-motor buzzer fields yet
+    // (both oh_buzzer/ug_buzzer absent → false), fall back to the shared
+    // buzzer_active flag so both cards blink (same as v1.4.3 behaviour).
+    // Once firmware is updated the per-motor fields take over.
+    final bool noPerMotorBuzzer = !(s?.ohBuzzer ?? false) && !(s?.ugBuzzer ?? false);
+    final bool buzzerFallback   = noPerMotorBuzzer && (s?.buzzerActive ?? false);
+
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -467,7 +474,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         title: 'Underground',
                         tankState: s?.ugState ?? '',
                         motorOn: s?.ugMotor ?? false,
-                        buzzerActive: s?.ugBuzzer ?? false,
+                        buzzerActive: (s?.ugBuzzer ?? false) || buzzerFallback,
                         onOn:  () => svc.sendControl({'cmd': 'ug_on'}),
                         onOff: () => svc.sendControl({'cmd': 'ug_off'}),
                       )),
@@ -476,7 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         title: 'Overhead',
                         tankState: s?.ohState ?? '',
                         motorOn: s?.ohMotor ?? false,
-                        buzzerActive: s?.ohBuzzer ?? false,
+                        buzzerActive: (s?.ohBuzzer ?? false) || buzzerFallback,
                         onOn:  () => svc.sendControl({'cmd': 'oh_on'}),
                         onOff: () => svc.sendControl({'cmd': 'oh_off'}),
                       )),
