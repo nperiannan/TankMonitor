@@ -48,8 +48,14 @@ func main() {
 	}))
 	mux.HandleFunc("/api/devices/claim", requireAuth(handleClaimDevice))
 
-	// Per-device routes — handled by a single dispatcher
-	mux.HandleFunc("/api/devices/", requireAuth(deviceRouter))
+	// OTA firmware download — no auth, ESP32 fetches directly
+	mux.HandleFunc("/api/devices/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/ota/firmware.bin") {
+			handleOtaServeFirmware(w, r)
+			return
+		}
+		requireAuth(deviceRouter)(w, r)
+	})
 
 	// ---------------------------------------------------------------------------
 	// WebSocket — per-device: /ws/{mac}?token=...
