@@ -13,11 +13,11 @@ TankMonitor/
 
 ## Versions
 
-| Component   | Latest |
-|-------------|--------|
-| Controller Firmware | v1.3.7 |
-| Web App     | v1.3.4 |
-| Mobile App  | v1.4.5 |
+| Component | Latest |
+|-----------|--------|
+| Controller Firmware | v1.5.1 |
+| Web App | v2.0.3 |
+| Mobile App | v1.5.4 |
 
 ---
 
@@ -122,7 +122,7 @@ Configure these rules on your home router (ER605 or similar):
 
 ### First-time NAS git setup (sparse checkout — `web/` only)
 
-Run once on the NAS (via SSH or plink) to clone only the `web/` folder:
+Run once on the NAS (via SSH or TNAS terminal) to clone only the `web/` folder:
 
 ```bash
 GIT=/home/nperiannan/miniconda3/bin/git
@@ -141,60 +141,31 @@ $GIT sparse-checkout set web
 $GIT checkout master
 ```
 
-After this the layout is `/Volume1/docker/TankMonitor/web/{Dockerfile,backend/,frontend/}`.
-Future `git pull` calls from that directory automatically download only `web/` changes.
+After this the layout is `/Volume1/docker/TankMonitor/web/{Dockerfile,backend/,frontend/,build_web.sh}`.
+Future updates via `git pull` will download only `web/` changes.
 
 ---
 
 ### Deploy / Update the Web App
 
-Connect to TNAS via SSH, then:
+A build script is included at `web/build_web.sh`. Copy it to the NAS once,
+then run it for every update:
 
 ```bash
-# Pull latest web/ changes from GitHub
-cd /Volume1/docker/TankMonitor
-/home/nperiannan/miniconda3/bin/git pull
-
-# Rebuild the Docker image (build context is web/ subfolder)
-/Volume1/@apps/DockerEngine/dockerd/bin/docker build -t tankmonitor-web web/
-
-# Stop and remove old container
-/Volume1/@apps/DockerEngine/dockerd/bin/docker stop tankmonitor-web
-/Volume1/@apps/DockerEngine/dockerd/bin/docker rm tankmonitor-web
-
-# Start fresh container
-/Volume1/@apps/DockerEngine/dockerd/bin/docker run -d \
-  --name tankmonitor-web \
-  --restart unless-stopped \
-  -p 1880:8080 \
-  -e MQTT_BROKER=192.168.0.102 \
-  -e MQTT_PORT=1883 \
-  -e MQTT_USER=tankmonitor \
-  -e 'MQTT_PASS=<mqtt-password>' \
-  -e MQTT_LOCATION=home \
-  -e AUTH_USER=admin \
-  -e 'AUTH_PASS=<web-password>' \
-  -e 'AUTH_SECRET=<secret>' \
-  -e OTA_BASE_URL=http://nperiannan-nas.freemyip.com:1880 \
-  tankmonitor-web
+cd /Volume1/docker/TankMonitor/web
+bash build_web.sh
 ```
 
-### One-liner from Windows (via plink)
-
-```powershell
-$plink = "C:\Program Files (x86)\PuTTY\plink.exe"
-$hk    = "ssh-ed25519 255 SHA256:VQhSnjH1mz/ZpLv5lwBKsZqUEoVemScYgTMBBFNQXsw"
-$pw    = "<tnas-ssh-password>"
-$docker = "/Volume1/@apps/DockerEngine/dockerd/bin/docker"
-
-& $plink -ssh -pw $pw -hostkey $hk nperiannan@192.168.0.102 `
-  "cd /Volume1/docker/TankMonitor && /home/nperiannan/miniconda3/bin/git pull && $docker build -t tankmonitor-web web/ && $docker stop tankmonitor-web && $docker rm tankmonitor-web && $docker run -d --name tankmonitor-web --restart unless-stopped -p 1880:8080 -e MQTT_BROKER=192.168.0.102 -e MQTT_PORT=1883 -e MQTT_USER=tankmonitor -e 'MQTT_PASS=<mqtt-password>' -e MQTT_LOCATION=home -e AUTH_USER=admin -e 'AUTH_PASS=<web-password>' -e 'AUTH_SECRET=<secret>' -e OTA_BASE_URL=http://nperiannan-nas.freemyip.com:1880 tankmonitor-web && echo DONE"
-```
+The script:
+1. `source ~/.bashrc` + `conda activate base` (sets up environment)
+2. `git -C .. pull origin master` (pulls latest `web/` changes)
+3. `docker build -t tankmonitor-web:2.0.3 .`
+4. Stops/removes old container and starts a fresh one with all required env vars
 
 ### Check container logs
 
 ```bash
-/Volume1/@apps/DockerEngine/dockerd/bin/docker logs --tail 50 tankmonitor-web
+docker logs --tail 50 tankmonitor-web
 ```
 
 ---
@@ -208,18 +179,34 @@ cd controller_firmware
 pio run -e nebulas3_serial -t upload   # COM7 on Windows
 ```
 
+### OTA via build script (recommended)
+
+From the repo root on Windows:
+
+```powershell
+# Build + upload + trigger OTA in one step
+.\build_controller.ps1 -Upload -Mac 'AA:BB:CC:DD:EE:FF'
+```
+
+The script builds with PlatformIO (`nebulas3` env), uploads `firmware.bin` to the NAS,
+then triggers OTA via MQTT. The device downloads and flashes automatically.
+
+### OTA via Mobile App
+
+1. Open the app → go to **Settings tab** → **FIRMWARE UPDATE (OTA)**.
+2. **Step 1**: tap **Choose firmware.bin** → pick the `.bin` file from your phone.
+   An upload progress bar is shown; once complete the file size and upload time appear.
+3. **Step 2**: tap **Flash Firmware** → confirm.
+4. A 150-second countdown progress bar tracks the update:
+   - `triggered` → `ack_received` (ESP32 confirmed) → `downloading` (flashing) → `success`
+5. On success the device reboots into the new firmware.
+
 ### OTA via Web App
 
-1. Build firmware locally:
-   ```bash
-   cd controller_firmware
-   pio run -e nebulas3_serial
-   # Binary at: .pio/build/nebulas3_serial/firmware.bin
-   ```
-2. Open http://192.168.0.102:1880, log in.
-3. Go to **Firmware Update (OTA)** → click **Upload firmware.bin** → select the `.bin` file.
-4. Click **Flash to ESP32** → confirm.
-5. The button shows `Triggering… → Downloading… → success` as the device flashes and reboots.
+1. Open http://192.168.0.102:1880, log in.
+2. Go to **Firmware Update (OTA)** → click **Upload firmware.bin** → select the `.bin` file.
+3. Click **Flash to ESP32** → confirm.
+4. A 150-second progress bar tracks the update phases until `success`.
 
 ---
 
