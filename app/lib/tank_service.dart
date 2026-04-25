@@ -15,12 +15,17 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.4.5';
+const mobileAppVersion = '1.5.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
   String? authToken;
-  bool unauthorized = false;  // ── Version info ────────────────────────────────────────────────────
+  bool unauthorized = false;
+  Device? currentDevice;
+  bool isAdmin = false;
+  String? currentUsername;
+
+  // ── Version info ────────────────────────────────────────────────────
   String? webAppVersion;
 
   // ── Update check ─────────────────────────────────────────────────────────
@@ -89,6 +94,8 @@ class TankService extends ChangeNotifier {
         if (authToken != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString(_kAuthToken, authToken!);
+          isAdmin = data['is_admin'] as bool? ?? false;
+          currentUsername = data['username'] as String?;
           unauthorized = false;
           notifyListeners();
           return true;
@@ -106,6 +113,9 @@ class TankService extends ChangeNotifier {
 
   Future<void> logout() async {
     authToken = null;
+    currentDevice = null;
+    isAdmin = false;
+    currentUsername = null;
     unauthorized = true;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kAuthToken);
@@ -114,6 +124,20 @@ class TankService extends ChangeNotifier {
   }
 
   // ── Network detection ────────────────────────────────────────────────────
+
+  /// Returns the active URL, picking based on connectivity if WS not yet connected.
+  Future<String> _resolveUrl() async {
+    if (_activeUrl.isNotEmpty) return _activeUrl;
+    await loadSavedUrls();
+    final url = await _pickUrl();
+    return url.trimRight().replaceAll(RegExp(r'/$'), '');
+  }
+
+  /// Builds a per-device path when a device is selected, falling back to legacy.
+  String _devicePath(String legacy, String sub) {
+    final mac = currentDevice?.mac;
+    return mac != null ? '/api/devices/$mac/$sub' : legacy;
+  }
 
   Future<String> _pickUrl() async {
     final result = await Connectivity().checkConnectivity();
@@ -149,10 +173,12 @@ class TankService extends ChangeNotifier {
         .replaceFirst(RegExp(r'^http://'), 'ws://')
         .replaceFirst(RegExp(r'^https://'), 'wss://');
 
+    final mac = currentDevice?.mac;
+    final wsPath = mac != null ? '/ws/$mac' : '/ws';
     if (authToken != null) {
-      wsUrl = '$wsUrl/ws?token=${Uri.encodeComponent(authToken!)}';
+      wsUrl = '$wsUrl$wsPath?token=${Uri.encodeComponent(authToken!)}';
     } else {
-      wsUrl = '$wsUrl/ws';
+      wsUrl = '$wsUrl$wsPath';
     }
 
     try {
@@ -244,6 +270,130 @@ class TankService extends ChangeNotifier {
     super.dispose();
   }
 
+  // ── Multi-device management ────────────────────────────────────────────
+
+  Future<void> connectToDevice(Device device) async {
+    currentDevice = device;
+    await connectAuto();
+  }
+
+  Future<bool> register(String username, String password) async {
+    error = null;
+    try {
+      final baseUrl = await _resolveUrl();
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        authToken = data['token'] as String?;
+        if (authToken != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(_kAuthToken, authToken!);
+          isAdmin = data['is_admin'] as bool? ?? false;
+          currentUsername = data['username'] as String?;
+          unauthorized = false;
+          notifyListeners();
+          return true;
+        }
+      }
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      error = (body['error'] as String?) ?? 'Registration failed (${res.statusCode})';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      error = 'Cannot reach server: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<List<Device>> listDevices() async {
+    try {
+      final baseUrl = await _resolveUrl();
+      if (authToken == null) return [];
+      final res = await http.get(
+        Uri.parse('$baseUrl/api/devices'),
+        headers: {'Authorization': 'Bearer $authToken'},
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List<dynamic>;
+        return list.map((e) => Device.fromJson(e as Map<String, dynamic>)).toList();
+      }
+      if (res.statusCode == 401) {
+        unauthorized = true;
+        authToken = null;
+        SharedPreferences.getInstance().then((p) => p.remove(_kAuthToken));
+        notifyListeners();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> claimDevice(String mac, String displayName) async {
+    error = null;
+    try {
+      final baseUrl = await _resolveUrl();
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/devices/claim'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (authToken != null) 'Authorization': 'Bearer $authToken',
+        },
+        body: jsonEncode({'mac': mac.toUpperCase(), 'display_name': displayName}),
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200 || res.statusCode == 201) return true;
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      error = (body['error'] as String?) ?? 'Claim failed (${res.statusCode})';
+      notifyListeners();
+      return false;
+    } catch (e) {
+      error = 'Cannot reach server: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> renameDevice(String mac, String displayName) async {
+    error = null;
+    try {
+      final baseUrl = await _resolveUrl();
+      final res = await http.patch(
+        Uri.parse('$baseUrl/api/devices/$mac'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (authToken != null) 'Authorization': 'Bearer $authToken',
+        },
+        body: jsonEncode({'display_name': displayName}),
+      ).timeout(const Duration(seconds: 10));
+      return res.statusCode == 200;
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> unclaimDevice(String mac) async {
+    error = null;
+    try {
+      final baseUrl = await _resolveUrl();
+      final res = await http.delete(
+        Uri.parse('$baseUrl/api/devices/$mac'),
+        headers: {
+          if (authToken != null) 'Authorization': 'Bearer $authToken',
+        },
+      ).timeout(const Duration(seconds: 10));
+      return res.statusCode == 200;
+    } catch (e) {
+      error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   // ── Control API ──────────────────────────────────────────────────────────
   Future<void> fetchVersion() async {
     try {
@@ -311,7 +461,7 @@ class TankService extends ChangeNotifier {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       await http.post(
-        Uri.parse('$_activeUrl/api/ota/trigger'),
+        Uri.parse('$_activeUrl${_devicePath('/api/ota/trigger', 'ota/trigger')}'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
     } catch (_) {}
@@ -322,7 +472,7 @@ class TankService extends ChangeNotifier {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       await http.post(
-        Uri.parse('$_activeUrl/api/ota/rollback'),
+        Uri.parse('$_activeUrl${_devicePath('/api/ota/rollback', 'ota/rollback')}'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
     } catch (_) {}
@@ -346,7 +496,7 @@ class TankService extends ChangeNotifier {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.get(
-        Uri.parse('$_activeUrl/api/ota/status'),
+        Uri.parse('$_activeUrl${_devicePath('/api/ota/status', 'ota/status')}'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) return jsonDecode(res.body) as Map<String, dynamic>;
@@ -359,7 +509,7 @@ class TankService extends ChangeNotifier {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.get(
-        Uri.parse('$_activeUrl/api/logs'),
+        Uri.parse('$_activeUrl${_devicePath('/api/logs', 'logs')}'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 401) {
@@ -380,7 +530,7 @@ class TankService extends ChangeNotifier {
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.post(
-        Uri.parse('$_activeUrl/api/control'),
+        Uri.parse('$_activeUrl${_devicePath('/api/control', 'control')}'),
         headers: headers,
         body: jsonEncode(cmd),
       ).timeout(const Duration(seconds: 8));

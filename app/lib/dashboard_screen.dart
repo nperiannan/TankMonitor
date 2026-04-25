@@ -10,6 +10,7 @@ import 'tank_service.dart';
 import 'schedule_sheet.dart';
 import 'setup_screen.dart';
 import 'login_screen.dart';
+import 'device_list_screen.dart';
 
 // ─── Colours (mirrors Ant Design dark theme) ────────────────────────────────
 const _bg      = Color(0xFF141414);
@@ -417,8 +418,12 @@ class _DashboardScreenState extends State<DashboardScreen>
       appBar: AppBar(
         backgroundColor: _cardBg,
         elevation: 0,
-        title: const Text('💧 Tank Monitor',
-          style: TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text(
+          '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
+          style: const TextStyle(
+              color: _blue, fontWeight: FontWeight.w700, fontSize: 18),
+          overflow: TextOverflow.ellipsis,
+        ),
         actions: [
           if (s?.time != null)
             Center(child: Padding(
@@ -434,6 +439,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               Text(svc.connected ? 'Live' : 'Offline',
                 style: const TextStyle(color: _label, fontSize: 12)),
             ]),
+          ),
+          IconButton(
+            icon: const Icon(Icons.devices, color: _label, size: 20),
+            tooltip: 'Switch device',
+            onPressed: () => Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const DeviceListScreen()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),

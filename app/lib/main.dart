@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'login_screen.dart';
 import 'setup_screen.dart';
-import 'dashboard_screen.dart';
+import 'device_list_screen.dart';
 
 void main() {
   runApp(
@@ -37,10 +37,10 @@ class TankMonitorApp extends StatelessWidget {
   }
 }
 
-/// Loads the saved token and URLs on first frame.
-/// If no token → LoginScreen.
-/// If token present and URLs saved → DashboardScreen.
-/// If token present but no URLs → SetupScreen.
+/// Loads the saved token on first frame and routes to the right screen.
+/// Token missing  → LoginScreen
+/// Token present, no saved URL → SetupScreen
+/// Token present, URL saved → DeviceListScreen (auto-navigates to Dashboard for single device)
 class _Startup extends StatefulWidget {
   const _Startup();
 
@@ -49,9 +49,8 @@ class _Startup extends StatefulWidget {
 }
 
 class _StartupState extends State<_Startup> {
-  bool _ready       = false;
-  bool _loggedIn    = false;
-  bool _hasSavedUrl = false;
+  bool _ready = false;
+  Widget _home = const _Splash();
 
   @override
   void initState() {
@@ -63,29 +62,31 @@ class _StartupState extends State<_Startup> {
     final svc = context.read<TankService>();
     await svc.loadToken();
     if (svc.authToken == null) {
-      setState(() { _loggedIn = false; _ready = true; });
+      setState(() { _home = const LoginScreen(); _ready = true; });
       return;
     }
     await svc.loadSavedUrls();
     if (svc.wifiUrl.isNotEmpty || svc.mobileUrl.isNotEmpty) {
-      await svc.connectAuto();
-      setState(() { _loggedIn = true; _hasSavedUrl = true; _ready = true; });
+      setState(() { _home = const DeviceListScreen(); _ready = true; });
     } else {
-      setState(() { _loggedIn = true; _hasSavedUrl = false; _ready = true; });
+      setState(() { _home = const SetupScreen(); _ready = true; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_ready) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF141414),
-        body: Center(
-          child: Text('💧', style: TextStyle(fontSize: 48)),
-        ),
-      );
-    }
-    if (!_loggedIn) return const LoginScreen();
-    return _hasSavedUrl ? const DashboardScreen() : const SetupScreen();
+    if (!_ready) return const _Splash();
+    return _home;
+  }
+}
+
+class _Splash extends StatelessWidget {
+  const _Splash();
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      backgroundColor: Color(0xFF141414),
+      body: Center(child: Text('💧', style: TextStyle(fontSize: 48))),
+    );
   }
 }
