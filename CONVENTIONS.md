@@ -22,6 +22,7 @@
 
 ## Versioning & Tags
 - Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `app/vX.Y.Z`
+- **One release per component** — no combined multi-component releases
 - Tags must be **annotated** (not lightweight): `git tag -a web/vX.Y.Z -m "..."`
 - Version strings live in:
   - Firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
@@ -37,7 +38,7 @@
   gh release delete web/vX.Y.Z --yes   # delete old
   gh release create web/vX.Y.Z ...     # create new
   ```
-- Release titles: `Web App vX.Y.Z`, `Firmware vX.Y.Z`, `Mobile App vX.Y.Z`
+- Release titles: `Controller Firmware vX.Y.Z`, `Web App vX.Y.Z`, `Mobile App vX.Y.Z`
 
 ## NAS Deployment (TNAS @ 192.168.0.102)
 - Repo cloned at `/Volume1/docker/TankMonitor` with sparse-checkout (`web/` only)
