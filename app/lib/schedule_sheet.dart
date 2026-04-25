@@ -129,7 +129,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}',
+                _tod12hr(_time),
                 style: const TextStyle(color: Colors.white, fontSize: 15),
               ),
             ),
@@ -215,4 +215,12 @@ class _MotorChip extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Converts [TimeOfDay] to "H:MM AM/PM" for display.
+String _tod12hr(TimeOfDay t) {
+  final period = t.hour >= 12 ? 'PM' : 'AM';
+  final h = t.hour % 12 == 0 ? 12 : t.hour % 12;
+  final m = t.minute.toString().padLeft(2, '0');
+  return '$h:$m $period';
 }

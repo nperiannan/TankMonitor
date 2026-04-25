@@ -43,6 +43,7 @@ class Status {
   final bool ohBuzzer;    // buzzer countdown running for OH motor
   final bool ugBuzzer;    // buzzer countdown running for UG motor
   final String txFw;      // transmitter firmware version
+  final String mgmtIp;    // ESP32 management IP (WiFi STA IP)
 
   const Status({
     required this.ohState,
@@ -65,6 +66,7 @@ class Status {
     required this.ohBuzzer,
     required this.ugBuzzer,
     required this.txFw,
+    required this.mgmtIp,
   });
 
   factory Status.fromJson(Map<String, dynamic> j) => Status(
@@ -90,6 +92,7 @@ class Status {
         ohBuzzer:   j['oh_buzzer']    as bool? ?? false,
         ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
         txFw:       j['tx_fw']        as String? ?? '',
+        mgmtIp:     j['ip']           as String? ?? '',
       );
 }
 

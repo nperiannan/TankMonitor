@@ -21,6 +21,12 @@ class _ClaimScreenState extends State<ClaimScreen> {
   final _nameCtrl = TextEditingController();
   bool _loading  = false;
   String? _error;
+  String _typeId = 'tank_monitor'; // default
+
+  static const _deviceTypes = [
+    _DeviceTypeOption(id: 'tank_monitor', label: 'Tank Monitor', icon: Icons.water_drop_outlined),
+    _DeviceTypeOption(id: 'smart_ps',     label: 'Smart PS',     icon: Icons.bolt_outlined),
+  ];
 
   @override
   void dispose() {
@@ -38,7 +44,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
     }
     setState(() { _loading = true; _error = null; });
     final svc = context.read<TankService>();
-    final ok = await svc.claimDevice(mac, name);
+    final ok = await svc.claimDevice(mac, name, typeId: _typeId);
     if (!mounted) return;
     if (ok) {
       Navigator.of(context).pop(true);
@@ -74,6 +80,45 @@ class _ClaimScreenState extends State<ClaimScreen> {
             const Text(
               'You can find the MAC address on the device LCD screen or physical label.',
               style: TextStyle(color: _label, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+
+            // ── Device type ──────────────────────────────────────────────
+            const Text('Device Type', style: TextStyle(color: _label, fontSize: 12)),
+            const SizedBox(height: 8),
+            Row(
+              children: _deviceTypes.map((t) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: t == _deviceTypes.last ? 0 : 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _typeId = t.id),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _typeId == t.id
+                            ? _blue.withOpacity(0.12)
+                            : const Color(0xFF1f1f1f),
+                        border: Border.all(
+                          color: _typeId == t.id ? _blue : _cardBd,
+                          width: _typeId == t.id ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          Icon(t.icon,
+                            color: _typeId == t.id ? _blue : _label, size: 26),
+                          const SizedBox(height: 4),
+                          Text(t.label,
+                            style: TextStyle(
+                              color: _typeId == t.id ? _blue : _label,
+                              fontSize: 12, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              )).toList(),
             ),
             const SizedBox(height: 24),
 
@@ -160,4 +205,11 @@ class _ClaimScreenState extends State<ClaimScreen> {
             borderSide: const BorderSide(color: _blue, width: 2)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       );
+}
+
+class _DeviceTypeOption {
+  final String id;
+  final String label;
+  final IconData icon;
+  const _DeviceTypeOption({required this.id, required this.label, required this.icon});
 }

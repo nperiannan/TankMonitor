@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -263,6 +264,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Bottom nav tab
   int _tabIndex = 0;
 
+  // Scheduler expand/collapse
+  bool _schedExpanded = false;
+
   @override
   void initState() {
     super.initState();
@@ -457,7 +461,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           IconButton(
             icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),
             tooltip: 'Change server',
-            onPressed: () => Navigator.of(context).pushReplacement(
+            onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SetupScreen()),
             ),
           ),
@@ -509,40 +513,82 @@ class _DashboardScreenState extends State<DashboardScreen>
                     ]),
                     const SizedBox(height: 12),
                     // ── Schedules ──
-                    _SectionCard(
-                      title: s?.time != null
-                          ? 'MOTOR SCHEDULER  ·  ${_to12hr(s!.time)}'
-                          : 'MOTOR SCHEDULER',
-                      trailing: Row(children: [
-                        _SmallButton(
-                          label: '+ Add',
-                          onTap: () => showModalBottomSheet(
-                            context: context, isScrollControlled: true,
-                            backgroundColor: _cardBg,
-                            builder: (_) => ScheduleSheet(svc: svc),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        _SmallButton(
-                          label: 'Clear All', danger: true,
-                          onTap: () => _confirmClear(context, svc),
-                        ),
-                      ]),
-                      child: s == null || s.schedules.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 12),
-                              child: Center(child: Text('No schedules configured',
-                                style: TextStyle(color: _label, fontSize: 13))),
-                            )
-                          : Column(
-                              children: enabledScheds.map((sch) =>
-                                _ScheduleRow(
-                                  sch: sch,
-                                  svc: svc,
-                                  isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
-                                )).toList(),
+                    Builder(builder: (ctx) {
+                      // Compute default 2 entries: next OH + next UG
+                      final allScheds = s?.schedules ?? [];
+                      final ohScheds = allScheds.where((sc) => sc.m == 'OH').toList();
+                      final ugScheds = allScheds.where((sc) => sc.m == 'UG').toList();
+                      Schedule? nextOHSched = ohScheds.isEmpty ? null
+                          : (nextOHIdx != null ? ohScheds.firstWhere((sc) => sc.i == nextOHIdx, orElse: () => ohScheds.first) : ohScheds.first);
+                      Schedule? nextUGSched = ugScheds.isEmpty ? null
+                          : (nextUGIdx != null ? ugScheds.firstWhere((sc) => sc.i == nextUGIdx, orElse: () => ugScheds.first) : ugScheds.first);
+                      final defaultEntries = [
+                        if (nextOHSched != null) nextOHSched,
+                        if (nextUGSched != null) nextUGSched,
+                      ];
+                      final showEntries = _schedExpanded ? allScheds : defaultEntries;
+                      final hasMore = allScheds.length > defaultEntries.length;
+
+                      return _SectionCard(
+                        title: s?.time != null
+                            ? 'MOTOR SCHEDULER  ·  ${_to12hr(s!.time)}'
+                            : 'MOTOR SCHEDULER',
+                        trailing: Row(children: [
+                          _SmallButton(
+                            label: '+ Add',
+                            onTap: () => showModalBottomSheet(
+                              context: ctx, isScrollControlled: true,
+                              backgroundColor: _cardBg,
+                              builder: (_) => ScheduleSheet(svc: svc),
                             ),
-                    ),
+                          ),
+                          const SizedBox(width: 6),
+                          _SmallButton(
+                            label: 'Clear All', danger: true,
+                            onTap: () => _confirmClear(ctx, svc),
+                          ),
+                        ]),
+                        child: Column(
+                          children: [
+                            if (s == null || allScheds.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: Center(child: Text('No schedules yet',
+                                  style: TextStyle(color: _label, fontSize: 13))),
+                              )
+                            else
+                              ...showEntries.map((sch) => _ScheduleRow(
+                                sch: sch,
+                                svc: svc,
+                                isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
+                              )),
+                            if (allScheds.isNotEmpty && hasMore)
+                              GestureDetector(
+                                onTap: () => setState(() => _schedExpanded = !_schedExpanded),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        _schedExpanded
+                                            ? 'Show less'
+                                            : 'Show all ${allScheds.length} schedules',
+                                        style: const TextStyle(color: _blue, fontSize: 12),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Icon(
+                                        _schedExpanded ? Icons.expand_less : Icons.expand_more,
+                                        color: _blue, size: 16,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    }),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -730,35 +776,55 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _InfoRow('WiFi',        s != null ? '${s.wifiRssi} dBm' : '—'),
                         _InfoRow('LoRa',        null, loraOk: s?.loraOk),
                         _InfoRow('Uptime',      s != null ? _formatUptime(s.uptimeS) : '—'),
-                        _InfoRow('Controller',   s?.fw ?? '—'),
-                        _InfoRow('Transmitter',   s?.txFw.isNotEmpty == true ? s!.txFw : '—'),
+                        _InfoRow('Controller',  s?.fw ?? '—'),
+                        _InfoRow('Transmitter', s?.txFw.isNotEmpty == true ? s!.txFw : '—'),
                         _InfoRow('Web App',     svc.webAppVersion ?? '—'),
-                        _InfoRow('Mobile App',  mobileAppVersion, last: true),
+                        _InfoRow('Mobile App',  mobileAppVersion),
+                        const Divider(color: Color(0xFF303030), height: 16),
+                        _InfoRow('Device MAC',  svc.currentDevice?.mac ?? '—'),
+                        _InfoRow('Device IP',   s?.mgmtIp.isNotEmpty == true ? s!.mgmtIp : '—'),
+                        const Divider(color: Color(0xFF303030), height: 16),
+                        _InfoRow('User',        svc.currentUsername ?? '—'),
+                        _InfoRow('Access Level', _accessLevel(svc), last: true),
                       ]),
                     ),
                     const SizedBox(height: 10),
                     // ── Device Logs ──
                     _SectionCard(
                       title: 'DEVICE LOGS',
-                      trailing: IconButton(
-                        icon: _logsLoading
-                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
-                            : const Icon(Icons.refresh, size: 18, color: Colors.white54),
-                        onPressed: s == null || _logsLoading ? null : () async {
-                          svc.sendControl({'cmd': 'get_logs'});
-                          await Future.delayed(const Duration(seconds: 2));
-                          if (!mounted) return;
-                          setState(() => _logsLoading = true);
-                          final data = await svc.fetchLogs();
-                          if (!mounted) return;
-                          setState(() {
-                            _logsLoading = false;
-                            if (data != null) {
-                              _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
-                              _logsAt = data['received_at'] as String?;
-                            }
-                          });
-                        },
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_deviceLogs.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.copy_outlined, size: 17, color: Colors.white54),
+                              tooltip: 'Copy logs',
+                              onPressed: () {
+                                final text = _deviceLogs.reversed.join('\n');
+                                _copyToClipboard(context, text);
+                              },
+                            ),
+                          IconButton(
+                            icon: _logsLoading
+                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
+                                : const Icon(Icons.refresh, size: 18, color: Colors.white54),
+                            onPressed: s == null || _logsLoading ? null : () async {
+                              svc.sendControl({'cmd': 'get_logs'});
+                              await Future.delayed(const Duration(seconds: 2));
+                              if (!mounted) return;
+                              setState(() => _logsLoading = true);
+                              final data = await svc.fetchLogs();
+                              if (!mounted) return;
+                              setState(() {
+                                _logsLoading = false;
+                                if (data != null) {
+                                  _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
+                                  _logsAt = data['received_at'] as String?;
+                                }
+                              });
+                            },
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,11 +846,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   items: const [
                                     DropdownMenuItem(
                                       value: 'info',
-                                      child: Text('Info (Warn + Error)'),
+                                      child: Text('Info'),
                                     ),
                                     DropdownMenuItem(
                                       value: 'debug',
-                                      child: Text('Debug (All)'),
+                                      child: Text('Debug'),
                                     ),
                                   ],
                                   onChanged: s != null
@@ -837,7 +903,29 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _tabIndex,
-        onTap: (i) => setState(() => _tabIndex = i),
+        onTap: (i) {
+          setState(() => _tabIndex = i);
+          // Auto-poll logs when switching to System tab
+          if (i == 2 && _deviceLogs.isEmpty && !_logsLoading) {
+            final svc2 = context.read<TankService>();
+            if (svc2.status != null) {
+              svc2.sendControl({'cmd': 'get_logs'});
+              Future.delayed(const Duration(seconds: 2), () async {
+                if (!mounted) return;
+                setState(() => _logsLoading = true);
+                final data = await svc2.fetchLogs();
+                if (!mounted) return;
+                setState(() {
+                  _logsLoading = false;
+                  if (data != null) {
+                    _deviceLogs = (data['logs'] as List<dynamic>? ?? []).cast<String>();
+                    _logsAt = data['received_at'] as String?;
+                  }
+                });
+              });
+            }
+          }
+        },
         backgroundColor: _cardBg,
         selectedItemColor: _blue,
         unselectedItemColor: _label,
@@ -986,6 +1074,25 @@ String _formatUptime(int s) {
   if (s < 60)   return '${s}s';
   if (s < 3600) return '${s ~/ 60}m ${s % 60}s';
   return '${s ~/ 3600}h ${(s % 3600) ~/ 60}m';
+}
+
+/// Returns access level label based on service state.
+String _accessLevel(TankService svc) {
+  if (svc.isAdmin) return 'Full (Admin)';
+  final role = svc.currentDevice?.role ?? '';
+  if (role == 'owner') return 'Control';
+  if (role == 'viewer') return 'Monitor';
+  return '—';
+}
+
+void _copyToClipboard(BuildContext context, String text) {
+  Clipboard.setData(ClipboardData(text: text));
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Logs copied to clipboard'),
+      duration: Duration(seconds: 2),
+    ),
+  );
 }
 
 class _UpdateBanner extends StatelessWidget {

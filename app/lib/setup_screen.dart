@@ -52,15 +52,29 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final canGoBack = Navigator.of(context).canPop();
     return Scaffold(
       backgroundColor: const Color(0xFF141414),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1f1f1f),
+        elevation: 0,
+        leading: canGoBack
+            ? BackButton(
+                color: const Color(0xFF8c8c8c),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        automaticallyImplyLeading: false,
+        title: const Text('Server Settings',
+            style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 28),
+              const SizedBox(height: 12),
               const Text(
                 '💧 Tank Monitor',
                 style: TextStyle(

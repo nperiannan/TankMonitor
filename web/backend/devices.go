@@ -103,6 +103,7 @@ func handleClaimDevice(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		MAC         string `json:"mac"`
 		DisplayName string `json:"display_name"`
+		TypeID      string `json:"type_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		jsonError(w, "invalid JSON", http.StatusBadRequest)
@@ -145,6 +146,9 @@ func handleClaimDevice(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback() //nolint:errcheck
 
 	tx.Exec(`UPDATE devices SET display_name=? WHERE mac=?`, req.DisplayName, req.MAC) //nolint:errcheck
+	if req.TypeID != "" {
+		tx.Exec(`UPDATE devices SET type_id=? WHERE mac=?`, req.TypeID, req.MAC) //nolint:errcheck
+	}
 	_, err = tx.Exec(
 		`INSERT INTO user_devices(user_id, mac, role) VALUES(?,?,'owner')
 		 ON CONFLICT(user_id, mac) DO UPDATE SET role='owner'`,

@@ -62,6 +62,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF141414),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF141414),
+        elevation: 0,
+        leading: BackButton(
+          color: const Color(0xFF8c8c8c),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text('Create Account',
+            style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+      ),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -70,21 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('💧', style: TextStyle(fontSize: 52)),
                 const SizedBox(height: 8),
-                const Text(
-                  'Tank Monitor',
-                  style: TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.bold,
-                    color: Color(0xFF1890ff),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Create your account',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF8c8c8c)),
-                ),
-                const SizedBox(height: 32),
 
                 if (_error != null)
                   Container(

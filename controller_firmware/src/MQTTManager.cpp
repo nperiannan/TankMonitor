@@ -394,10 +394,11 @@ void publishMQTTStatus() {
 
     // MAC address (colon-separated, uppercase) for device identity
     String macStr = WiFi.macAddress();
+    String ipStr  = WiFi.localIP().toString();
 
-    char payload[1400];
+    char payload[1440];
     snprintf(payload, sizeof(payload),
-        "{\"mac\":\"%s\",\"device_type\":\"tank_monitor\","
+        "{\"mac\":\"%s\",\"ip\":\"%s\",\"device_type\":\"tank_monitor\","
         "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
         "\"lora_ok\":%s,\"wifi_rssi\":%d,"
@@ -412,6 +413,7 @@ void publishMQTTStatus() {
         "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
         macStr.c_str(),
+        ipStr.c_str(),
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
         ohMotorRunning ? "true" : "false",

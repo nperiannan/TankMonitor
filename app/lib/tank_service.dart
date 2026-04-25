@@ -15,7 +15,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.5.0';
+const mobileAppVersion = '1.5.4';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -332,21 +332,26 @@ class TankService extends ChangeNotifier {
     return [];
   }
 
-  Future<bool> claimDevice(String mac, String displayName) async {
+  Future<bool> claimDevice(String mac, String displayName, {String? typeId}) async {
     error = null;
     try {
       final baseUrl = await _resolveUrl();
+      final body = <String, dynamic>{
+        'mac': mac.toUpperCase(),
+        'display_name': displayName,
+        if (typeId != null && typeId.isNotEmpty) 'type_id': typeId,
+      };
       final res = await http.post(
         Uri.parse('$baseUrl/api/devices/claim'),
         headers: {
           'Content-Type': 'application/json',
           if (authToken != null) 'Authorization': 'Bearer $authToken',
         },
-        body: jsonEncode({'mac': mac.toUpperCase(), 'display_name': displayName}),
+        body: jsonEncode(body),
       ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200 || res.statusCode == 201) return true;
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
-      error = (body['error'] as String?) ?? 'Claim failed (${res.statusCode})';
+      final errBody = jsonDecode(res.body) as Map<String, dynamic>;
+      error = (errBody['error'] as String?) ?? 'Claim failed (${res.statusCode})';
       notifyListeners();
       return false;
     } catch (e) {
