@@ -18,12 +18,29 @@ package main
 
 import "net/http"
 
-// firstClaimedMAC returns the first device MAC the user has claimed, or "".
+// firstClaimedMAC returns the first device MAC the user has claimed.
+// For admin users, if no device is claimed yet, it auto-claims the first
+// registered device so the legacy web UI works out-of-the-box.
 func firstClaimedMAC(uid int64) string {
 	var mac string
 	db.QueryRow( //nolint:errcheck
 		`SELECT mac FROM user_devices WHERE user_id=? LIMIT 1`, uid,
 	).Scan(&mac)
+	if mac != "" {
+		return mac
+	}
+	// Fallback: if the user is an admin, auto-claim the first known device.
+	var isAdmin bool
+	db.QueryRow(`SELECT is_admin FROM users WHERE user_id=?`, uid).Scan(&isAdmin) //nolint:errcheck
+	if !isAdmin {
+		return ""
+	}
+	db.QueryRow(`SELECT mac FROM devices ORDER BY created_at LIMIT 1`).Scan(&mac) //nolint:errcheck
+	if mac == "" {
+		return ""
+	}
+	// Persist the auto-claim so subsequent calls are fast.
+	db.Exec(`INSERT OR IGNORE INTO user_devices(user_id, mac, role) VALUES(?,?,'owner')`, uid, mac) //nolint:errcheck
 	return mac
 }
 
