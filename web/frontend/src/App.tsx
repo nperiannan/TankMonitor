@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.3.7'
+const WEB_APP_VERSION = '1.3.8'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -261,6 +261,7 @@ type EditForm = AddForm
 
 export default function App() {
   const [token,      setToken]      = useState<string | null>(() => localStorage.getItem('auth_token'))
+  const [backendVersion, setBackendVersion] = useState<string | null>(null)
   const [status,     setStatus]     = useState<Status | null>(null)
   const [connected,  setConnected]  = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
@@ -295,6 +296,7 @@ export default function App() {
     wsRef.current?.close()
     setConnected(false)
     setStatus(null)
+    setBackendVersion(null)
   }
 
   const loadOtaStatus = useCallback(() => {
@@ -324,7 +326,14 @@ export default function App() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const connect = () => {
       const ws = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(token)}`)
-      ws.onopen    = () => setConnected(true)
+      ws.onopen    = () => {
+        setConnected(true)
+        // Fetch backend version (may differ from frontend build constant)
+        fetch('/api/version', { headers: { Authorization: `Bearer ${t}` } })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d?.web_version) setBackendVersion(d.web_version as string) })
+          .catch(() => {})
+      }
       ws.onclose   = () => { setConnected(false); setTimeout(connect, 3000) }
       ws.onerror   = () => ws.close()
       ws.onmessage = ({ data }) => {
@@ -504,7 +513,7 @@ export default function App() {
     ['LoRa',        <Tag color={s?.lora_ok ? 'success' : (s ? 'error' : 'default')}>{s?.lora_ok ? 'OK' : (s ? 'FAIL' : '—')}</Tag>],
     ['Uptime',      s ? formatUptime(s.uptime_s) : '—'],
     ['Firmware',    s?.fw ?? '—'],
-    ['Web App',     WEB_APP_VERSION],
+    ['Web App',     backendVersion ?? WEB_APP_VERSION],
     ['Last update', lastUpdate ? lastUpdate.toLocaleTimeString() : '—'],
   ]
 

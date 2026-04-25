@@ -15,7 +15,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.5.6';
+const mobileAppVersion = '1.5.7';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -199,6 +199,7 @@ class TankService extends ChangeNotifier {
             if (!connected) {
               connected = true;
               fetchVersion(); // fire and forget
+              fetchMe();      // restore isAdmin + currentUsername from token
             }
             error = null;
             notifyListeners();
@@ -419,6 +420,26 @@ class TankService extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         webAppVersion = data['web_version'] as String?;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  /// Refresh isAdmin + currentUsername from the server using the saved token.
+  /// Called on every WS first-connect so the values are correct even after
+  /// the app is re-opened with a persisted token (no fresh login).
+  Future<void> fetchMe() async {
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl/api/auth/me'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        isAdmin = data['is_admin'] as bool? ?? false;
+        currentUsername = data['username'] as String?;
         notifyListeners();
       }
     } catch (_) {}
