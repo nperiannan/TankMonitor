@@ -8,6 +8,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $FwDir = "$PSScriptRoot\transmitter_firmware"
+$pio  = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
+if (-not (Test-Path $pio)) { $pio = 'pio' }  # fallback if in PATH
 
 Write-Host "==> Building transmitter firmware (env: $Env)..." -ForegroundColor Cyan
 Push-Location $FwDir
@@ -17,11 +19,11 @@ try {
         if ($Port -ne "") { $uploadArgs += @("--upload-port", $Port) }
 
         Write-Host "==> Building + uploading..." -ForegroundColor Cyan
-        & pio @uploadArgs
+        & $pio @uploadArgs
         if ($LASTEXITCODE -ne 0) { throw "PlatformIO upload failed" }
         Write-Host "==> Upload complete." -ForegroundColor Green
     } else {
-        pio run --environment $Env
+        & $pio run --environment $Env
         if ($LASTEXITCODE -ne 0) { throw "PlatformIO build failed" }
 
         $fw = Get-ChildItem ".pio\build\$Env\firmware.hex" -ErrorAction SilentlyContinue

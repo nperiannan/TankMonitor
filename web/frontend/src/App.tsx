@@ -275,7 +275,9 @@ export default function App() {
   const [uploadPct,    setUploadPct]    = useState<number | null>(null)
   const [otaError,     setOtaError]     = useState<string | null>(null)
   const [otaBusy,      setOtaBusy]      = useState(false)
-  const otaPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [otaElapsed,   setOtaElapsed]   = useState(0)   // seconds since OTA triggered
+  const otaPollRef      = useRef<ReturnType<typeof setInterval> | null>(null)
+  const otaCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // Device logs state
   const [deviceLogs,   setDeviceLogs]   = useState<string[]>([])
   const [logsAt,       setLogsAt]       = useState<string | null>(null)
@@ -422,9 +424,15 @@ export default function App() {
     if (!token) return
     setOtaError(null)
     setOtaBusy(true)
+    setOtaElapsed(0)
     try {
       await triggerOta(token)
-      // Poll for phase completion — keep otaBusy true until done
+      // 150-second countdown timer
+      if (otaCountdownRef.current) clearInterval(otaCountdownRef.current)
+      otaCountdownRef.current = setInterval(() => {
+        setOtaElapsed(prev => prev + 1)
+      }, 1000)
+      // Poll for phase completion every 5 s
       if (otaPollRef.current) clearInterval(otaPollRef.current)
       otaPollRef.current = setInterval(async () => {
         try {
@@ -434,14 +442,18 @@ export default function App() {
           if (done) {
             clearInterval(otaPollRef.current!)
             otaPollRef.current = null
+            clearInterval(otaCountdownRef.current!)
+            otaCountdownRef.current = null
             setOtaBusy(false)
           }
         } catch {
           clearInterval(otaPollRef.current!)
           otaPollRef.current = null
+          clearInterval(otaCountdownRef.current!)
+          otaCountdownRef.current = null
           setOtaBusy(false)
         }
-      }, 3000)
+      }, 5000)
     } catch (e: unknown) {
       setOtaError(e instanceof Error ? e.message : 'Trigger failed')
       setOtaBusy(false)
@@ -718,17 +730,33 @@ export default function App() {
 
           {/* OTA phase progress */}
           {otaStatus?.phase && otaStatus.phase !== 'idle' && (
-            <Alert
-              style={{ marginBottom: 10 }}
-              showIcon
-              type={otaStatus.phase === 'success' ? 'success' : otaStatus.phase === 'failed' ? 'error' : 'info'}
-              message={
-                otaStatus.phase === 'triggered'   ? '⚡ Flash triggered — ESP32 is starting download…' :
-                otaStatus.phase === 'downloading' ? '⬇️ ESP32 is downloading firmware…' :
-                otaStatus.phase === 'success'     ? `✅ Update successful! Device rebooted with fw ${otaStatus.prev_fw ? `${otaStatus.prev_fw} → ` : ''}${s?.fw ?? 'new version'}` :
-                otaStatus.phase === 'failed'      ? '❌ Update failed — ESP32 did not apply the firmware. Try again or use serial flash.' : ''
-              }
-            />
+            <>
+              <Alert
+                style={{ marginBottom: 10 }}
+                showIcon
+                type={otaStatus.phase === 'success' ? 'success' : otaStatus.phase === 'failed' ? 'error' : 'info'}
+                message={
+                  otaStatus.phase === 'triggered'    ? '⚡ OTA triggered — waiting for ESP32 to acknowledge…' :
+                  otaStatus.phase === 'ack_received' ? '✅ ESP32 confirmed — downloading firmware…' :
+                  otaStatus.phase === 'downloading'  ? '⬇️ ESP32 is flashing firmware…' :
+                  otaStatus.phase === 'success'      ? `✅ Update successful! ${otaStatus.prev_fw ? `${otaStatus.prev_fw} → ` : ''}${s?.fw ?? 'new version'}` :
+                  otaStatus.phase === 'failed'       ? '❌ Update failed — ESP32 did not apply the firmware. Try again or use serial flash.' : ''
+                }
+              />
+              {otaBusy && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: labelClr, marginBottom: 4 }}>
+                    OTA in progress — {Math.max(0, 150 - otaElapsed)}s remaining
+                  </div>
+                  <Progress
+                    percent={Math.min(100, Math.round((otaElapsed / 150) * 100))}
+                    strokeColor={{ from: '#1890ff', to: '#52c41a' }}
+                    status="active"
+                    showInfo={false}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* Current staged firmware info */}

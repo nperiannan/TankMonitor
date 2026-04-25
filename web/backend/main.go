@@ -14,6 +14,7 @@ func main() {
 	// Init subsystems in order
 	initDB()
 	initAuth()
+	otaLoadFromDisk() // restore any firmware staged before this run
 	go startMQTT()
 
 	port := env("PORT", "8080")

@@ -205,8 +205,9 @@ static void processPendingMQTT() {
         if (strlen(url) == 0) {
             Log(WARN, "[MQTT] ota_start: no url provided");
         } else {
-            Log(INFO, "[MQTT] OTA start — URL: " + String(url));
-            publishMQTTStatus();
+            Log(INFO, "[MQTT] OTA command received — downloading firmware from " + String(url));
+            publishMQTTLogs();   // immediate log ack so backend/app knows ESP32 received the command
+            publishMQTTStatus(); // status update triggers ack_received phase on backend
 
             HTTPClient http;
             http.begin(url);

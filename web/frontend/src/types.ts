@@ -45,6 +45,6 @@ export interface OtaStatus {
   filename:     string
   size:         number
   uploaded_at:  string
-  phase:        string   // idle | triggered | downloading | success | failed
+  phase:        string   // idle | triggered | ack_received | downloading | success | failed
   prev_fw:      string
 }

@@ -13,12 +13,13 @@ import (
 
 // Per-device OTA state
 type OtaInfo struct {
-	HasFirmware bool   `json:"has_firmware"`
-	Filename    string `json:"filename"`
-	Size        int64  `json:"size"`
-	UploadedAt  string `json:"uploaded_at"`
-	Phase       string `json:"phase"` // idle | triggered | downloading | success | failed
-	PrevFw      string `json:"prev_fw,omitempty"`
+	HasFirmware bool      `json:"has_firmware"`
+	Filename    string    `json:"filename"`
+	Size        int64     `json:"size"`
+	UploadedAt  string    `json:"uploaded_at"`
+	Phase       string    `json:"phase"` // idle | triggered | ack_received | downloading | success | failed
+	PrevFw      string    `json:"prev_fw,omitempty"`
+	TriggeredAt time.Time `json:"-"` // internal; used for elapsed tracking
 }
 
 var (
@@ -26,7 +27,7 @@ var (
 	otaInfo = make(map[string]*OtaInfo) // mac → OtaInfo
 )
 
-const otaDir = "/tmp/ota"
+const otaDir = "/data/ota"
 
 func otaFilePath(mac string) string {
 	// Sanitise mac for filesystem use (replace : with -)
@@ -41,9 +42,48 @@ func otaOnStatusReceived(mac, fw string) {
 	if info == nil {
 		return
 	}
-	if (info.Phase == "triggered" || info.Phase == "downloading") && fw != "" && fw != info.PrevFw {
+	// Device is alive and responded — advance triggered → ack_received.
+	if info.Phase == "triggered" {
+		info.Phase = "ack_received"
+		log.Printf("[OTA] %s: ack received — device online", mac)
+	}
+	if (info.Phase == "ack_received" || info.Phase == "downloading") && fw != "" && fw != info.PrevFw {
 		info.Phase = "success"
 		log.Printf("[OTA] %s: success — fw changed %s → %s", mac, info.PrevFw, fw)
+	}
+}
+
+// otaLoadFromDisk scans the OTA directory and restores in-memory state for
+// any firmware files left over from a previous run (e.g. after container restart).
+func otaLoadFromDisk() {
+	entries, err := os.ReadDir(otaDir)
+	if err != nil {
+		return // directory may not exist yet — that's fine
+	}
+	otaMu.Lock()
+	defer otaMu.Unlock()
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".bin") {
+			continue
+		}
+		// Filename is "{mac-with-dashes}.bin" → convert back to colon MAC
+		macDash := strings.TrimSuffix(e.Name(), ".bin")
+		mac := strings.ToUpper(strings.ReplaceAll(macDash, "-", ":"))
+		info, err2 := e.Info()
+		if err2 != nil {
+			continue
+		}
+		if _, exists := otaInfo[mac]; exists {
+			continue // already tracked (uploaded this session)
+		}
+		otaInfo[mac] = &OtaInfo{
+			HasFirmware: true,
+			Filename:    "firmware.bin",
+			Size:        info.Size(),
+			UploadedAt:  info.ModTime().UTC().Format(time.RFC3339),
+			Phase:       "idle",
+		}
+		log.Printf("[OTA] restored staged firmware for %s (%d bytes) from disk", mac, info.Size())
 	}
 }
 
@@ -175,15 +215,19 @@ func handleOtaTrigger(w http.ResponseWriter, r *http.Request) {
 	otaMu.Lock()
 	otaInfo[mac].Phase = "triggered"
 	otaInfo[mac].PrevFw = curSt.FW
+	otaInfo[mac].TriggeredAt = time.Now()
 	otaMu.Unlock()
 
-	// Auto-fail after 120 s
+	// Auto-fail after 150 s; clean up firmware file so next upload starts fresh.
 	go func() {
-		time.Sleep(120 * time.Second)
+		time.Sleep(150 * time.Second)
 		otaMu.Lock()
-		if i := otaInfo[mac]; i != nil && (i.Phase == "triggered" || i.Phase == "downloading") {
+		i := otaInfo[mac]
+		if i != nil && (i.Phase == "triggered" || i.Phase == "ack_received" || i.Phase == "downloading") {
 			i.Phase = "failed"
-			log.Printf("[OTA] %s: timeout — marking failed", mac)
+			i.HasFirmware = false
+			log.Printf("[OTA] %s: timeout — marking failed, removing staged firmware", mac)
+			os.Remove(otaFilePath(mac)) //nolint:errcheck
 		}
 		otaMu.Unlock()
 	}()

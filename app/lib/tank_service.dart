@@ -461,6 +461,68 @@ class TankService extends ChangeNotifier {
       return false;
     }
   }
+  Future<bool> uploadFirmware(
+    List<int> bytes, {
+    void Function(double progress)? onProgress,
+  }) async {
+    try {
+      final uri = Uri.parse('$_activeUrl${_devicePath('/api/ota/upload', 'ota/upload')}');
+      const boundary = '----TankMonitorOTABoundary';
+      final headerStr =
+          '--$boundary\r\nContent-Disposition: form-data; name="firmware"; filename="firmware.bin"\r\nContent-Type: application/octet-stream\r\n\r\n';
+      final footerStr = '\r\n--$boundary--\r\n';
+      final headerBytes = utf8.encode(headerStr);
+      final footerBytes = utf8.encode(footerStr);
+      final total = headerBytes.length + bytes.length + footerBytes.length;
+
+      final request = http.StreamedRequest('POST', uri);
+      request.headers['Content-Type'] = 'multipart/form-data; boundary=$boundary';
+      request.headers['Content-Length'] = '$total';
+      request.contentLength = total;
+      if (authToken != null) request.headers['Authorization'] = 'Bearer $authToken';
+
+      // Stream chunks and report upload progress
+      Future.microtask(() async {
+        request.sink.add(headerBytes);
+        const chunkSize = 65536;
+        int sent = headerBytes.length;
+        for (int i = 0; i < bytes.length; i += chunkSize) {
+          final end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+          request.sink.add(bytes.sublist(i, end));
+          sent += (end - i);
+          onProgress?.call(sent / total);
+          await Future.delayed(Duration.zero);
+        }
+        request.sink.add(footerBytes);
+        await request.sink.close();
+      });
+
+      final client = http.Client();
+      try {
+        final response =
+            await client.send(request).timeout(const Duration(minutes: 5));
+        final body = await response.stream.bytesToString();
+        if (response.statusCode == 401) {
+          unauthorized = true;
+          authToken = null;
+          SharedPreferences.getInstance()
+              .then((p) => p.remove(_kAuthToken));
+          notifyListeners();
+          return false;
+        }
+        if (response.statusCode == 200) {
+          final data = jsonDecode(body) as Map<String, dynamic>;
+          return data['ok'] == true;
+        }
+        return false;
+      } finally {
+        client.close();
+      }
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> triggerOta() async {
     try {
       final headers = <String, String>{};

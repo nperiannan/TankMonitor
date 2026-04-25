@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:open_filex/open_filex.dart';
@@ -252,9 +254,20 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   double? _downloadProgress; // null = idle, 0.0–1.0 = downloading
 
-  // OTA state
-  bool _otaBusy = false;
-  String _otaPhase = ''; // idle | triggered | downloading | success | failed
+  // OTA upload state
+  double? _uploadProgress; // null = idle, 0.0–1.0 = uploading
+  String? _uploadError;
+  // OTA server state (polled from backend)
+  bool    _otaHasFirmware  = false;
+  String  _otaStagedName   = '';
+  int     _otaStagedSize   = 0;
+  String  _otaStagedAt     = '';
+  // OTA flash state
+  bool    _otaBusy         = false;
+  String  _otaPhase        = ''; // triggered | ack_received | downloading | success | failed
+  int     _otaSecondsElapsed = 0;
+  Timer?  _otaCountdownTimer;
+  Timer?  _otaPollTimer;
 
   // Device logs state
   List<String> _deviceLogs = [];
@@ -273,11 +286,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TankService>().checkForUpdate();
+      _loadOtaStatus();
     });
   }
 
   @override
   void dispose() {
+    _otaCountdownTimer?.cancel();
+    _otaPollTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -288,6 +304,103 @@ class _DashboardScreenState extends State<DashboardScreen>
       // Reconnect when app comes back from background
       context.read<TankService>().reconnectIfNeeded();
     }
+  }
+
+  // ── OTA helpers ───────────────────────────────────────────────────────────
+
+  Future<void> _loadOtaStatus() async {
+    final svc = context.read<TankService>();
+    final data = await svc.fetchOtaStatus();
+    if (!mounted || data == null) return;
+    setState(() {
+      _otaHasFirmware = data['has_firmware'] == true;
+      _otaStagedName  = data['filename']    as String? ?? '';
+      _otaStagedSize  = (data['size'] as num?)?.toInt() ?? 0;
+      _otaStagedAt    = data['uploaded_at'] as String? ?? '';
+      final serverPhase = data['phase'] as String? ?? '';
+      // Only update phase from server if we're not actively tracking a flash
+      if (!_otaBusy) _otaPhase = serverPhase;
+    });
+  }
+
+  Future<void> _pickAndUploadFirmware() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['bin'],
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+    if (!mounted) return;
+    setState(() { _uploadProgress = 0; _uploadError = null; });
+    final svc = context.read<TankService>();
+    final ok = await svc.uploadFirmware(
+      file.bytes!,
+      onProgress: (p) {
+        if (mounted) setState(() => _uploadProgress = p);
+      },
+    );
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _uploadProgress = null);
+      await _loadOtaStatus();
+    } else {
+      setState(() { _uploadProgress = null; _uploadError = 'Upload failed — check connection.'; });
+    }
+  }
+
+  void _startOtaPolling() {
+    _otaCountdownTimer?.cancel();
+    _otaPollTimer?.cancel();
+    _otaSecondsElapsed = 0;
+    // Countdown tick every second
+    _otaCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _otaSecondsElapsed++);
+      if (_otaSecondsElapsed >= 150) {
+        _otaCountdownTimer?.cancel();
+      }
+    });
+    // Status poll every 5 seconds
+    _otaPollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted) return;
+      final svc = context.read<TankService>();
+      final data = await svc.fetchOtaStatus();
+      if (!mounted || data == null) return;
+      final phase = (data['phase'] as String?) ?? '';
+      setState(() {
+        _otaPhase = phase;
+        _otaHasFirmware = data['has_firmware'] == true;
+      });
+      if (phase == 'success' || phase == 'failed' || phase == 'idle' || phase.isEmpty) {
+        _otaCountdownTimer?.cancel();
+        _otaPollTimer?.cancel();
+        setState(() { _otaBusy = false; });
+      }
+    });
+  }
+
+  void _confirmFlash(BuildContext ctx, TankService svc) {
+    showDialog(context: ctx, builder: (_) => AlertDialog(
+      backgroundColor: _cardBg,
+      title: const Text('Flash firmware to ESP32?', style: TextStyle(color: Colors.white)),
+      content: const Text(
+        'The ESP32 will download and install the staged firmware, then reboot.',
+        style: TextStyle(color: _label, fontSize: 13)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(ctx);
+            setState(() { _otaBusy = true; _otaPhase = 'triggered'; });
+            await svc.triggerOta();
+            _startOtaPolling();
+          },
+          child: const Text('Flash', style: TextStyle(color: _blue)),
+        ),
+      ],
+    ));
   }
 
   Future<void> _downloadAndInstall() async {
@@ -322,38 +435,6 @@ class _DashboardScreenState extends State<DashboardScreen>
         );
       }
     }
-  }
-
-  void _confirmFlash(BuildContext ctx, TankService svc) {
-    showDialog(context: ctx, builder: (_) => AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text('Flash firmware to ESP32?', style: TextStyle(color: Colors.white)),
-      content: const Text(
-        'The ESP32 will download and install the staged firmware from the server, then reboot.',
-        style: TextStyle(color: _label, fontSize: 13)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-        TextButton(
-          onPressed: () async {
-            Navigator.pop(ctx);
-            setState(() { _otaBusy = true; _otaPhase = 'triggered'; });
-            await svc.triggerOta();
-            // Poll for phase changes
-            for (int i = 0; i < 40; i++) {
-              await Future.delayed(const Duration(seconds: 3));
-              if (!mounted) return;
-              final st = await svc.fetchOtaStatus();
-              if (st == null) break;
-              final phase = (st['phase'] as String?) ?? '';
-              setState(() => _otaPhase = phase);
-              if (phase == 'success' || phase == 'failed' || phase == 'idle' || phase.isEmpty) break;
-            }
-            if (mounted) setState(() => _otaBusy = false);
-          },
-          child: const Text('Flash', style: TextStyle(color: _blue)),
-        ),
-      ],
-    ));
   }
 
   void _confirmRollback(BuildContext ctx, TankService svc) {
@@ -680,83 +761,193 @@ class _DashboardScreenState extends State<DashboardScreen>
                     // ── Firmware OTA ──
                     _SectionCard(
                       title: 'FIRMWARE UPDATE (OTA)',
+                      trailing: IconButton(
+                        icon: const Icon(Icons.refresh, size: 17, color: Colors.white54),
+                        tooltip: 'Refresh OTA status',
+                        onPressed: _otaBusy ? null : _loadOtaStatus,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            Expanded(child: Text(
-                              'Current: ${s?.fw ?? '—'}',
-                              style: const TextStyle(color: _label, fontSize: 12),
-                            )),
-                          ]),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Upload a firmware.bin via the web app, then trigger flash here.',
-                            style: TextStyle(color: _label, fontSize: 11),
-                          ),
-                          // OTA phase message
-                          if (_otaPhase.isNotEmpty && _otaPhase != 'idle') ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                              decoration: BoxDecoration(
-                                color: _otaPhase == 'success'
-                                    ? Colors.green.withAlpha(30)
-                                    : _otaPhase == 'failed'
-                                        ? Colors.red.withAlpha(30)
-                                        : Colors.blue.withAlpha(30),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: _otaPhase == 'success'
-                                      ? Colors.green.withAlpha(80)
-                                      : _otaPhase == 'failed'
-                                          ? Colors.red.withAlpha(80)
-                                          : Colors.blue.withAlpha(80),
-                                ),
-                              ),
-                              child: Row(children: [
-                                if (_otaBusy) ...[
-                                  const SizedBox(width: 14, height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54)),
-                                  const SizedBox(width: 8),
-                                ],
-                                Expanded(child: Text(
-                                  _otaPhase == 'triggered'   ? '⚡ Flash triggered — ESP32 is starting download…'
-                                : _otaPhase == 'downloading' ? '⬇️ ESP32 is downloading firmware…'
-                                : _otaPhase == 'success'     ? '✅ Update successful! Device rebooted.'
-                                : _otaPhase == 'failed'      ? '❌ Update failed — try serial flash.'
-                                : '',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: _otaPhase == 'success' ? Colors.greenAccent
-                                         : _otaPhase == 'failed'  ? Colors.redAccent
-                                         : Colors.white70,
-                                  ),
-                                )),
-                              ]),
-                            ),
-                          ],
+                          // Current firmware version
+                          Text('Current: ${s?.fw ?? '—'}',
+                            style: const TextStyle(color: _label, fontSize: 12)),
                           const SizedBox(height: 10),
-                          Row(children: [
-                            _ActionButton(
-                              label: _otaBusy
-                                  ? (_otaPhase == 'triggered'   ? 'Triggering…'
-                                    : _otaPhase == 'downloading' ? 'Downloading…'
-                                    : 'Flashing…')
-                                  : 'Flash Firmware',
-                              icon: Icons.bolt,
-                              enabled: s != null && !_otaBusy,
-                              onTap: () => _confirmFlash(context, svc),
+
+                          // ── Step 1: Staged firmware status ──
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0d0d0d),
+                              borderRadius: BorderRadius.circular(6),
                             ),
-                            const SizedBox(width: 10),
-                            _ActionButton(
-                              label: 'Rollback',
-                              icon: Icons.history,
-                              danger: true,
-                              enabled: s != null && !_otaBusy,
-                              onTap: () => _confirmRollback(context, svc),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('STEP 1 — STAGE FIRMWARE',
+                                  style: TextStyle(color: _label, fontSize: 10, letterSpacing: 0.8)),
+                                const SizedBox(height: 6),
+                                if (_uploadProgress != null) ...[
+                                  // Uploading…
+                                  Row(children: [
+                                    const SizedBox(width: 12, height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
+                                    const SizedBox(width: 8),
+                                    Text('Uploading… ${(_uploadProgress! * 100).toStringAsFixed(0)}%',
+                                      style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                  ]),
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(3),
+                                    child: LinearProgressIndicator(
+                                      value: _uploadProgress,
+                                      backgroundColor: const Color(0xFF303030),
+                                      color: _blue,
+                                      minHeight: 4,
+                                    ),
+                                  ),
+                                ] else if (_uploadError != null) ...[
+                                  Text('❌ $_uploadError',
+                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                  const SizedBox(height: 6),
+                                  _ActionButton(
+                                    label: 'Choose firmware.bin',
+                                    icon: Icons.upload_file,
+                                    enabled: !_otaBusy,
+                                    onTap: _pickAndUploadFirmware,
+                                  ),
+                                ] else if (_otaHasFirmware) ...[
+                                  Row(children: [
+                                    const Icon(Icons.check_circle, color: _green, size: 14),
+                                    const SizedBox(width: 6),
+                                    Expanded(child: Text(
+                                      '${_otaStagedName.isEmpty ? 'firmware.bin' : _otaStagedName}'
+                                      '  —  ${(_otaStagedSize / 1024).toStringAsFixed(0)} KB',
+                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                    )),
+                                  ]),
+                                  if (_otaStagedAt.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Uploaded ${DateTime.tryParse(_otaStagedAt)?.toLocal().toString().substring(0, 16) ?? _otaStagedAt}',
+                                      style: const TextStyle(color: _label, fontSize: 11),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 6),
+                                  _ActionButton(
+                                    label: 'Replace firmware.bin',
+                                    icon: Icons.upload_file,
+                                    enabled: !_otaBusy,
+                                    onTap: _pickAndUploadFirmware,
+                                  ),
+                                ] else ...[
+                                  const Text('No firmware staged.',
+                                    style: TextStyle(color: _label, fontSize: 12)),
+                                  const SizedBox(height: 6),
+                                  _ActionButton(
+                                    label: 'Choose firmware.bin',
+                                    icon: Icons.upload_file,
+                                    enabled: !_otaBusy,
+                                    onTap: _pickAndUploadFirmware,
+                                  ),
+                                ],
+                              ],
                             ),
-                          ]),
+                          ),
+                          const SizedBox(height: 10),
+
+                          // ── Step 2: Flash ──
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0d0d0d),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('STEP 2 — FLASH TO DEVICE',
+                                  style: TextStyle(color: _label, fontSize: 10, letterSpacing: 0.8)),
+                                const SizedBox(height: 8),
+
+                                // Phase message + countdown
+                                if (_otaBusy || (_otaPhase.isNotEmpty && _otaPhase != 'idle')) ...[
+                                  _otaPhase == 'success'
+                                    ? Row(children: const [
+                                        Icon(Icons.check_circle, color: _green, size: 14),
+                                        SizedBox(width: 6),
+                                        Text('✅ Update successful! Device rebooted.',
+                                          style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                                      ])
+                                    : _otaPhase == 'failed'
+                                      ? Row(children: const [
+                                          Icon(Icons.error_outline, color: _red, size: 14),
+                                          SizedBox(width: 6),
+                                          Expanded(child: Text('❌ Update failed — timed out.',
+                                            style: TextStyle(color: Colors.redAccent, fontSize: 12))),
+                                        ])
+                                      : Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(children: [
+                                              const SizedBox(width: 12, height: 12,
+                                                child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _otaPhase == 'triggered'    ? '⚡ OTA triggered — waiting for ESP32…'
+                                              : _otaPhase == 'ack_received' ? '✅ ESP32 confirmed — downloading…'
+                                              : _otaPhase == 'downloading'  ? '⬇️ ESP32 is flashing firmware…'
+                                              : 'In progress…',
+                                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                              ),
+                                            ]),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text('${_otaSecondsElapsed}s / 150s',
+                                                  style: const TextStyle(color: _label, fontSize: 10)),
+                                                Text('${150 - _otaSecondsElapsed > 0 ? 150 - _otaSecondsElapsed : 0}s remaining',
+                                                  style: const TextStyle(color: _label, fontSize: 10)),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            ClipRRect(
+                                              borderRadius: BorderRadius.circular(3),
+                                              child: LinearProgressIndicator(
+                                                value: (_otaSecondsElapsed / 150).clamp(0.0, 1.0),
+                                                backgroundColor: const Color(0xFF303030),
+                                                color: _blue,
+                                                minHeight: 6,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                  const SizedBox(height: 8),
+                                ],
+
+                                Row(children: [
+                                  _ActionButton(
+                                    label: _otaBusy ? 'Flashing…' : 'Flash Firmware',
+                                    icon: Icons.bolt,
+                                    enabled: s != null && _otaHasFirmware && !_otaBusy
+                                        && _otaPhase != 'triggered'
+                                        && _otaPhase != 'ack_received'
+                                        && _otaPhase != 'downloading',
+                                    onTap: () => _confirmFlash(context, svc),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _ActionButton(
+                                    label: 'Rollback',
+                                    icon: Icons.history,
+                                    danger: true,
+                                    enabled: s != null && !_otaBusy,
+                                    onTap: () => _confirmRollback(context, svc),
+                                  ),
+                                ]),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -905,6 +1096,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         currentIndex: _tabIndex,
         onTap: (i) {
           setState(() => _tabIndex = i);
+          // Refresh OTA status when switching to Settings tab
+          if (i == 1 && !_otaBusy) _loadOtaStatus();
           // Auto-poll logs when switching to System tab
           if (i == 2 && _deviceLogs.isEmpty && !_logsLoading) {
             final svc2 = context.read<TankService>();
