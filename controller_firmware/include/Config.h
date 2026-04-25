@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.4.0"
+#define FW_VERSION "1.5.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "1.0.0"
@@ -170,7 +170,7 @@
 #define MQTT_PORT_DEFAULT     1883
 #define MQTT_USER_DEFAULT     "tankmonitor"
 #define MQTT_PASS_DEFAULT     "Tank32!"
-#define MQTT_LOCATION_DEFAULT "home"          // Used in topic: tankmonitor/<location>/...
+#define MQTT_LOCATION_DEFAULT "home"          // Legacy NVS key — no longer used for topics (topics now use MAC)
 
 #define MQTT_NVS_NS           "mqtt_cfg"
 #define MQTT_PUBLISH_MS       5000UL          // Publish status every 5 s
