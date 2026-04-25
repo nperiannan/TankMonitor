@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # build_web.sh — rebuild and redeploy the tankmonitor-web Docker container on the NAS.
-# Run from the repo root: bash build_web.sh
+# Run from web/: bash build_web.sh
 set -e
 
 source ~/.bashrc
 conda activate base
 
-cd /Volume1/docker/TankMonitor
-git pull origin master
+cd /Volume1/docker/TankMonitor/web
+git -C .. pull origin master
 
-docker build -t tankmonitor-web:2.0.3 web/
+docker build -t tankmonitor-web:2.0.3 .
 
 docker stop tankmonitor-web 2>/dev/null || true
 docker rm   tankmonitor-web 2>/dev/null || true
