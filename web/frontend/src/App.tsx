@@ -286,6 +286,8 @@ export default function App() {
   const [mqttPassInput, setMqttPassInput] = useState('')
   const [mqttPassBusy,  setMqttPassBusy]  = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
+  // Optimistic settings — key → {value, expiresAt ms} to win against stale WS updates
+  const pendingRef = useRef<Map<string, { value: unknown; expiresAt: number }>>(new Map())
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
@@ -327,7 +329,13 @@ export default function App() {
       ws.onerror   = () => ws.close()
       ws.onmessage = ({ data }) => {
         try {
-          setStatus(JSON.parse(data as string))
+          const raw = JSON.parse(data as string) as Record<string, unknown>
+          const now = Date.now()
+          for (const [k, p] of pendingRef.current) {
+            if (now < p.expiresAt) raw[k] = p.value
+            else pendingRef.current.delete(k)
+          }
+          setStatus(raw as Status)
           setLastUpdate(new Date())
         } catch { /* ignore malformed */ }
       }
@@ -349,6 +357,14 @@ export default function App() {
       setCtrlError(e.message)
       setTimeout(() => setCtrlError(null), 4000)
     })
+
+  // Like ctrl() but also stores an optimistic override for `statusKey` so the UI
+  // doesn't flicker back to the old value when the next WS status arrives before
+  // the ESP32 has processed the change. The override expires after 4 seconds.
+  const ctrlSetting = (cmd: ControlCmd, statusKey: string, value: unknown) => {
+    pendingRef.current.set(statusKey, { value, expiresAt: Date.now() + 4000 })
+    ctrl(cmd)
+  }
 
   // ── Schedule table columns ────────────────────────────────────────────────
   const schedCols: TableColumnsType<Schedule> = [
@@ -630,7 +646,7 @@ export default function App() {
                 size="small"
                 checked={val ?? false}
                 disabled={!s}
-                onChange={(checked) => ctrl({ cmd: 'set_setting', key, value: checked })}
+                onChange={(checked) => ctrlSetting({ cmd: 'set_setting', key, value: checked }, key, checked)}
               />
             </div>
           ))}
@@ -646,7 +662,10 @@ export default function App() {
               style={{ width: 170 }}
               disabled={!s}
               value={s?.lcd_bl_mode ?? 0}
-              onChange={(v: number) => ctrl({ cmd: 'set_lcd_mode', mode: ['auto', 'always_on', 'always_off'][v] } as unknown as ControlCmd)}
+              onChange={(v: number) => ctrlSetting(
+                { cmd: 'set_lcd_mode', mode: ['auto', 'always_on', 'always_off'][v] } as unknown as ControlCmd,
+                'lcd_bl_mode', v,
+              )}
               options={[
                 { value: 0, label: 'Auto' },
                 { value: 1, label: 'On' },
@@ -846,7 +865,7 @@ export default function App() {
                 value={s?.log_level ?? 'info'}
                 disabled={!s}
                 style={{ width: 160 }}
-                onChange={(v: string) => ctrl({ cmd: 'set_log_level', level: v } as ControlCmd)}
+                onChange={(v: string) => ctrlSetting({ cmd: 'set_log_level', level: v } as ControlCmd, 'log_level', v)}
                 options={[
                   { value: 'info',  label: 'Info (Warn + Error)' },
                   { value: 'debug', label: 'Debug (All)' },

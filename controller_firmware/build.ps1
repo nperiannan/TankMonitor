@@ -12,7 +12,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$FwDir    = "$PSScriptRoot\controller_firmware"
+$FwDir    = "$PSScriptRoot"
 $pio      = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
 if (-not (Test-Path $pio)) { $pio = 'pio' }  # fallback if in PATH
 

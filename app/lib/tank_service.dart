@@ -40,6 +40,11 @@ class TankService extends ChangeNotifier {
   bool connected = false;
   String? error;
 
+  // Optimistic setting overrides: status-JSON key → {value, expiresAt}.
+  // Applied in the WS listener so the UI doesn't flicker back to the old
+  // value when a stale status arrives before the ESP32 processes the change.
+  final Map<String, _PendingSetting> _pendingSettings = {};
+
   WebSocketChannel? _channel;
   StreamSubscription? _sub;
   StreamSubscription? _netSub;
@@ -187,7 +192,7 @@ class TankService extends ChangeNotifier {
         (data) {
           if (_disposed) return;
           try {
-            status = Status.fromJson(jsonDecode(data as String) as Map<String, dynamic>);
+            status = Status.fromJson(_applyPending(jsonDecode(data as String) as Map<String, dynamic>));
             if (!connected) {
               connected = true;
               fetchVersion(); // fire and forget
@@ -547,6 +552,7 @@ class TankService extends ChangeNotifier {
 
   Future<void> setLcdMode(int mode) async {
     const modes = ['auto', 'always_on', 'always_off'];
+    setPendingSetting('lcd_bl_mode', mode);
     await sendControl({'cmd': 'set_lcd_mode', 'mode': modes[mode.clamp(0, 2)]});
   }
 
@@ -555,7 +561,35 @@ class TankService extends ChangeNotifier {
   }
 
   Future<void> setLogLevel(String level) async {
+    setPendingSetting('log_level', level);
     await sendControl({'cmd': 'set_log_level', 'level': level});
+  }
+
+  /// Send a boolean setting toggle and immediately store an optimistic override
+  /// so the UI doesn't flicker on the next incoming WS status message.
+  Future<void> sendSettingControl(String statusKey, bool value) async {
+    setPendingSetting(statusKey, value);
+    await sendControl({'cmd': 'set_setting', 'key': statusKey, 'value': value});
+  }
+
+  /// Store an optimistic value for [key] that overrides incoming WS status for 4 seconds.
+  void setPendingSetting(String key, dynamic value) {
+    _pendingSettings[key] = _PendingSetting(
+      value: value,
+      expiresAt: DateTime.now().add(const Duration(seconds: 4)),
+    );
+  }
+
+  /// Patch a raw status JSON map with non-expired pending overrides.
+  Map<String, dynamic> _applyPending(Map<String, dynamic> json) {
+    final now = DateTime.now();
+    _pendingSettings.removeWhere((_, v) => now.isAfter(v.expiresAt));
+    if (_pendingSettings.isEmpty) return json;
+    final patched = Map<String, dynamic>.from(json);
+    for (final entry in _pendingSettings.entries) {
+      patched[entry.key] = entry.value.value;
+    }
+    return patched;
   }
 
   Future<Map<String, dynamic>?> fetchOtaStatus() async {
@@ -636,4 +670,11 @@ class TankService extends ChangeNotifier {
       Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
     }
   }
+}
+
+// Internal helper — holds an optimistic setting value until it expires.
+class _PendingSetting {
+  final dynamic value;
+  final DateTime expiresAt;
+  const _PendingSetting({required this.value, required this.expiresAt});
 }

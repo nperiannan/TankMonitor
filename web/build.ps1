@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $ImageTag = "tankmonitor-web:$Version"
 
 Write-Host "==> Pushing latest code to GitHub..." -ForegroundColor Cyan
-Push-Location $PSScriptRoot
+Push-Location "$PSScriptRoot\.."
 git push origin HEAD
 Pop-Location
 

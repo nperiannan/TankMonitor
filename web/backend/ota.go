@@ -208,7 +208,9 @@ func handleOtaTrigger(w http.ResponseWriter, r *http.Request) {
 
 	// Capture current fw for change detection
 	deviceStatusMu.RLock()
-	var curSt struct{ FW string `json:"fw"` }
+	var curSt struct {
+		FW string `json:"fw"`
+	}
 	json.Unmarshal(deviceStatus[mac], &curSt) //nolint:errcheck
 	deviceStatusMu.RUnlock()
 

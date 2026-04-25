@@ -5,7 +5,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$AppDir = "$PSScriptRoot\app"
+$AppDir = "$PSScriptRoot"
 
 Write-Host "==> Building Flutter app..." -ForegroundColor Cyan
 Push-Location $AppDir

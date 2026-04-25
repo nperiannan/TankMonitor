@@ -683,10 +683,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                     _SectionCard(
                       title: 'SETTINGS',
                       child: Column(children: [
-                        _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_disp_only', 'value': v})),
-                        _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_disp_only', 'value': v})),
-                        _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'ug_ignore',    'value': v})),
-                        _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendControl({'cmd': 'set_setting', 'key': 'buzzer_delay', 'value': v})),
+                        _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendSettingControl('oh_disp_only', v)),
+                        _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendSettingControl('ug_disp_only', v)),
+                        _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendSettingControl('ug_ignore',    v)),
+                        _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendSettingControl('buzzer_delay', v)),
                         // LCD Backlight mode
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
