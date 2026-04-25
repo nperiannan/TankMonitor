@@ -40,6 +40,9 @@ class Status {
   final int  lcdBlMode;   // 0=auto, 1=always_on, 2=always_off
   final String logLevel;  // 'info' | 'debug'
   final bool buzzerActive;
+  final bool ohBuzzer;    // buzzer countdown running for OH motor
+  final bool ugBuzzer;    // buzzer countdown running for UG motor
+  final String txFw;      // transmitter firmware version
 
   const Status({
     required this.ohState,
@@ -59,6 +62,9 @@ class Status {
     required this.lcdBlMode,
     required this.logLevel,
     required this.buzzerActive,
+    required this.ohBuzzer,
+    required this.ugBuzzer,
+    required this.txFw,
   });
 
   factory Status.fromJson(Map<String, dynamic> j) => Status(
@@ -81,5 +87,8 @@ class Status {
         lcdBlMode:  j['lcd_bl_mode']  as int?  ?? 0,
         logLevel:   j['log_level']    as String? ?? 'info',
         buzzerActive: j['buzzer_active'] as bool? ?? false,
+        ohBuzzer:   j['oh_buzzer']    as bool? ?? false,
+        ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
+        txFw:       j['tx_fw']        as String? ?? '',
       );
 }

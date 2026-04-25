@@ -6,6 +6,9 @@
 // =============================================================================
 #define FW_VERSION "1.3.6"
 
+// Known transmitter firmware version (update here when transmitter is reflashed).
+#define TRANSMITTER_FW_VERSION "1.0.0"
+
 // =============================================================================
 //                              I2C CONFIGURATION
 // =============================================================================

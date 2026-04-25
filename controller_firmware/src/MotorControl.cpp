@@ -252,3 +252,6 @@ void turnOffUGMotor() {
     stopBuzzer();
     energiseUGRelay(false);
 }
+
+bool isOHBuzzerPending() { return ohMotorStartPending; }
+bool isUGBuzzerPending() { return ugMotorStartPending; }

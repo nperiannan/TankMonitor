@@ -376,7 +376,7 @@ void publishMQTTStatus() {
     }
     strcat(schedJson, "]");
 
-    char payload[1152];
+    char payload[1280];
     snprintf(payload, sizeof(payload),
         "{\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
@@ -388,6 +388,8 @@ void publishMQTTStatus() {
         "\"lcd_bl_mode\":%u,"
         "\"log_level\":\"%s\","
         "\"buzzer_active\":%s,"
+        "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
+        "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
@@ -404,7 +406,10 @@ void publishMQTTStatus() {
         buzzerDelayEnabled ? "true" : "false",
         (unsigned)lcdBacklightMode,
         getLogLevel() == DEBUG ? "debug" : "info",
-        isBuzzerActive() ? "true" : "false",
+        isBuzzerActive()     ? "true" : "false",
+        isOHBuzzerPending()  ? "true" : "false",
+        isUGBuzzerPending()  ? "true" : "false",
+        TRANSMITTER_FW_VERSION,
         schedJson
     );
 

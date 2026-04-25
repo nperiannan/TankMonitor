@@ -29,4 +29,8 @@ void turnOffUGMotor();
 // Check and handle pending motor starts (after buzzer delay).
 void processPendingMotorStarts();
 
+// Per-motor buzzer-pending state (true while buzzer countdown is running for that motor).
+bool isOHBuzzerPending();
+bool isUGBuzzerPending();
+
 #endif // MOTOR_CONTROL_H

@@ -742,6 +742,9 @@ static void handleStatus() {
     doc["lcdBlMode"]         = (int)lcdBacklightMode;
     doc["logLevel"]          = getLogLevel() == DEBUG ? "debug" : "info";
     doc["buzzerActive"]      = isBuzzerActive();
+    doc["ohBuzzer"]          = isOHBuzzerPending();
+    doc["ugBuzzer"]          = isUGBuzzerPending();
+    doc["txFw"]              = TRANSMITTER_FW_VERSION;
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();
     doc["ntpSyncAge"]        = (uint32_t)getNtpSyncAgeSeconds();
