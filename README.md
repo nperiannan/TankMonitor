@@ -16,8 +16,8 @@ TankMonitor/
 | Component | Latest |
 |-----------|--------|
 | Controller Firmware | v1.5.1 |
-| Web App | v2.0.5 |
-| Mobile App | v1.5.5 |
+| Web App | v2.0.6 |
+| Mobile App | v1.5.6 |
 
 ---
 

@@ -15,7 +15,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '1.5.5';
+const mobileAppVersion = '1.5.6';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -44,6 +44,7 @@ class TankService extends ChangeNotifier {
   // Applied in the WS listener so the UI doesn't flicker back to the old
   // value when a stale status arrives before the ESP32 processes the change.
   final Map<String, _PendingSetting> _pendingSettings = {};
+  Map<String, dynamic>? _lastRawStatus; // last received WS payload (pre-pending)
 
   WebSocketChannel? _channel;
   StreamSubscription? _sub;
@@ -192,7 +193,9 @@ class TankService extends ChangeNotifier {
         (data) {
           if (_disposed) return;
           try {
-            status = Status.fromJson(_applyPending(jsonDecode(data as String) as Map<String, dynamic>));
+            final raw = jsonDecode(data as String) as Map<String, dynamic>;
+            _lastRawStatus = raw; // store pre-pending snapshot
+            status = Status.fromJson(_applyPending(raw));
             if (!connected) {
               connected = true;
               fetchVersion(); // fire and forget
@@ -573,11 +576,18 @@ class TankService extends ChangeNotifier {
   }
 
   /// Store an optimistic value for [key] that overrides incoming WS status for 4 seconds.
+  /// Also immediately updates the current status so the UI responds without waiting for
+  /// the next WS message.
   void setPendingSetting(String key, dynamic value) {
     _pendingSettings[key] = _PendingSetting(
       value: value,
       expiresAt: DateTime.now().add(const Duration(seconds: 4)),
     );
+    // Immediately reflect the change in the UI
+    if (_lastRawStatus != null) {
+      status = Status.fromJson(_applyPending(Map<String, dynamic>.from(_lastRawStatus!)));
+      notifyListeners();
+    }
   }
 
   /// Patch a raw status JSON map with non-expired pending overrides.

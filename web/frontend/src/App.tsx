@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.3.6'
+const WEB_APP_VERSION = '1.3.7'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -363,6 +363,8 @@ export default function App() {
   // the ESP32 has processed the change. The override expires after 4 seconds.
   const ctrlSetting = (cmd: ControlCmd, statusKey: string, value: unknown) => {
     pendingRef.current.set(statusKey, { value, expiresAt: Date.now() + 4000 })
+    // Immediately reflect the change in the UI — don't wait for the next WS message
+    setStatus(prev => prev ? { ...prev, [statusKey]: value } as Status : prev)
     ctrl(cmd)
   }
 
