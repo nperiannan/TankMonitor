@@ -77,3 +77,8 @@
 ## Git Notes
 - `credential-winced` warning on push is harmless (typo in git credential helper config)
 - Flutter auto-generated files (`app/linux/`, `app/macos/`, `app/windows/`) are not committed unless intentionally changed
+
+## Terminal Hygiene
+- Keep at most **1–2 terminal tabs** open at a time — close finished terminals immediately after use
+- AI agents must not leave stray async terminals running after a task completes; call `kill_terminal` when done
+- Before starting a new long-running command, check for and close idle terminals first
