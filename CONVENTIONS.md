@@ -8,15 +8,17 @@
 ## CRITICAL — Commit & Version Discipline
 - **Every successful build must be immediately committed to git** — never leave built/tested changes uncommitted
 - **Version strings must be updated BEFORE building**, not after — the binary must embed the correct version
+- **AI agents must ALWAYS perform the full checklist below** when committing changes to any component, without waiting to be reminded
 - After a successful build + test, the full checklist is:
   1. Update ALL version strings for the changed component (see list below)
   2. Update `README.md` versions table
-  3. Update CHANGELOG with what changed
-  4. `git add` + `git commit` with descriptive message
-  5. `git tag -a <component>/vX.Y.Z -m "..."` (annotated tag)
-  6. `git push origin master && git push origin <tag>`
-  7. Delete old GitHub release, create new one via `gh release create`
-- **Never let version strings drift** — the binary version, git tag, README table, and CHANGELOG must all agree
+  3. `git add` + `git commit` with descriptive message
+  4. `git tag -a <component>/vX.Y.Z -m "..."` (annotated tag)
+  5. `git push origin master && git push origin <tag>`
+  6. Delete old GitHub release for that component, create new one via `gh release create`
+  7. Rebuild binary/image for the changed component and deploy/install
+- **Never let version strings drift** — the binary version, git tag, README table, and GitHub release must all agree
+- **Do not skip the release checklist** — even for "small" changes like refactors or race condition fixes that affect user-facing behaviour
 
 ## Versioning & Tags
 - Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `app/vX.Y.Z`
