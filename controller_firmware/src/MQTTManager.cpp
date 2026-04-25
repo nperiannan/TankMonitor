@@ -376,9 +376,13 @@ void publishMQTTStatus() {
     }
     strcat(schedJson, "]");
 
-    char payload[1280];
+    // MAC address (colon-separated, uppercase) for device identity
+    String macStr = WiFi.macAddress();
+
+    char payload[1400];
     snprintf(payload, sizeof(payload),
-        "{\"oh_state\":\"%s\",\"ug_state\":\"%s\","
+        "{\"mac\":\"%s\",\"device_type\":\"tank_monitor\","
+        "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
         "\"lora_ok\":%s,\"wifi_rssi\":%d,"
         "\"uptime_s\":%lu,\"fw\":\"%s\","
@@ -391,6 +395,7 @@ void publishMQTTStatus() {
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
         "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
+        macStr.c_str(),
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
         ohMotorRunning ? "true" : "false",

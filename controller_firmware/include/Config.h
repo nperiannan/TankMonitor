@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.3.7"
+#define FW_VERSION "1.4.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "1.0.0"
