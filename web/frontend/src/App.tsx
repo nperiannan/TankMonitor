@@ -329,7 +329,7 @@ export default function App() {
       ws.onopen    = () => {
         setConnected(true)
         // Fetch backend version (may differ from frontend build constant)
-        fetch('/api/version', { headers: { Authorization: `Bearer ${t}` } })
+        fetch('/api/version', { headers: { Authorization: `Bearer ${token}` } })
           .then(r => r.ok ? r.json() : null)
           .then(d => { if (d?.web_version) setBackendVersion(d.web_version as string) })
           .catch(() => {})
