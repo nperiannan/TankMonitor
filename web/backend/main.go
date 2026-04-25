@@ -53,8 +53,21 @@ func main() {
 
 	// ---------------------------------------------------------------------------
 	// WebSocket — per-device: /ws/{mac}?token=...
+	// Legacy single-device:   /ws?token=...  (auto-picks first claimed device)
 	// ---------------------------------------------------------------------------
 	mux.HandleFunc("/ws/", requireAuth(handleWS))
+	mux.HandleFunc("/ws", requireAuth(handleLegacyWS))
+
+	// ---------------------------------------------------------------------------
+	// Legacy single-device routes — for old React web frontend (v1.x)
+	// These auto-select the user's first claimed device.
+	// ---------------------------------------------------------------------------
+	mux.HandleFunc("/api/control", requireAuth(handleLegacyControl))
+	mux.HandleFunc("/api/ota/status", requireAuth(handleLegacyOtaStatus))
+	mux.HandleFunc("/api/ota/upload", requireAuth(handleLegacyOtaUpload))
+	mux.HandleFunc("/api/ota/trigger", requireAuth(handleLegacyOtaTrigger))
+	mux.HandleFunc("/api/ota/rollback", requireAuth(handleLegacyOtaRollback))
+	mux.HandleFunc("/api/logs", requireAuth(handleLegacyLogs))
 
 	// ---------------------------------------------------------------------------
 	// Admin
