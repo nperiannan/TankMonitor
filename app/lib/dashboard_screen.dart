@@ -418,18 +418,25 @@ class _DashboardScreenState extends State<DashboardScreen>
       appBar: AppBar(
         backgroundColor: _cardBg,
         elevation: 0,
-        title: Text(
-          '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
-          style: const TextStyle(
-              color: _blue, fontWeight: FontWeight.w700, fontSize: 18),
-          overflow: TextOverflow.ellipsis,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
+              style: const TextStyle(
+                  color: _blue, fontWeight: FontWeight.w700, fontSize: 17),
+              overflow: TextOverflow.ellipsis,
+            ),
+            if ((svc.currentDevice?.typeId ?? '').isNotEmpty)
+              Text(
+                svc.currentDevice!.typeId,
+                style: const TextStyle(color: _label, fontSize: 11),
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
         ),
         actions: [
-          if (s?.time != null)
-            Center(child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(_to12hr(s!.time), style: const TextStyle(color: _label, fontSize: 12)),
-            )),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
@@ -503,7 +510,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 12),
                     // ── Schedules ──
                     _SectionCard(
-                      title: 'MOTOR SCHEDULER',
+                      title: s?.time != null
+                          ? 'MOTOR SCHEDULER  ·  ${_to12hr(s!.time)}'
+                          : 'MOTOR SCHEDULER',
                       trailing: Row(children: [
                         _SmallButton(
                           label: '+ Add',
