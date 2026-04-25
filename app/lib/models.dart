@@ -92,3 +92,30 @@ class Status {
         txFw:       j['tx_fw']        as String? ?? '',
       );
 }
+
+class Device {
+  final String mac;
+  final String typeId;
+  final String displayName;
+  final String fwVersion;
+  final String role;   // 'owner' | 'viewer' | '' (unclaimed, admin-visible only)
+  final bool online;
+
+  const Device({
+    required this.mac,
+    required this.typeId,
+    required this.displayName,
+    required this.fwVersion,
+    required this.role,
+    required this.online,
+  });
+
+  factory Device.fromJson(Map<String, dynamic> j) => Device(
+        mac:         j['mac']          as String? ?? '',
+        typeId:      j['type_id']      as String? ?? '',
+        displayName: j['display_name'] as String? ?? '',
+        fwVersion:   j['fw_version']   as String? ?? '',
+        role:        j['role']         as String? ?? '',
+        online:      j['online']       as bool?   ?? false,
+      );
+}

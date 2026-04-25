@@ -43,21 +43,16 @@ static unsigned long s_lastLogPublishMs = 0;
 static void loadConfig() {
     Preferences prefs;
     prefs.begin(MQTT_NVS_NS, true);
-    String broker   = prefs.getString("broker",   MQTT_BROKER_DEFAULT);
-    s_port          = prefs.getInt   ("port",      MQTT_PORT_DEFAULT);
-    String user     = prefs.getString("user",      MQTT_USER_DEFAULT);
-    String pass     = prefs.getString("pass",      MQTT_PASS_DEFAULT);
-    String location = prefs.getString("location",  MQTT_LOCATION_DEFAULT);
+    String broker = prefs.getString("broker", MQTT_BROKER_DEFAULT);
+    s_port        = prefs.getInt   ("port",   MQTT_PORT_DEFAULT);
+    String user   = prefs.getString("user",   MQTT_USER_DEFAULT);
+    String pass   = prefs.getString("pass",   MQTT_PASS_DEFAULT);
     prefs.end();
 
     strncpy(s_broker, broker.c_str(), sizeof(s_broker) - 1);
     strncpy(s_user,   user.c_str(),   sizeof(s_user)   - 1);
     strncpy(s_pass,   pass.c_str(),   sizeof(s_pass)   - 1);
-
-    snprintf(s_topicStatus,  sizeof(s_topicStatus),  "tankmonitor/%s/status",  location.c_str());
-    snprintf(s_topicControl, sizeof(s_topicControl), "tankmonitor/%s/control", location.c_str());
-    snprintf(s_topicLogs,    sizeof(s_topicLogs),    "tankmonitor/%s/logs",    location.c_str());
-    snprintf(s_clientId,     sizeof(s_clientId),     "esp32_%s",               location.c_str());
+    // Topics are MAC-based and are set in buildTopicsFromMAC() — called from mqttConnect()
 }
 
 static void seedDefaultsIfEmpty() {
@@ -81,6 +76,24 @@ static void seedDefaultsIfEmpty() {
 // ---------------------------------------------------------------------------
 // Forward declarations
 static void publishMQTTLogs();
+
+// ---------------------------------------------------------------------------
+// Build MQTT topics and client ID from the hardware MAC address.
+// Called from mqttConnect() when WiFi is guaranteed to be up.
+// Topics: tm/{AA:BB:CC:DD:EE:FF}/status|control|logs
+// Client: esp32_{last6hex}  e.g. esp32_DDEEFF
+// ---------------------------------------------------------------------------
+static void buildTopicsFromMAC() {
+    String macStr    = WiFi.macAddress();   // "AA:BB:CC:DD:EE:FF"
+    String macNoDash = macStr;
+    macNoDash.replace(":", "");             // "AABBCCDDEEFF"
+
+    snprintf(s_topicStatus,  sizeof(s_topicStatus),  "tm/%s/status",  macStr.c_str());
+    snprintf(s_topicControl, sizeof(s_topicControl), "tm/%s/control", macStr.c_str());
+    snprintf(s_topicLogs,    sizeof(s_topicLogs),    "tm/%s/logs",    macStr.c_str());
+    // Use last 6 hex chars of MAC as a short unique suffix
+    snprintf(s_clientId,     sizeof(s_clientId),     "esp32_%s",      macNoDash.substring(6).c_str());
+}
 
 // Pending command queue — executed from loop(), not from callback stack
 // ---------------------------------------------------------------------------
@@ -287,6 +300,9 @@ static void processPendingMQTT() {
 static bool mqttConnect() {
     if (WiFi.status() != WL_CONNECTED) return false;
 
+    // Build topics from MAC now that WiFi is up (MAC is stable hardware address)
+    buildTopicsFromMAC();
+
     Log(INFO, "[MQTT] Connecting to " + String(s_broker) + ":" + String(s_port) + " as " + String(s_clientId) + " ...");
 
     if (s_mqtt.connect(s_clientId, s_user, s_pass)) {
@@ -313,7 +329,7 @@ void initMQTT() {
     s_mqtt.setSocketTimeout(10);
     s_mqtt.setBufferSize(4096);  // large enough for status + log payloads
 
-    Log(INFO, "[MQTT] Init. Broker=" + String(s_broker) + ":" + String(s_port) + " topic=" + String(s_topicStatus));
+    Log(INFO, "[MQTT] Init. Broker=" + String(s_broker) + ":" + String(s_port) + " (topics built from MAC on first connect)");
 }
 
 void mqttLoop() {
@@ -376,9 +392,13 @@ void publishMQTTStatus() {
     }
     strcat(schedJson, "]");
 
-    char payload[1280];
+    // MAC address (colon-separated, uppercase) for device identity
+    String macStr = WiFi.macAddress();
+
+    char payload[1400];
     snprintf(payload, sizeof(payload),
-        "{\"oh_state\":\"%s\",\"ug_state\":\"%s\","
+        "{\"mac\":\"%s\",\"device_type\":\"tank_monitor\","
+        "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
         "\"lora_ok\":%s,\"wifi_rssi\":%d,"
         "\"uptime_s\":%lu,\"fw\":\"%s\","
@@ -391,6 +411,7 @@ void publishMQTTStatus() {
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
         "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
+        macStr.c_str(),
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
         ohMotorRunning ? "true" : "false",

@@ -10,6 +10,7 @@ import 'tank_service.dart';
 import 'schedule_sheet.dart';
 import 'setup_screen.dart';
 import 'login_screen.dart';
+import 'device_list_screen.dart';
 
 // ─── Colours (mirrors Ant Design dark theme) ────────────────────────────────
 const _bg      = Color(0xFF141414);
@@ -417,14 +418,25 @@ class _DashboardScreenState extends State<DashboardScreen>
       appBar: AppBar(
         backgroundColor: _cardBg,
         elevation: 0,
-        title: const Text('💧 Tank Monitor',
-          style: TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
+              style: const TextStyle(
+                  color: _blue, fontWeight: FontWeight.w700, fontSize: 17),
+              overflow: TextOverflow.ellipsis,
+            ),
+            if ((svc.currentDevice?.typeId ?? '').isNotEmpty)
+              Text(
+                svc.currentDevice!.typeId,
+                style: const TextStyle(color: _label, fontSize: 11),
+                overflow: TextOverflow.ellipsis,
+              ),
+          ],
+        ),
         actions: [
-          if (s?.time != null)
-            Center(child: Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Text(_to12hr(s!.time), style: const TextStyle(color: _label, fontSize: 12)),
-            )),
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
@@ -434,6 +446,13 @@ class _DashboardScreenState extends State<DashboardScreen>
               Text(svc.connected ? 'Live' : 'Offline',
                 style: const TextStyle(color: _label, fontSize: 12)),
             ]),
+          ),
+          IconButton(
+            icon: const Icon(Icons.devices, color: _label, size: 20),
+            tooltip: 'Switch device',
+            onPressed: () => Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),
@@ -491,7 +510,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 12),
                     // ── Schedules ──
                     _SectionCard(
-                      title: 'MOTOR SCHEDULER',
+                      title: s?.time != null
+                          ? 'MOTOR SCHEDULER  ·  ${_to12hr(s!.time)}'
+                          : 'MOTOR SCHEDULER',
                       trailing: Row(children: [
                         _SmallButton(
                           label: '+ Add',

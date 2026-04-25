@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
-import 'setup_screen.dart';
 import 'device_list_screen.dart';
-import 'register_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegisterScreen extends StatefulWidget {
+  const RegisterScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
+class _RegisterScreenState extends State<RegisterScreen> {
+  final _userCtrl    = TextEditingController();
+  final _passCtrl    = TextEditingController();
+  final _confirmCtrl = TextEditingController();
   bool _loading  = false;
   String? _error;
   bool _obscure  = true;
@@ -23,41 +22,38 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _userCtrl.dispose();
     _passCtrl.dispose();
+    _confirmCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
+  Future<void> _register() async {
     final username = _userCtrl.text.trim();
     final password = _passCtrl.text;
-    if (username.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Please enter username and password');
+    final confirm  = _confirmCtrl.text;
+    if (username.length < 3) {
+      setState(() => _error = 'Username must be at least 3 characters');
+      return;
+    }
+    if (password.length < 6) {
+      setState(() => _error = 'Password must be at least 6 characters');
+      return;
+    }
+    if (password != confirm) {
+      setState(() => _error = 'Passwords do not match');
       return;
     }
     setState(() { _loading = true; _error = null; });
     final svc = context.read<TankService>();
-    final ok = await svc.login(username, password);
+    final ok = await svc.register(username, password);
     if (!mounted) return;
     if (ok) {
-      await svc.loadSavedUrls();
-      if (!mounted) return;
-      if (svc.wifiUrl.isNotEmpty || svc.mobileUrl.isNotEmpty) {
-        await svc.connectAuto();
-        if (mounted) {
-                Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const DeviceListScreen()),
-          );
-        }
-      } else {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SetupScreen()),
-          );
-        }
-      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DeviceListScreen()),
+      );
     } else {
       setState(() {
         _loading = false;
-        _error = svc.error ?? 'Invalid username or password';
+        _error = svc.error ?? 'Registration failed';
       });
     }
   }
@@ -85,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Sign in to continue',
+                  'Create your account',
                   style: TextStyle(fontSize: 13, color: Color(0xFF8c8c8c)),
                 ),
                 const SizedBox(height: 32),
@@ -115,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: _userCtrl,
-                  decoration: _inputDecoration('Username', Icons.person_outline),
+                  decoration: _inputDecoration('Username (min 3 chars)', Icons.person_outline),
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.username],
                 ),
@@ -123,7 +119,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passCtrl,
                   obscureText: _obscure,
-                  decoration: _inputDecoration('Password', Icons.lock_outline).copyWith(
+                  decoration: _inputDecoration('Password (min 6 chars)', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscure ? Icons.visibility_off : Icons.visibility,
@@ -132,16 +128,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
                   ),
+                  textInputAction: TextInputAction.next,
+                  autofillHints: const [AutofillHints.newPassword],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _confirmCtrl,
+                  obscureText: _obscure,
+                  decoration: _inputDecoration('Confirm password', Icons.lock_outline),
                   textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _login(),
-                  autofillHints: const [AutofillHints.password],
+                  onSubmitted: (_) => _register(),
+                  autofillHints: const [AutofillHints.newPassword],
                 ),
                 const SizedBox(height: 24),
 
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    onPressed: _loading ? null : _login,
+                    onPressed: _loading ? null : _register,
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF1890ff),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -152,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 18, width: 18,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('Sign In', style: TextStyle(fontSize: 15)),
+                        : const Text('Create Account', style: TextStyle(fontSize: 15)),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -160,13 +164,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('New here? ',
+                    const Text('Already have an account? ',
                         style: TextStyle(color: Color(0xFF8c8c8c), fontSize: 13)),
                     GestureDetector(
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                      ),
-                      child: const Text('Create account',
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Text('Sign in',
                           style: TextStyle(
                               color: Color(0xFF1890ff),
                               fontSize: 13,
