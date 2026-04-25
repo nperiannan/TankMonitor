@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.0.0"
+const webVersion = "2.0.3"
 
 func main() {
 	// Init subsystems in order
@@ -73,6 +73,7 @@ func main() {
 	// Admin
 	// ---------------------------------------------------------------------------
 	mux.HandleFunc("/api/admin/devices", requireAdmin(handleAdminListDevices))
+	mux.HandleFunc("/api/admin/users", requireAdmin(handleAdminListUsers))
 
 	// ---------------------------------------------------------------------------
 	// Static SPA fallback

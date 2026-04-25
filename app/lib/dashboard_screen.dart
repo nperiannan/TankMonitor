@@ -444,7 +444,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             icon: const Icon(Icons.devices, color: _label, size: 20),
             tooltip: 'Switch device',
             onPressed: () => Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const DeviceListScreen()),
+              MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
             ),
           ),
           IconButton(

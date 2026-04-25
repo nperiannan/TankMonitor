@@ -6,6 +6,7 @@ import 'login_screen.dart';
 import 'setup_screen.dart';
 import 'dashboard_screen.dart';
 import 'claim_screen.dart';
+import 'admin_screen.dart';
 
 const _bg     = Color(0xFF141414);
 const _cardBg = Color(0xFF1f1f1f);
@@ -14,9 +15,16 @@ const _label  = Color(0xFF8c8c8c);
 const _blue   = Color(0xFF1890ff);
 const _green  = Color(0xFF52c41a);
 const _red    = Color(0xFFff4d4f);
+const _orange = Color(0xFFfa8c16);
 
 class DeviceListScreen extends StatefulWidget {
-  const DeviceListScreen({super.key});
+  /// When [autoNavigate] is true (default), a single device skips straight
+  /// to the dashboard on load — useful for the initial app launch flow.
+  /// Set to false when navigating here intentionally (e.g. "Switch device")
+  /// so the user can see and manage their device cards.
+  const DeviceListScreen({super.key, this.autoNavigate = true});
+
+  final bool autoNavigate;
 
   @override
   State<DeviceListScreen> createState() => _DeviceListScreenState();
@@ -38,8 +46,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final devices = await svc.listDevices();
     if (!mounted) return;
 
-    // Auto-navigate when there's exactly one device
-    if (devices.length == 1) {
+    // Auto-navigate when there's exactly one device — only on initial launch
+    if (widget.autoNavigate && devices.length == 1) {
       await svc.connectToDevice(devices.first);
       if (mounted) {
         Navigator.of(context).pushReplacement(
@@ -172,6 +180,14 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         title: const Text('💧 My Devices',
             style: TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
+          if (svc.isAdmin)
+            IconButton(
+              icon: const Icon(Icons.admin_panel_settings, color: _orange, size: 22),
+              tooltip: 'Admin: Users & Devices',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AdminScreen()),
+              ),
+            ),
           IconButton(
             icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),
             tooltip: 'Server settings',

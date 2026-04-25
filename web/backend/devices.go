@@ -16,8 +16,8 @@ type DeviceRow struct {
 	DisplayName string `json:"display_name"`
 	FWVersion   string `json:"fw_version"`
 	LastSeen    string `json:"last_seen"`
-	Role        string `json:"role,omitempty"`   // owner | viewer | "" (unclaimed)
-	Online      bool   `json:"online"`           // last_seen within 30 s
+	Role        string `json:"role,omitempty"` // owner | viewer | "" (unclaimed)
+	Online      bool   `json:"online"`         // last_seen within 30 s
 }
 
 // upsertDevice auto-registers a device when it first publishes to MQTT.
@@ -225,6 +225,70 @@ func handleRenameDevice(w http.ResponseWriter, r *http.Request) {
 	db.Exec(`UPDATE devices SET display_name=? WHERE mac=?`, req.DisplayName, mac) //nolint:errcheck
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
+}
+
+// GET /api/admin/users — admin: all users with their claimed devices
+func handleAdminListUsers(w http.ResponseWriter, r *http.Request) {
+	cors(w)
+
+	// 1. Fetch all users
+	userRows, err := db.Query(`SELECT user_id, username, is_admin FROM users ORDER BY user_id`)
+	if err != nil {
+		jsonError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer userRows.Close()
+
+	type adminDevice struct {
+		MAC         string `json:"mac"`
+		DisplayName string `json:"display_name"`
+		FWVersion   string `json:"fw_version"`
+		Online      bool   `json:"online"`
+		LastSeen    string `json:"last_seen"`
+	}
+	type adminUser struct {
+		UserID   int64         `json:"user_id"`
+		Username string        `json:"username"`
+		IsAdmin  bool          `json:"is_admin"`
+		Devices  []adminDevice `json:"devices"`
+	}
+
+	var users []adminUser
+	for userRows.Next() {
+		var u adminUser
+		if err := userRows.Scan(&u.UserID, &u.Username, &u.IsAdmin); err != nil {
+			continue
+		}
+		u.Devices = []adminDevice{}
+		users = append(users, u)
+	}
+	userRows.Close()
+
+	// 2. Fetch devices for each user
+	for i, u := range users {
+		devRows, err := db.Query(`
+			SELECT d.mac, COALESCE(d.display_name,''), COALESCE(d.fw_version,''), COALESCE(d.last_seen,'')
+			FROM user_devices ud
+			JOIN devices d ON d.mac = ud.mac
+			WHERE ud.user_id = ?
+			ORDER BY d.display_name`, u.UserID)
+		if err != nil {
+			continue
+		}
+		for devRows.Next() {
+			var d adminDevice
+			devRows.Scan(&d.MAC, &d.DisplayName, &d.FWVersion, &d.LastSeen) //nolint:errcheck
+			d.Online = isOnline(d.LastSeen)
+			users[i].Devices = append(users[i].Devices, d)
+		}
+		devRows.Close()
+	}
+
+	if users == nil {
+		users = []adminUser{}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users) //nolint:errcheck
 }
 
 // GET /api/admin/devices — admin: all devices with owner info

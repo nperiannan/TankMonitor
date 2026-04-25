@@ -526,6 +526,23 @@ class TankService extends ChangeNotifier {
     return null;
   }
 
+  // ── Admin ────────────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> adminListUsers() async {
+    try {
+      final baseUrl = await _resolveUrl();
+      final res = await http.get(
+        Uri.parse('$baseUrl/api/admin/users'),
+        headers: {if (authToken != null) 'Authorization': 'Bearer $authToken'},
+      ).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        return (jsonDecode(res.body) as List<dynamic>)
+            .cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    return [];
+  }
+
   Future<void> sendControl(Map<String, dynamic> cmd) async {    try {
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
