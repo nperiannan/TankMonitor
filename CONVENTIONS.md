@@ -28,7 +28,7 @@
   - Firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
   - Web backend: `web/backend/main.go` → `const webVersion`
   - Web frontend: `web/frontend/src/App.tsx` → `const WEB_APP_VERSION` ← must ALSO be bumped (hardcoded, not fetched from server)
-  - App: Flutter `app/pubspec.yaml` → `version:`
+  - App: Flutter `app/pubspec.yaml` → `version:` AND `app/lib/tank_service.dart` → `const mobileAppVersion` (both must be updated together)
 - `README.md` versions table must also be updated on every bump
 
 ## GitHub Releases — IMPORTANT
