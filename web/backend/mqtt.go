@@ -46,10 +46,10 @@ func startMQTT() {
 			// New topic scheme: tm/+/status, tm/+/logs
 			// Legacy topic scheme: tankmonitor/+/status, tankmonitor/+/logs (backward compat)
 			subs := map[string]byte{
-				"tm/+/status":           1,
-				"tm/+/logs":             0,
-				"tankmonitor/+/status":  1,
-				"tankmonitor/+/logs":    0,
+				"tm/+/status":          1,
+				"tm/+/logs":            0,
+				"tankmonitor/+/status": 1,
+				"tankmonitor/+/logs":   0,
 			}
 			log.Printf("[MQTT] Connected — subscribing to %d wildcard topics", len(subs))
 			c.SubscribeMultiple(subs, onMessage)
