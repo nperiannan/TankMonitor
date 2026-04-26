@@ -988,6 +988,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   key: const PageStorageKey('logs'),
                   padding: const EdgeInsets.all(12),
                   children: [
+                    if (_deviceLogs.isNotEmpty) ...[                    
+                      _buildLogSummaryCard(_deviceLogs),
+                      const SizedBox(height: 10),
+                    ],
                     _SectionCard(
                       title: 'DEVICE LOGS',
                       trailing: Row(
@@ -1153,6 +1157,67 @@ class _DashboardScreenState extends State<DashboardScreen>
         ],
       ),
     );
+  }
+
+  // ── Log summary helpers ──────────────────────────────────────────────────
+
+  Widget _buildLogSummaryCard(List<String> logs) {
+    final errors = logs.where((l) => l.contains('[ERROR]')).toList();
+    final warns  = logs.where((l) => l.contains('[WARN]')).toList();
+    final hasIssues = errors.isNotEmpty || warns.isNotEmpty;
+
+    final parts = <String>[];
+    if (errors.isNotEmpty) parts.add('${errors.length} error${errors.length > 1 ? 's' : ''}');
+    if (warns.isNotEmpty)  parts.add('${warns.length} warning${warns.length > 1 ? 's' : ''}');
+    if (!hasIssues)        parts.add('No errors or warnings');
+
+    final items = <Widget>[
+      _SummaryLine(
+        icon: errors.isNotEmpty
+            ? Icons.error_outline
+            : warns.isNotEmpty
+                ? Icons.warning_amber_outlined
+                : Icons.check_circle_outline,
+        color: errors.isNotEmpty ? Colors.redAccent
+             : warns.isNotEmpty  ? Colors.orange
+             : _green,
+        text: '${parts.join(' · ')}  (${logs.length} entries)',
+        bold: true,
+      ),
+    ];
+
+    // Last 2 errors
+    for (final e in errors.reversed.take(2)) {
+      items.add(_SummaryLine(
+        icon: Icons.cancel_outlined,
+        color: Colors.redAccent,
+        text: _trimLogLine(e),
+      ));
+    }
+
+    // Fill remaining slots with latest warnings (max 2)
+    final warnSlots = (4 - errors.take(2).length).clamp(0, 2);
+    for (final w in warns.reversed.take(warnSlots)) {
+      items.add(_SummaryLine(
+        icon: Icons.warning_amber_outlined,
+        color: Colors.orange,
+        text: _trimLogLine(w),
+      ));
+    }
+
+    return _SectionCard(
+      title: 'LOG SUMMARY',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: items,
+      ),
+    );
+  }
+
+  String _trimLogLine(String line) {
+    final match = RegExp(r'\[(?:ERROR|WARN)\]\s*(.+)').firstMatch(line);
+    final content = match != null ? match.group(1)!.trim() : line.trim();
+    return content.length > 72 ? '${content.substring(0, 72)}…' : content;
   }
 
   void _confirmClear(BuildContext ctx, TankService svc) {
@@ -1397,6 +1462,41 @@ class _ErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
     Padding(padding: const EdgeInsets.all(16), child: _Banner(msg));
+}
+
+class _SummaryLine extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String text;
+  final bool bold;
+  const _SummaryLine({required this.icon, required this.color, required this.text, this.bold = false});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(icon, size: 13, color: color),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SectionCard extends StatelessWidget {
