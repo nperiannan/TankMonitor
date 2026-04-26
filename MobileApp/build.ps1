@@ -1,4 +1,4 @@
-# build_app.ps1 — Build Flutter mobile app APK (release)
+# build_MobileApp.ps1 — Build Flutter mobile app APK (release)
 # Usage: .\build_app.ps1 [-Install]
 param(
     [switch]$Install  # Pass -Install to also install on connected USB device

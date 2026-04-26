@@ -8,7 +8,7 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 TankMonitor/
 ├── controller_firmware/   ESP32-S3 firmware (PlatformIO + Arduino framework)
 ├── web/                   Go backend + React/Ant Design frontend (Docker-deployed on TNAS)
-└── app/                   Flutter Android mobile app
+└── MobileApp/             Flutter Android mobile app
 ```
 
 ## Versions
@@ -213,7 +213,7 @@ then triggers OTA via MQTT. The device downloads and flashes automatically.
 ## Mobile App — Build & Release
 
 ```bash
-cd app
+cd MobileApp
 flutter build apk --release
 # Output: build/app/outputs/flutter-apk/app-release.apk
 ```
@@ -256,8 +256,8 @@ cd web/frontend && npm run dev     # dev server
 cd web && docker build ...         # production
 
 # Work on mobile app
-cd app && flutter run              # debug on device
-cd app && flutter build apk ...    # release APK
+cd MobileApp && flutter run              # debug on device
+cd MobileApp && flutter build apk ...    # release APK
 ```
 
 ### Commit & push
@@ -273,5 +273,5 @@ git push origin master
 ```bash
 git subtree pull --prefix=controller_firmware https://github.com/nperiannan/Tank-Monitor-Float.git master
 git subtree pull --prefix=web      https://github.com/nperiannan/TankMonitor-Web.git master
-git subtree pull --prefix=app      https://github.com/nperiannan/TankMonitor-App.git master
+git subtree pull --prefix=MobileApp https://github.com/nperiannan/TankMonitor-App.git master
 ```

@@ -447,7 +447,7 @@ class TankService extends ChangeNotifier {
 
   Future<void> checkForUpdate() async {
     try {
-      // Fetch all releases and find the latest app/ tag
+      // Fetch all releases and find the latest MobileApp/ tag
       final res = await http.get(
         Uri.parse('https://api.github.com/repos/nperiannan/TankMonitor/releases?per_page=20'),
         headers: {'Accept': 'application/vnd.github+json'},
@@ -456,9 +456,9 @@ class TankService extends ChangeNotifier {
         final releases = jsonDecode(res.body) as List<dynamic>;
         for (final r in releases) {
           final tagName = (r['tag_name'] as String?) ?? '';
-          if (!tagName.startsWith('app/')) continue;
-          // Strip "app/v" or "app/" prefix
-          final tag = tagName.replaceFirst('app/', '').replaceFirst('v', '');
+          if (!tagName.startsWith('MobileApp/')) continue;
+          // Strip "MobileApp/v" or "MobileApp/" prefix
+          final tag = tagName.replaceFirst('MobileApp/', '').replaceFirst('v', '');
           final assets = r['assets'] as List<dynamic>? ?? [];
           for (final a in assets) {
             if ((a['name'] as String).endsWith('.apk')) {
@@ -469,7 +469,7 @@ class TankService extends ChangeNotifier {
           latestAppVersion = tag;
           updateAvailable = _isNewerVersion(tag, mobileAppVersion);
           notifyListeners();
-          break; // first matching app/ release is the latest
+          break; // first matching MobileApp/ release is the latest
         }
       }
     } catch (_) {}

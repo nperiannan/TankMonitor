@@ -1,7 +1,7 @@
 # TankMonitor Repo Conventions
 
 ## Repository
-- Monorepo: `controller_firmware/`, `web/`, `app/`
+- Monorepo: `controller_firmware/`, `web/`, `MobileApp/`
 - Remote: https://github.com/nperiannan/TankMonitor.git
 - Branch: `master`
 
@@ -21,14 +21,14 @@
 - **Do not skip the release checklist** — even for "small" changes like refactors or race condition fixes that affect user-facing behaviour
 
 ## Versioning & Tags
-- Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `app/vX.Y.Z`
+- Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `MobileApp/vX.Y.Z`
 - **One release per component** — no combined multi-component releases
 - Tags must be **annotated** (not lightweight): `git tag -a web/vX.Y.Z -m "..."`
 - Version strings live in:
   - Firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
   - Web backend: `web/backend/main.go` → `const webVersion`
   - Web frontend: `web/frontend/src/App.tsx` → `const WEB_APP_VERSION` ← must ALSO be bumped (hardcoded, not fetched from server)
-  - App: Flutter `app/pubspec.yaml` → `version:` AND `app/lib/tank_service.dart` → `const mobileAppVersion` (both must be updated together)
+  - App: Flutter `MobileApp/pubspec.yaml` → `version:` AND `MobileApp/lib/tank_service.dart` → `const mobileAppVersion` (both must be updated together)
 - `README.md` versions table must also be updated on every bump
 
 ## GitHub Releases — IMPORTANT
@@ -76,7 +76,7 @@
 
 ## Git Notes
 - `credential-winced` warning on push is harmless (typo in git credential helper config)
-- Flutter auto-generated files (`app/linux/`, `app/macos/`, `app/windows/`) are not committed unless intentionally changed
+- Flutter auto-generated files (`MobileApp/linux/`, `MobileApp/macos/`, `MobileApp/windows/`) are not committed unless intentionally changed
 
 ## Terminal Hygiene
 - Keep at most **1–2 terminal tabs** open at a time — close finished terminals immediately after use

@@ -10,6 +10,9 @@ Thumbs.db
 firmware/.pio/
 web/frontend/node_modules/
 web/frontend/dist/
-app/build/
-app/.dart_tool/
+MobileApp/build/
+MobileApp/.dart_tool/
 *.apk
+
+# Old directory — delete manually after closing VS Code
+app/
