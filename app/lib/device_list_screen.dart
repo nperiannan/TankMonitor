@@ -247,6 +247,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   }
 
   Widget _deviceCard(Device d) {
+    final (typeIcon, typeLabel) = _deviceTypeInfo(d.typeId);
     return GestureDetector(
       onTap: () => _selectDevice(d),
       onLongPress: () => _showDeviceOptions(d),
@@ -259,7 +260,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.memory, color: d.online ? _green : _label, size: 36),
+            Icon(typeIcon, color: d.online ? _green : _label, size: 36),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -296,7 +297,10 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
+                  Text(typeLabel,
+                      style: const TextStyle(color: _blue, fontSize: 12, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 2),
                   Text(d.mac,
                       style: const TextStyle(
                           color: _label, fontSize: 11, fontFamily: 'monospace')),
@@ -311,6 +315,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
       ),
     );
+  }
+
+  /// Returns (icon, label) for the given device type ID.
+  (IconData, String) _deviceTypeInfo(String typeId) {
+    switch (typeId) {
+      case 'tank_monitor': return (Icons.water_drop_outlined, 'Tank Monitor');
+      case 'smart_ps':     return (Icons.bolt_outlined,        'Smart PS');
+      default:             return (Icons.memory,               typeId.isNotEmpty ? typeId : 'Unknown');
+    }
   }
 
   void _showDeviceOptions(Device d) {

@@ -979,8 +979,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _InfoRow('Access Level', _accessLevel(svc), last: true),
                       ]),
                     ),
-                    const SizedBox(height: 10),
-                    // ── Device Logs ──
+                    const SizedBox(height: 20),
+                  ],
+                ),
+
+                // ── Tab 3: Logs ───────────────────────────────────────────
+                ListView(
+                  key: const PageStorageKey('logs'),
+                  padding: const EdgeInsets.all(12),
+                  children: [
                     _SectionCard(
                       title: 'DEVICE LOGS',
                       trailing: Row(
@@ -1098,8 +1105,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           setState(() => _tabIndex = i);
           // Refresh OTA status when switching to Settings tab
           if (i == 1 && !_otaBusy) _loadOtaStatus();
-          // Auto-poll logs when switching to System tab
-          if (i == 2 && _deviceLogs.isEmpty && !_logsLoading) {
+          // Auto-poll logs when switching to Logs tab
+          if (i == 3 && _deviceLogs.isEmpty && !_logsLoading) {
             final svc2 = context.read<TankService>();
             if (svc2.status != null) {
               svc2.sendControl({'cmd': 'get_logs'});
@@ -1137,6 +1144,11 @@ class _DashboardScreenState extends State<DashboardScreen>
             icon: Icon(Icons.monitor_heart_outlined),
             activeIcon: Icon(Icons.monitor_heart),
             label: 'System',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.terminal_outlined),
+            activeIcon: Icon(Icons.terminal),
+            label: 'Logs',
           ),
         ],
       ),
