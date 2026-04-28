@@ -20,6 +20,7 @@ docker run -d \
   -p 1880:8080 \
   -v /Volume1/docker/tankmonitor-data:/data \
   -e MQTT_BROKER=192.168.0.102 \
+  -e MQTT_PORT=1883 \
   -e MQTT_USER=tankmonitor \
   -e MQTT_PASS='Tank32!' \
   -e AUTH_USER=admin \
