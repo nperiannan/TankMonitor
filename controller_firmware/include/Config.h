@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.5.2"
+#define FW_VERSION "1.5.3"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "1.0.0"
@@ -177,6 +177,11 @@
 #define MQTT_PUBLISH_MS       5000UL          // Publish status every 5 s
 #define MQTT_RECONNECT_MS     15000UL         // Retry connection every 15 s
 #define MQTT_PORT_FAIL_LIMIT  3               // Switch to fallback port after N consecutive failures
+
+// HTTP OTA poll — ESP32 checks server for staged firmware over HTTP,
+// independent of MQTT.  Uses web server port (1880) which ISPs don't block.
+#define OTA_POLL_PORT         1880
+#define OTA_POLL_INTERVAL_MS  300000UL        // Poll every 5 min
 
 // =============================================================================
 //                              WIFI DEFAULTS

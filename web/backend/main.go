@@ -49,10 +49,14 @@ func main() {
 	}))
 	mux.HandleFunc("/api/devices/claim", requireAuth(handleClaimDevice))
 
-	// OTA firmware download — no auth, ESP32 fetches directly
+	// OTA endpoints — no auth, ESP32 fetches/polls directly
 	mux.HandleFunc("/api/devices/", func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/ota/firmware.bin") {
 			handleOtaServeFirmware(w, r)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/ota/check") {
+			handleOtaCheck(w, r)
 			return
 		}
 		requireAuth(deviceRouter)(w, r)
@@ -140,6 +144,8 @@ func deviceRouter(w http.ResponseWriter, r *http.Request) {
 		handleOtaTrigger(w, r)
 	case sub == "ota/rollback":
 		handleOtaRollback(w, r)
+	case sub == "ota/check":
+		handleOtaCheck(w, r)
 	case sub == "ota/firmware.bin":
 		// No auth needed — ESP32 fetches directly
 		handleOtaServeFirmware(w, r)

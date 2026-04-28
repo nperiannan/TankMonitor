@@ -41,6 +41,8 @@ static int  s_portFallback    = MQTT_PORT_FALLBACK;
 static int  s_connectFailures = 0;            // consecutive failures on current port
 static bool s_usingFallback   = false;        // true when using fallback port
 
+static unsigned long s_lastOtaPollMs = 0;     // HTTP OTA poll timer
+
 // ---------------------------------------------------------------------------
 // NVS helpers
 // ---------------------------------------------------------------------------
@@ -338,6 +340,72 @@ static bool mqttConnect() {
 }
 
 // ---------------------------------------------------------------------------
+// HTTP OTA poll — checks server for staged firmware independent of MQTT.
+// Uses port 1880 (HTTP) which ISPs don't block, unlike MQTT 1883.
+// ---------------------------------------------------------------------------
+static void otaPollHTTP() {
+    if (WiFi.status() != WL_CONNECTED || isAPMode) return;
+
+    String mac = WiFi.macAddress();
+    String url = String("http://") + s_broker + ":" + String(OTA_POLL_PORT) +
+                 "/api/devices/" + mac + "/ota/check?fw=" + FW_VERSION;
+
+    HTTPClient http;
+    http.begin(url);
+    http.setTimeout(10000);
+    int code = http.GET();
+    if (code != HTTP_CODE_OK) {
+        http.end();
+        return;
+    }
+
+    String body = http.getString();
+    http.end();
+
+    StaticJsonDocument<256> doc;
+    if (deserializeJson(doc, body) != DeserializationError::Ok) return;
+
+    bool hasUpdate = doc["update"] | false;
+    if (!hasUpdate) return;
+
+    const char* fwUrl = doc["url"] | "";
+    if (strlen(fwUrl) == 0) return;
+
+    Log(INFO, "[OTA-POLL] Update available — downloading from " + String(fwUrl));
+    publishMQTTLogs();
+
+    HTTPClient dl;
+    dl.begin(fwUrl);
+    dl.setTimeout(30000);
+    int dlCode = dl.GET();
+    if (dlCode != HTTP_CODE_OK) {
+        Log(WARN, "[OTA-POLL] Download HTTP error: " + String(dlCode));
+        dl.end();
+        return;
+    }
+    int contentLen = dl.getSize();
+    Log(INFO, "[OTA-POLL] Firmware size: " + String(contentLen));
+
+    if (!Update.begin(contentLen > 0 ? contentLen : UPDATE_SIZE_UNKNOWN)) {
+        Log(WARN, "[OTA-POLL] Update.begin failed: " + String(Update.errorString()));
+        dl.end();
+        return;
+    }
+    WiFiClient* stream = dl.getStreamPtr();
+    size_t written = Update.writeStream(*stream);
+    dl.end();
+
+    if (Update.end(true)) {
+        Log(INFO, "[OTA-POLL] Success — " + String(written) + " bytes, rebooting…");
+        publishMQTTStatus();
+        delay(500);
+        esp_restart();
+    } else {
+        Log(WARN, "[OTA-POLL] Update.end failed: " + String(Update.errorString()));
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 void initMQTT() {
@@ -355,6 +423,13 @@ void initMQTT() {
 
 void mqttLoop() {
     if (WiFi.status() != WL_CONNECTED || isAPMode) return;
+
+    // HTTP OTA poll — runs regardless of MQTT connection state
+    unsigned long nowOta = millis();
+    if (nowOta - s_lastOtaPollMs >= OTA_POLL_INTERVAL_MS) {
+        s_lastOtaPollMs = nowOta;
+        otaPollHTTP();
+    }
 
     if (!s_mqtt.connected()) {
         unsigned long now = millis();

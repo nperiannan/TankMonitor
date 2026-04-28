@@ -280,6 +280,46 @@ func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, otaFilePath(mac))
 }
 
+// handleOtaCheck responds to GET /api/devices/{mac}/ota/check?fw=1.5.1
+// Returns {"update":true,"url":"..."} if firmware is staged and version differs,
+// otherwise {"update":false}. No auth — ESP32 polls this directly.
+func handleOtaCheck(w http.ResponseWriter, r *http.Request) {
+	mac := otaMacFromPath(r.URL.Path)
+	currentFW := r.URL.Query().Get("fw")
+
+	otaMu.RLock()
+	info := otaInfo[mac]
+	otaMu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if info == nil || !info.HasFirmware {
+		w.Write([]byte(`{"update":false}`)) //nolint:errcheck
+		return
+	}
+
+	// If OTA is staged (any phase except success/failed) and we have a firmware file, offer it
+	if info.Phase == "success" || info.Phase == "failed" {
+		w.Write([]byte(`{"update":false}`)) //nolint:errcheck
+		return
+	}
+
+	// Build download URL
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+	scheme := "http"
+	if r.Header.Get("X-Forwarded-Proto") == "https" || r.TLS != nil {
+		scheme = "https"
+	}
+	fwURL := scheme + "://" + host + "/api/devices/" + mac + "/ota/firmware.bin"
+
+	resp := map[string]interface{}{"update": true, "url": fwURL}
+	json.NewEncoder(w).Encode(resp) //nolint:errcheck
+	log.Printf("[OTA] %s: check from fw=%s — update available", mac, currentFW)
+}
+
 func otaMacFromPath(path string) string {
 	// /api/devices/{mac}/ota/... → mac
 	after := strings.TrimPrefix(path, "/api/devices/")
