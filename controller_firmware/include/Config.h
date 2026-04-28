@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.5.1"
+#define FW_VERSION "1.5.2"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "1.0.0"
@@ -168,6 +168,7 @@
 // Credentials are seeded into NVS on first boot; change via web UI or redefine here.
 #define MQTT_BROKER_DEFAULT   "nperiannan-nas.freemyip.com"
 #define MQTT_PORT_DEFAULT     1883
+#define MQTT_PORT_FALLBACK    8883            // Alternate port if primary is blocked by ISP
 #define MQTT_USER_DEFAULT     "tankmonitor"
 #define MQTT_PASS_DEFAULT     "Tank32!"
 #define MQTT_LOCATION_DEFAULT "home"          // Legacy NVS key — no longer used for topics (topics now use MAC)
@@ -175,6 +176,7 @@
 #define MQTT_NVS_NS           "mqtt_cfg"
 #define MQTT_PUBLISH_MS       5000UL          // Publish status every 5 s
 #define MQTT_RECONNECT_MS     15000UL         // Retry connection every 15 s
+#define MQTT_PORT_FAIL_LIMIT  3               // Switch to fallback port after N consecutive failures
 
 // =============================================================================
 //                              WIFI DEFAULTS

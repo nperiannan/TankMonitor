@@ -37,6 +37,10 @@ static unsigned long s_lastPublishMs    = 0;
 static unsigned long s_lastReconnectMs  = 0;
 static unsigned long s_lastLogPublishMs = 0;
 
+static int  s_portFallback    = MQTT_PORT_FALLBACK;
+static int  s_connectFailures = 0;            // consecutive failures on current port
+static bool s_usingFallback   = false;        // true when using fallback port
+
 // ---------------------------------------------------------------------------
 // NVS helpers
 // ---------------------------------------------------------------------------
@@ -304,16 +308,32 @@ static bool mqttConnect() {
     // Build topics from MAC now that WiFi is up (MAC is stable hardware address)
     buildTopicsFromMAC();
 
-    Log(INFO, "[MQTT] Connecting to " + String(s_broker) + ":" + String(s_port) + " as " + String(s_clientId) + " ...");
+    int port = s_usingFallback ? s_portFallback : s_port;
+    s_mqtt.setServer(s_broker, port);
+
+    Log(INFO, "[MQTT] Connecting to " + String(s_broker) + ":" + String(port)
+             + " as " + String(s_clientId)
+             + (s_usingFallback ? " (fallback)" : "") + " ...");
 
     if (s_mqtt.connect(s_clientId, s_user, s_pass)) {
-        Log(INFO, "[MQTT] Connected. Subscribing " + String(s_topicControl));
+        Log(INFO, "[MQTT] Connected on port " + String(port) + ". Subscribing " + String(s_topicControl));
         s_mqtt.subscribe(s_topicControl, 1);
+        s_connectFailures = 0;   // reset on success
         publishMQTTStatus();
         return true;
     }
 
-    Log(WARN, "[MQTT] Failed, rc=" + String(s_mqtt.state()));
+    s_connectFailures++;
+    Log(WARN, "[MQTT] Failed on port " + String(port) + ", rc=" + String(s_mqtt.state())
+             + " (fail #" + String(s_connectFailures) + ")");
+
+    // Switch to the other port after MQTT_PORT_FAIL_LIMIT consecutive failures
+    if (s_connectFailures >= MQTT_PORT_FAIL_LIMIT) {
+        s_usingFallback = !s_usingFallback;
+        s_connectFailures = 0;
+        int nextPort = s_usingFallback ? s_portFallback : s_port;
+        Log(INFO, "[MQTT] Switching to port " + String(nextPort));
+    }
     return false;
 }
 
