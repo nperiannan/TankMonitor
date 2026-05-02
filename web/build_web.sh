@@ -6,15 +6,19 @@ set -e
 source ~/.bashrc
 conda activate base
 
+# Full path required — docker is not in PATH for non-interactive SSH sessions on TNAS
+DOCKER=/Volume1/@apps/DockerEngine/dockerd/bin/docker
+GIT=/home/nperiannan/miniconda3/bin/git
+
 cd /Volume1/docker/TankMonitor/web
-git -C .. pull origin master
+$GIT -C .. pull origin master
 
-docker build -t tankmonitor-web:2.0.7 .
+$DOCKER build -t tankmonitor-web:2.0.7 .
 
-docker stop tankmonitor-web 2>/dev/null || true
-docker rm   tankmonitor-web 2>/dev/null || true
+$DOCKER stop tankmonitor-web 2>/dev/null || true
+$DOCKER rm   tankmonitor-web 2>/dev/null || true
 
-docker run -d \
+$DOCKER run -d \
   --name tankmonitor-web \
   --restart unless-stopped \
   -p 1880:8080 \
@@ -30,4 +34,4 @@ docker run -d \
   tankmonitor-web:2.0.7
 
 echo "--- Last 10 log lines ---"
-docker logs tankmonitor-web --tail 10
+$DOCKER logs tankmonitor-web --tail 10
