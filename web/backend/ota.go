@@ -94,6 +94,37 @@ func otaLoadFromDisk() {
 	}
 }
 
+// otaEnsureLoaded checks whether a firmware file exists on disk for mac and
+// loads it into the in-memory map if it is not already tracked. This allows
+// firmware files placed directly on disk (e.g. via SCP) after container start
+// to be picked up automatically on the next OTA poll without requiring a restart.
+func otaEnsureLoaded(mac string) {
+	otaMu.RLock()
+	_, tracked := otaInfo[mac]
+	otaMu.RUnlock()
+	if tracked {
+		return // already in memory — nothing to do
+	}
+	fi, err := os.Stat(otaFilePath(mac))
+	if err != nil {
+		return // file doesn't exist
+	}
+	otaMu.Lock()
+	defer otaMu.Unlock()
+	// Re-check under write lock to avoid a race
+	if _, exists := otaInfo[mac]; exists {
+		return
+	}
+	otaInfo[mac] = &OtaInfo{
+		HasFirmware: true,
+		Filename:    "firmware.bin",
+		Size:        fi.Size(),
+		UploadedAt:  fi.ModTime().UTC().Format(time.RFC3339),
+		Phase:       "idle",
+	}
+	log.Printf("[OTA] %s: found firmware on disk (%d bytes), loaded into memory", mac, fi.Size())
+}
+
 // ---------------------------------------------------------------------------
 // HTTP handlers — all scoped to /api/devices/{mac}/ota/...
 // ---------------------------------------------------------------------------
@@ -269,6 +300,8 @@ func handleOtaRollback(w http.ResponseWriter, r *http.Request) {
 // No auth — ESP32 downloads without token support.
 func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
 	mac := otaMacFromPath(r.URL.Path)
+	// Pick up firmware files placed on disk after container start (e.g. via SCP)
+	otaEnsureLoaded(mac)
 	otaMu.RLock()
 	info := otaInfo[mac]
 	otaMu.RUnlock()
@@ -293,6 +326,9 @@ func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
 func handleOtaCheck(w http.ResponseWriter, r *http.Request) {
 	mac := otaMacFromPath(r.URL.Path)
 	currentFW := r.URL.Query().Get("fw")
+
+	// Pick up firmware files placed on disk after container start (e.g. via SCP)
+	otaEnsureLoaded(mac)
 
 	otaMu.RLock()
 	info := otaInfo[mac]
