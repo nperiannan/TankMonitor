@@ -311,7 +311,7 @@ func handleOtaServeFirmware(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("[OTA] %s: serving firmware to %s", mac, r.RemoteAddr)
 	otaMu.Lock()
-	if otaInfo[mac].Phase == "triggered" {
+	if otaInfo[mac].Phase == "triggered" || otaInfo[mac].Phase == "idle" {
 		otaInfo[mac].Phase = "downloading"
 	}
 	otaMu.Unlock()
@@ -361,6 +361,14 @@ func handleOtaCheck(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{"update": true, "url": fwURL}
 	json.NewEncoder(w).Encode(resp) //nolint:errcheck
 	log.Printf("[OTA] %s: check from fw=%s — update available", mac, currentFW)
+
+	// Advance phase idle→triggered so otaOnStatusReceived can detect same-version re-flash
+	otaMu.Lock()
+	if otaInfo[mac] != nil && otaInfo[mac].Phase == "idle" {
+		otaInfo[mac].Phase = "triggered"
+		otaInfo[mac].PrevFw = currentFW
+	}
+	otaMu.Unlock()
 }
 
 func otaMacFromPath(path string) string {
