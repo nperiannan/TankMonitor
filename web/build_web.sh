@@ -20,7 +20,7 @@ $DOCKER rm   tankmonitor-web 2>/dev/null || true
 
 $DOCKER run -d \
   --name tankmonitor-web \
-  --restart unless-stopped \
+  --restart always \
   -p 1880:8080 \
   -v /Volume1/docker/tankmonitor-data:/data \
   -e MQTT_BROKER=192.168.0.102 \
