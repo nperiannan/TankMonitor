@@ -47,9 +47,16 @@ func otaOnStatusReceived(mac, fw string) {
 		info.Phase = "ack_received"
 		log.Printf("[OTA] %s: ack received — device online", mac)
 	}
-	if (info.Phase == "ack_received" || info.Phase == "downloading") && fw != "" && fw != info.PrevFw {
-		info.Phase = "success"
-		log.Printf("[OTA] %s: success — fw changed %s → %s", mac, info.PrevFw, fw)
+	if (info.Phase == "ack_received" || info.Phase == "downloading") && fw != "" {
+		if fw != info.PrevFw {
+			info.Phase = "success"
+			log.Printf("[OTA] %s: success — fw changed %s → %s", mac, info.PrevFw, fw)
+		} else if info.Phase == "downloading" {
+			// Device re-reported after downloading — same fw version means it already
+			// had this firmware (re-flash of same version). Mark success to stop re-serving.
+			info.Phase = "success"
+			log.Printf("[OTA] %s: success — fw unchanged %s (same-version re-flash)", mac, fw)
+		}
 	}
 }
 
