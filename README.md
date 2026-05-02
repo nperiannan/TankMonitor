@@ -188,8 +188,14 @@ From the repo root on Windows:
 .\build_controller.ps1 -Upload -Mac 'AA:BB:CC:DD:EE:FF'
 ```
 
-The script builds with PlatformIO (`nebulas3` env), uploads `firmware.bin` to the NAS,
-then triggers OTA via MQTT. The device downloads and flashes automatically.
+The script builds with PlatformIO (`nebulas3` env) and uploads `firmware.bin` to the NAS,
+staging it at `/Volume1/docker/tankmonitor-data/ota/{MAC}.bin`.
+
+> **How the ESP32 picks it up:** The firmware polls `GET /api/ota/check/{mac}` on the web app
+> (port 1880) every **5 minutes via HTTP** — completely independent of MQTT.  
+> When a staged binary exists the web app replies `{"update": true, "url": "..."}` and the
+> ESP32 downloads, flashes, and reboots automatically.  
+> MQTT does **not** need to be connected for OTA to work.
 
 ### OTA via Mobile App
 
@@ -207,6 +213,9 @@ then triggers OTA via MQTT. The device downloads and flashes automatically.
 2. Go to **Firmware Update (OTA)** → click **Upload firmware.bin** → select the `.bin` file.
 3. Click **Flash to ESP32** → confirm.
 4. A 150-second progress bar tracks the update phases until `success`.
+
+> The binary is staged on the NAS; the ESP32 fetches it on its next 5-minute HTTP poll
+> (`/api/ota/check/{mac}`). No MQTT connection is required for the update to proceed.
 
 ---
 
