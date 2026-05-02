@@ -9,7 +9,7 @@ conda activate base
 cd /Volume1/docker/TankMonitor/web
 git -C .. pull origin master
 
-docker build -t tankmonitor-web:2.0.3 .
+docker build -t tankmonitor-web:2.0.7 .
 
 docker stop tankmonitor-web 2>/dev/null || true
 docker rm   tankmonitor-web 2>/dev/null || true
@@ -27,7 +27,7 @@ docker run -d \
   -e AUTH_PASS='Tank32!' \
   -e AUTH_SECRET='1ee5cd0b3032e3d2d3613d23aa6b33d08890337cd7df504a9393dfa4f3e42a45' \
   -e OTA_BASE_URL=http://nperiannan-nas.freemyip.com:1880 \
-  tankmonitor-web:2.0.3
+  tankmonitor-web:2.0.7
 
 echo "--- Last 10 log lines ---"
 docker logs tankmonitor-web --tail 10
