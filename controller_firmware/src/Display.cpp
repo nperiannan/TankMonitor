@@ -185,6 +185,13 @@ void updateDisplay() {
         currentScreen = (currentScreen + 1) % SCREEN_COUNT;
         lastScreenChange = now;
         renderCurrentScreen();
+    } else if ((currentScreen == SCREEN_OH_TANK || currentScreen == SCREEN_UG_TANK)) {
+        // Refresh tank screen every 1s so level/motor changes appear instantly
+        static unsigned long lastTankRefreshMs = 0;
+        if (now - lastTankRefreshMs >= 1000UL) {
+            lastTankRefreshMs = now;
+            showOHTank();
+        }
     }
 }
 
