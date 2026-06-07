@@ -26,6 +26,12 @@ static int           currentScreen    = 0;
 static unsigned long lastScreenChange = 0;
 static unsigned long lastBlCheckMs    = 0;  // last backlight mode check
 
+// LCD blink state machine for lost transmitter
+static bool          loraBlinkActive     = false;
+static unsigned long loraBlinkStartMs    = 0;
+static bool          loraBlinkPhase      = false;  // true = blinking 30s, false = idle 10min
+static unsigned long loraBlinkToggleMs   = 0;
+
 // ---------------------------------------------------------------------------
 //  Helpers
 // ---------------------------------------------------------------------------
@@ -132,8 +138,45 @@ void updateDisplay() {
 
     unsigned long now = millis();
 
-    // Re-check backlight every 30 s (auto mode follows time-of-day)
-    if (now - lastBlCheckMs >= 30000UL || lastBlCheckMs == 0) {
+    // --- LCD blink for lost transmitter ---
+    if (isTransmitterLost()) {
+        if (!loraBlinkActive) {
+            loraBlinkActive   = true;
+            loraBlinkPhase    = true;   // start with 30s blink
+            loraBlinkStartMs  = now;
+            loraBlinkToggleMs = now;
+            Log(INFO, "[Display] Transmitter lost – starting LCD blink");
+        }
+        if (loraBlinkPhase) {
+            // Blinking phase: toggle backlight every 500ms for 30s
+            if (now - loraBlinkToggleMs >= 500UL) {
+                loraBlinkToggleMs = now;
+                backlightOn = !backlightOn;
+                if (backlightOn) lcd.backlight(); else lcd.noBacklight();
+            }
+            if (now - loraBlinkStartMs >= 30000UL) {
+                // Switch to 10 min idle phase
+                loraBlinkPhase   = false;
+                loraBlinkStartMs = now;
+                lcd.noBacklight();
+                backlightOn = false;
+            }
+        } else {
+            // Idle phase: wait 10 min, then restart blink
+            if (now - loraBlinkStartMs >= 600000UL) {
+                loraBlinkPhase   = true;
+                loraBlinkStartMs = now;
+            }
+        }
+    } else if (loraBlinkActive) {
+        // Transmitter signal restored – stop blinking, restore normal mode
+        loraBlinkActive = false;
+        applyBacklightMode();
+        Log(INFO, "[Display] Transmitter signal restored – LCD blink stopped");
+    }
+
+    // Re-check backlight every 30 s (auto mode follows time-of-day) — only when not blinking
+    if (!loraBlinkActive && (now - lastBlCheckMs >= 30000UL || lastBlCheckMs == 0)) {
         lastBlCheckMs = now;
         applyBacklightMode();
     }

@@ -15,6 +15,9 @@ void pollLoRa();
 // Returns true when LoRa radio is operational.
 bool isLoraOperational();
 
+// Returns true when transmitter is declared lost (10+ missed packets).
+bool isTransmitterLost();
+
 // Returns RSSI of the last received packet (dBm).
 float getLoraRSSI();
 

@@ -4,10 +4,10 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "1.5.4"
+#define FW_VERSION "2.0.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
-#define TRANSMITTER_FW_VERSION "1.0.0"
+#define TRANSMITTER_FW_VERSION "2.0.0"
 
 // =============================================================================
 //                              I2C CONFIGURATION
@@ -41,12 +41,7 @@
 #define LORA_PREAMBLE_LENGTH      8
 
 // Packet type bytes
-#define LORA_PKT_FLOAT_SWITCH  0x02   // New: float switch state
-#define LORA_PKT_DISTANCE      0x01   // Legacy: ultrasonic distance (backward compat)
-
-// If a legacy distance packet is received, treat as FULL below this threshold (cm)
-#define LORA_LEGACY_FULL_THRESHOLD   50
-#define LORA_LEGACY_LOW_THRESHOLD   150
+#define LORA_PKT_FLOAT_SWITCH  0x02   // Float switch state
 
 // =============================================================================
 //                              RELAY / MOTOR PINS
@@ -91,7 +86,9 @@
 #define FLOAT_DEBOUNCE_MS         3000UL   // 3 s debounce for float switch state change
 #define UG_SENSOR_POLL_MS         5000UL   // Poll UG float switch every 5 s
 #define LCD_SCREEN_DURATION_MS    5000UL   // Each LCD screen visible for 5 s
-#define LORA_STALE_TIMEOUT_MS   120000UL   // OH tank state stale after 2 min with no LoRa
+#define LORA_EXPECTED_INTERVAL_MS  30000UL   // Transmitter sends every 30 s
+#define LORA_MAX_MISSED_PACKETS       10    // 10 × 30s = 5 min → transmitter lost
+#define LORA_MOTOR_SAFETY_TIMEOUT_MS  300000UL  // 5 min – stop motor if no LoRa while running
 #define MAX_LORA_RETRIES              3
 #define LORA_REINIT_INTERVAL_MS   60000UL
 #define WIFI_CHECK_INTERVAL_MS    30000UL
@@ -103,6 +100,7 @@
 #define BUZZER_MAX_DURATION_MS      35000UL   // Auto-stop buzzer after 35 s
 #define MOTOR_START_BUZZER_DELAY_MS 30000UL   // Buzz 30 s before motor starts
 #define BOOT_GRACE_PERIOD_MS        20000UL   // Auto-control & scheduler suppressed for 20 s after boot
+#define MOTOR_MIN_RUN_MS            60000UL   // Hysteresis: motor stays on for at least 60 s once started
 
 // =============================================================================
 //                              BLE CONFIGURATION
@@ -142,6 +140,11 @@
 #define NVS_KEY_BUZZER_DELAY   "buzzer_delay"    // Buzz before motor start
 #define NVS_KEY_BLE_ENABLED    "ble_enabled"
 #define NVS_KEY_LCD_BL_MODE    "lcd_bl_mode"
+#define NVS_KEY_OH_START_LVL   "oh_start_lvl"   // TankState for motor start threshold
+#define NVS_KEY_OH_STOP_LVL    "oh_stop_lvl"    // TankState for motor stop threshold
+#define NVS_KEY_OH_MAX_RUN     "oh_max_run"     // Max motor runtime in minutes (5-60)
+#define NVS_KEY_OH_MOTOR_INTENT "oh_intent"     // Motor was running before power loss
+#define NVS_KEY_UG_MOTOR_INTENT "ug_intent"     // Motor was running before power loss
 
 // LCD backlight modes
 #define LCD_BL_AUTO       0   // Off 7:00 AM – 5:30 PM, On at night (default)

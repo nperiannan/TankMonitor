@@ -1,88 +1,140 @@
-// OH Tank Level Transmitter – Float Switch Edition
-//
-// Hardware:
-//   MCU  : ATmega328P @ 8 MHz, 3.3 V
-//   Radio: RFM95 (SX1276) LoRa module via SPI
-//   Input: single float switch (NO/NC/COM type) on pin A2 (old echo pin)
-//
-// Behaviour:
-//   Every TX_INTERVAL_MS (5 s) read the float switch pin and broadcast a
-//   3-byte FloatPacket over LoRa.  The controller_firmware receives this
-//   packet to determine whether the OH tank is LOW or FULL.
-//
-// Packet format (must stay in sync with Globals.h in controller_firmware):
-//   byte 0 – type  : LORA_PKT_FLOAT_SWITCH (0x02)
-//   byte 1 – low   : 1 = tank not full (COM connected to NC → GND)
-//   byte 2 – full  : 1 = tank full     (COM connected to NO → 3.3 V)
+#include <RadioLib.h>
+#include <avr/wdt.h>
 
-#include <Arduino.h>
-#include <SPI.h>
-#include <LoRa.h>
-#include "Config.h"
+// ** Float Switch Configuration **
+#define FLOAT_LOW_PIN   A1   // Bottom float switch (LOW level)
+#define FLOAT_HALF_PIN  A2   // Middle float switch (HALF level)
+#define FLOAT_FULL_PIN  A3   // Top float switch (FULL level)
 
-// ---------------------------------------------------------------------------
-// Packet struct – mirrors FloatPacket in controller_firmware/include/Globals.h
-// ---------------------------------------------------------------------------
+// ** LoRa Module Configuration **
+#define NSS 10              // Chip select pin for LoRa
+#define DIO0 2              // Interrupt pin for LoRa
+#define RESET 3             // Reset pin for LoRa
+#define DEBUG_LED 9         // LED to indicate transmission
+
+// ** Transmission Interval **
+unsigned long interval = 30000;  // 30 seconds
+static uint8_t txFailCount = 0;  // consecutive transmit failures
+
+SX1276 radio = new Module(NSS, DIO0, RESET);
+
+// ** Data Struct for Transmission **
 #pragma pack(push, 1)
 struct FloatPacket {
-    uint8_t type;
-    uint8_t low;
-    uint8_t full;
+    uint8_t type;      // Packet type (0x02 = float switch)
+    uint8_t sw_full;   // 1 = FULL switch triggered
+    uint8_t sw_half;   // 1 = HALF switch triggered
+    uint8_t sw_low;    // 1 = LOW  switch triggered
 };
 #pragma pack(pop)
 
-static unsigned long lastTxTime = 0;
+// ** Function Declarations **
+void blink_led();
 
-// ---------------------------------------------------------------------------
-// setup
-// ---------------------------------------------------------------------------
 void setup() {
+    wdt_disable();  // Disable WDT early in case it was active from a reset
     Serial.begin(57600);
-    Serial.print(F("OH Tank Transmitter v"));
-    Serial.println(F(FW_VERSION));
+    delay(100);
 
-    // No INPUT_PULLUP – the switch itself drives the pin to 3.3 V (NO) or GND (NC).
-    pinMode(FLOAT_FULL_PIN, INPUT);
+    pinMode(FLOAT_LOW_PIN,  INPUT_PULLUP);
+    pinMode(FLOAT_HALF_PIN, INPUT_PULLUP);
+    pinMode(FLOAT_FULL_PIN, INPUT_PULLUP);
+    pinMode(DEBUG_LED, OUTPUT);
 
-    LoRa.setPins(LORA_SS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
-
-    while (!LoRa.begin(LORA_FREQUENCY)) {
-        Serial.println(F("LoRa init failed, retrying..."));
-        delay(500);
+    // 3 quick blinks = setup started
+    for (uint8_t i = 0; i < 3; i++) {
+        digitalWrite(DEBUG_LED, HIGH); delay(100);
+        digitalWrite(DEBUG_LED, LOW);  delay(100);
     }
 
-    LoRa.setSpreadingFactor(LORA_SPREADING_FACTOR);
-    LoRa.setSignalBandwidth(LORA_BANDWIDTH);
-    LoRa.setCodingRate4(LORA_CODING_RATE);
-    LoRa.setSyncWord(LORA_SYNC_WORD);
-    LoRa.setTxPower(LORA_TX_POWER);
-    LoRa.setPreambleLength(LORA_PREAMBLE_LENGTH);
+    Serial.print(F("LoRa Initializing ... "));
+    int state = radio.begin(865.0, 125.0, 9, 7, 0x34, 20, 8, 0);
+    if (state == RADIOLIB_ERR_NONE) {
+        Serial.println(F("success!"));
+        // 1 long blink = LoRa OK
+        digitalWrite(DEBUG_LED, HIGH); delay(1000);
+        digitalWrite(DEBUG_LED, LOW);
+    } else {
+        Serial.print(F("Failed, code: "));
+        Serial.println(state);
+        // Rapid blink forever = LoRa FAILED
+        while (true) {
+            digitalWrite(DEBUG_LED, HIGH); delay(50);
+            digitalWrite(DEBUG_LED, LOW);  delay(50);
+        }
+    }
 
-    Serial.println(F("LoRa ready"));
+    state = radio.setOutputPower(20);
+    if (state == RADIOLIB_ERR_NONE) {
+        Serial.println(F("Transmit power set!"));
+    } else {
+        Serial.print(F("Failed to set transmit power, code: "));
+        Serial.println(state);
+        while (true) {
+            digitalWrite(DEBUG_LED, HIGH); delay(50);
+            digitalWrite(DEBUG_LED, LOW);  delay(50);
+        }
+    }
+
+    Serial.println(F("LoRa transmitter initialized!"));
+
+    // Enable watchdog timer (8 second timeout)
+    // If anything hangs, MCU auto-resets
+    wdt_enable(WDTO_8S);
 }
 
-// ---------------------------------------------------------------------------
-// loop
-// ---------------------------------------------------------------------------
 void loop() {
-    unsigned long now = millis();
-    if (now - lastTxTime < TX_INTERVAL_MS) return;
-    lastTxTime = now;
+    // ** Read float switches **
+    // Switches are NO, INPUT_PULLUP: LOW = water present, HIGH = no water
+    uint8_t lo   = (digitalRead(FLOAT_LOW_PIN)  == LOW) ? 1 : 0;
+    uint8_t half = (digitalRead(FLOAT_HALF_PIN) == LOW) ? 1 : 0;
+    uint8_t full = (digitalRead(FLOAT_FULL_PIN) == LOW) ? 1 : 0;
 
-    // HIGH → COM on NO → tank FULL.  LOW → COM on NC → tank LOW.
-    uint8_t isFull = (digitalRead(FLOAT_FULL_PIN) == HIGH) ? 1 : 0;
-
+    // ** Pack Data into Struct **
     FloatPacket pkt;
-    pkt.type = LORA_PKT_FLOAT_SWITCH;
-    pkt.full = isFull;
-    pkt.low  = isFull ? 0 : 1;   // if not full, treat as low
+    pkt.type    = 0x02;
+    pkt.sw_full = full;
+    pkt.sw_half = half;
+    pkt.sw_low  = lo;
 
-    LoRa.beginPacket();
-    LoRa.write(reinterpret_cast<uint8_t*>(&pkt), sizeof(pkt));
-    LoRa.endPacket();   // blocking; returns after TX complete
+    // ** Transmit Data Over LoRa **
+    wdt_reset();
+    Serial.println(F("LoRa Transmitting Data ..."));
+    Serial.print(F("LOW=")); Serial.print(lo);
+    Serial.print(F(" HALF=")); Serial.print(half);
+    Serial.print(F(" FULL=")); Serial.println(full);
 
-    Serial.print(F("TX  full="));
-    Serial.print(pkt.full);
-    Serial.print(F("  low="));
-    Serial.println(pkt.low);
+    int state = radio.transmit((uint8_t*)&pkt, sizeof(pkt));
+
+    if (state == RADIOLIB_ERR_NONE) {
+        Serial.println(F("Success!"));
+        blink_led();
+        txFailCount = 0;
+    } else {
+        Serial.print(F("Transmission Failed, code: "));
+        Serial.println(state);
+        txFailCount++;
+        // After 3 consecutive failures, reinit the radio
+        if (txFailCount >= 3) {
+            Serial.println(F("Reinitializing radio..."));
+            radio.begin(865.0, 125.0, 9, 7, 0x34, 20, 8, 0);
+            radio.setOutputPower(20);
+            txFailCount = 0;
+        }
+    }
+
+    // ** Delay with WDT petting **
+    // delay(30000) exceeds 8s WDT, so pet in chunks
+    for (uint8_t i = 0; i < 6; i++) {
+        wdt_reset();
+        delay(5000);
+    }
+}
+
+// ** LED Blink Function **
+void blink_led() {
+    digitalWrite(DEBUG_LED, HIGH);
+    delay(200);
+    digitalWrite(DEBUG_LED, LOW);
+    delay(200);
 }

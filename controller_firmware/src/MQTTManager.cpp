@@ -11,6 +11,7 @@
 #include "Globals.h"
 #include "Logger.h"
 #include "MotorControl.h"
+#include "LoRaManager.h"
 #include "Scheduler.h"
 #include "RTCManager.h"
 #include "Buzzer.h"
@@ -178,14 +179,26 @@ static void processPendingMQTT() {
     }
     else if (strcmp(cmd, "set_setting") == 0) {
         const char* key = doc["key"] | "";
-        bool val = doc["value"] | false;
         bool changed = true;
-        if      (strcmp(key, "oh_disp_only") == 0) ohDisplayOnly      = val;
-        else if (strcmp(key, "ug_disp_only") == 0) ugDisplayOnly      = val;
-        else if (strcmp(key, "ug_ignore")    == 0) ugIgnoreForOH      = val;
-        else if (strcmp(key, "buzzer_delay") == 0) buzzerDelayEnabled = val;
+        if      (strcmp(key, "oh_disp_only") == 0) ohDisplayOnly      = doc["value"] | false;
+        else if (strcmp(key, "ug_disp_only") == 0) ugDisplayOnly      = doc["value"] | false;
+        else if (strcmp(key, "ug_ignore")    == 0) ugIgnoreForOH      = doc["value"] | false;
+        else if (strcmp(key, "buzzer_delay") == 0) buzzerDelayEnabled = doc["value"] | false;
+        else if (strcmp(key, "oh_start_level") == 0) {
+            uint8_t v = doc["value"] | 1;
+            if (v >= TANK_STATE_EMPTY && v <= TANK_STATE_HALF) ohStartLevel = (TankState)v;
+        }
+        else if (strcmp(key, "oh_stop_level") == 0) {
+            uint8_t v = doc["value"] | 4;
+            if (v >= TANK_STATE_LOW && v <= TANK_STATE_FULL) ohStopLevel = (TankState)v;
+        }
+        else if (strcmp(key, "oh_max_run_min") == 0) {
+            int v = doc["value"] | 20;
+            if (v >= 5 && v <= 60) ohMaxRunMin = (uint8_t)v;
+        }
         else changed = false;
-        if (changed) { saveMotorConfig(); Log(INFO, "[MQTT] set_setting " + String(key) + "=" + String(val)); }
+        if (ohStopLevel <= ohStartLevel) { ohStartLevel = TANK_STATE_EMPTY; ohStopLevel = TANK_STATE_FULL; }
+        if (changed) { saveMotorConfig(); Log(INFO, "[MQTT] set_setting " + String(key)); }
         else          Log(WARN, "[MQTT] set_setting unknown key: " + String(key));
     }
     else if (strcmp(cmd, "set_lcd_mode") == 0) {
@@ -492,17 +505,19 @@ void publishMQTTStatus() {
     String macStr = WiFi.macAddress();
     String ipStr  = WiFi.localIP().toString();
 
-    char payload[1440];
+    char payload[1600];
     snprintf(payload, sizeof(payload),
         "{\"mac\":\"%s\",\"ip\":\"%s\",\"device_type\":\"tank_monitor\","
         "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
+        "\"oh_last_known\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
-        "\"lora_ok\":%s,\"wifi_rssi\":%d,"
+        "\"lora_ok\":%s,\"tx_lost\":%s,\"wifi_rssi\":%d,"
         "\"uptime_s\":%lu,\"fw\":\"%s\","
         "\"time\":\"%s\","
         "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
         "\"ug_ignore\":%s,\"buzzer_delay\":%s,"
         "\"lcd_bl_mode\":%u,"
+        "\"oh_start_level\":%u,\"oh_stop_level\":%u,\"oh_max_run_min\":%u,"
         "\"log_level\":\"%s\","
         "\"buzzer_active\":%s,"
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
@@ -512,9 +527,11 @@ void publishMQTTStatus() {
         ipStr.c_str(),
         tankStateStr(ohTankState),
         tankStateStr(ugTankState),
+        tankStateStr(ohLastKnownState),
         ohMotorRunning ? "true" : "false",
         ugMotorRunning ? "true" : "false",
         loraOperational ? "true" : "false",
+        isTransmitterLost() ? "true" : "false",
         wifiRSSI,
         millis() / 1000UL,
         FW_VERSION,
@@ -524,6 +541,9 @@ void publishMQTTStatus() {
         ugIgnoreForOH      ? "true" : "false",
         buzzerDelayEnabled ? "true" : "false",
         (unsigned)lcdBacklightMode,
+        (unsigned)ohStartLevel,
+        (unsigned)ohStopLevel,
+        (unsigned)ohMaxRunMin,
         getLogLevel() == DEBUG ? "debug" : "info",
         isBuzzerActive()     ? "true" : "false",
         isOHBuzzerPending()  ? "true" : "false",

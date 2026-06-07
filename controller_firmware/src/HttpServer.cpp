@@ -89,7 +89,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .arc-bg{fill:none;stroke:var(--arc-bg);stroke-width:9}
 .arc-fg{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .5s,stroke .5s}
 .tlabel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:15px;font-weight:700;text-align:center;line-height:1.2}
-.s-full{color:#52c41a} .s-low{color:#ff4d4f} .s-unk{color:#faad14}
+.s-full{color:#52c41a} .s-half{color:#1890ff} .s-low{color:#fa8c16} .s-empty{color:#ff4d4f} .s-unk{color:#faad14}
+.tx-lost{display:none;background:#2a1215;border:1px solid #ff4d4f;border-radius:8px;padding:8px 14px;margin-bottom:10px;color:#ff4d4f;font-size:13px;text-align:center}
 .mrow{display:flex;align-items:center;justify-content:space-between;background:var(--bg3);border-radius:8px;padding:7px 12px;margin-top:8px}
 .mlabel{font-size:11px;color:var(--tx2)}
 .pill{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600}
@@ -135,6 +136,7 @@ input:checked+.sld::before{transform:translateX(18px)}
 </div>
 
 <!-- Tank Cards -->
+<div id="txLostBanner" class="tx-lost">&#9888; Transmitter lost &mdash; no signal received</div>
 <div class="grid">
   <div class="card">
     <div class="ctitle">Underground Tank</div>
@@ -223,6 +225,26 @@ input:checked+.sld::before{transform:translateX(18px)}
   <div class="trow">
     <span class="tlbl">Buzzer Delay Before Motor Start</span>
     <label class="sw"><input type="checkbox" id="buzz_del" onchange="saveSetting()"><span class="sld"></span></label>
+  </div>
+  <div class="trow">
+    <span class="tlbl">OH Motor Start Level</span>
+    <select id="oh_start_lvl" onchange="saveMotorThresholds()" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px">
+      <option value="1">EMPTY (0 0 0)</option>
+      <option value="2">LOW (0 0 1)</option>
+      <option value="3">HALF (0 1 1)</option>
+    </select>
+  </div>
+  <div class="trow">
+    <span class="tlbl">OH Motor Stop Level</span>
+    <select id="oh_stop_lvl" onchange="saveMotorThresholds()" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px">
+      <option value="2">LOW (0 0 1)</option>
+      <option value="3">HALF (0 1 1)</option>
+      <option value="4">FULL (1 1 1)</option>
+    </select>
+  </div>
+  <div class="trow">
+    <span class="tlbl">OH Max Motor Runtime (min)</span>
+    <input id="oh_max_run" type="number" min="5" max="60" value="20" onchange="saveMotorThresholds()" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px;width:70px">
   </div>
   <div class="trow">
     <span class="tlbl">LCD Backlight</span>
@@ -335,14 +357,21 @@ function toggleTheme(){
 function arc(id,lbl,state){
   var a=document.getElementById(id),l=document.getElementById(lbl);
   if(!a||!l)return;
+  l.style.color='';
   if(state==='FULL'){
     a.setAttribute('stroke-dasharray',C+' '+C);a.style.stroke='#52c41a';
     l.className='tlabel s-full';l.textContent='FULL';
+  } else if(state==='HALF'){
+    a.setAttribute('stroke-dasharray',(C*0.5)+' '+C);a.style.stroke='#1890ff';
+    l.className='tlabel s-half';l.textContent='HALF';
   } else if(state==='LOW'){
+    a.setAttribute('stroke-dasharray',(C*0.2)+' '+C);a.style.stroke='#fa8c16';
+    l.className='tlabel s-low';l.textContent='LOW';
+  } else if(state==='EMPTY'){
     a.setAttribute('stroke-dasharray','0 '+C);a.style.stroke='#ff4d4f';
-    l.className='tlabel s-low';l.textContent='EMPTY';
+    l.className='tlabel s-empty';l.textContent='EMPTY';
   } else {
-    a.setAttribute('stroke-dasharray',(C/2)+' '+C);a.style.stroke='#faad14';
+    a.setAttribute('stroke-dasharray','0 '+C);a.style.stroke='#faad14';
     l.className='tlabel s-unk';l.textContent='?';
   }
 }
@@ -376,6 +405,9 @@ function refreshStatus(){
   fetch('/status').then(function(r){return r.json();}).then(function(d){
     arc('ohArc','ohLbl',d.ohState);
     arc('ugArc','ugLbl',d.ugState);
+    // Transmitter lost banner
+    var tb=document.getElementById('txLostBanner');
+    if(tb)tb.style.display=d.txLost?'block':'none';
     pill('ohPill',d.oh_motor,d.ohDisplayOnly);
     pill('ugPill',d.ug_motor,d.ugDisplayOnly);
     var wi=document.getElementById('wifiInfo');
@@ -417,6 +449,13 @@ function refreshStatus(){
     }
     var lls=document.getElementById('log_level_sel');
     if(lls&&d.logLevel)lls.value=d.logLevel;
+    // Motor thresholds
+    var osl=document.getElementById('oh_start_lvl');
+    if(osl&&d.ohStartLevel!==undefined)osl.value=String(d.ohStartLevel);
+    var osl2=document.getElementById('oh_stop_lvl');
+    if(osl2&&d.ohStopLevel!==undefined)osl2.value=String(d.ohStopLevel);
+    var omr=document.getElementById('oh_max_run');
+    if(omr&&d.ohMaxRunMin!==undefined)omr.value=String(d.ohMaxRunMin);
     // Scheduler active alert
     var sa=document.getElementById('schedAlert');
     if(sa)sa.style.display=d.schedRunning?'flex':'none';
@@ -430,10 +469,14 @@ function saveSetting(){
   if(document.getElementById('ug_disp').checked)body.append('ug_disp_only','1');
   if(document.getElementById('ug_ign').checked)body.append('ug_ignore','1');
   if(document.getElementById('buzz_del').checked)body.append('buzzer_delay','1');
+  body.append('oh_start_level',document.getElementById('oh_start_lvl').value);
+  body.append('oh_stop_level',document.getElementById('oh_stop_lvl').value);
+  body.append('oh_max_run',document.getElementById('oh_max_run').value);
   fetch('/setconfig',{method:'POST',body:body})
-    .then(function(){toast('Settings saved','ok');})
+    .then(function(){toast('Settings saved','ok');refreshStatus();})
     .catch(function(){toast('Save failed','err');});
 }
+function saveMotorThresholds(){saveSetting();}
 // ---- WiFi ----
 function addWifi(){
   var ssid=document.getElementById('wSsid').value.trim();
@@ -676,7 +719,7 @@ function loadHistory(){
     }
     document.getElementById('histEmpty').style.display='none';
     document.getElementById('histTable').style.display='table';
-    var stColor=function(s){return s==='FULL'?'var(--green)':s==='LOW'?'var(--red)':'var(--gold)';};
+    var stColor=function(s){return s==='FULL'?'var(--green)':s==='HALF'?'var(--blue)':s==='LOW'?'var(--orange)':s==='EMPTY'?'var(--red)':'var(--gold)';};
     var mColor=function(b){return b?'var(--green)':'var(--tx2)';};
     var mTxt=function(b){return b?'ON':'--';};
     document.getElementById('histBody').innerHTML=rows.map(function(r){
@@ -714,11 +757,18 @@ loadLogs();
 // ---------------------------------------------------------------------------
 
 static void handleStatus() {
-    StaticJsonDocument<640> doc;
+    StaticJsonDocument<768> doc;
     doc["ugState"]           = tankStateStr(ugTankState);
     doc["ohState"]           = tankStateStr(ohTankState);
-    doc["undergroundTankLevel"] = (ugTankState == TANK_STATE_FULL) ? 100 : (ugTankState == TANK_STATE_LOW ? 0 : 50);
-    doc["overheadTankLevel"]    = (ohTankState == TANK_STATE_FULL) ? 100 : (ohTankState == TANK_STATE_LOW ? 0 : 50);
+    doc["ohLastKnown"]       = tankStateStr(ohLastKnownState);
+    doc["undergroundTankLevel"] = (ugTankState == TANK_STATE_FULL) ? 100
+                                : (ugTankState == TANK_STATE_HALF) ? 50
+                                : (ugTankState == TANK_STATE_LOW)  ? 20
+                                : (ugTankState == TANK_STATE_EMPTY) ? 0 : 50;
+    doc["overheadTankLevel"]    = (ohTankState == TANK_STATE_FULL) ? 100
+                                : (ohTankState == TANK_STATE_HALF) ? 50
+                                : (ohTankState == TANK_STATE_LOW)  ? 20
+                                : (ohTankState == TANK_STATE_EMPTY) ? 0 : 50;
     doc["oh_motor"]          = ohMotorRunning ? "ON" : "OFF";
     doc["ug_motor"]          = ugMotorRunning ? "ON" : "OFF";
     doc["overheadMotorStatus"]     = ohMotorRunning ? "ON" : "OFF";
@@ -727,6 +777,11 @@ static void handleStatus() {
     doc["ugDisplayOnly"]     = ugDisplayOnly;
     doc["ugIgnore"]          = ugIgnoreForOH;
     doc["buzzerDelay"]       = buzzerDelayEnabled;
+    doc["ohStartLevel"]      = (int)ohStartLevel;
+    doc["ohStopLevel"]       = (int)ohStopLevel;
+    doc["ohMaxRunMin"]       = (int)ohMaxRunMin;
+    doc["loraOk"]            = isLoraOperational();
+    doc["txLost"]            = isTransmitterLost();
     doc["loraRSSI"]          = getLoraRSSI();
     doc["loraSNR"]           = getLoraSNR();
     doc["lastLoraReceived"]  = lastLoraReceivedTime > 0
@@ -854,9 +909,25 @@ static void handleSetConfig() {
     ugDisplayOnly    = server.hasArg("ug_disp_only");
     ugIgnoreForOH    = server.hasArg("ug_ignore");
     buzzerDelayEnabled = server.hasArg("buzzer_delay");
+    if (server.hasArg("oh_start_level")) {
+        uint8_t v = (uint8_t)server.arg("oh_start_level").toInt();
+        if (v >= TANK_STATE_EMPTY && v <= TANK_STATE_HALF) ohStartLevel = (TankState)v;
+    }
+    if (server.hasArg("oh_stop_level")) {
+        uint8_t v = (uint8_t)server.arg("oh_stop_level").toInt();
+        if (v >= TANK_STATE_LOW && v <= TANK_STATE_FULL) ohStopLevel = (TankState)v;
+    }
+    // Validate: stop must be > start
+    if (ohStopLevel <= ohStartLevel) {
+        ohStartLevel = TANK_STATE_EMPTY;
+        ohStopLevel  = TANK_STATE_FULL;
+    }
+    if (server.hasArg("oh_max_run")) {
+        int v = server.arg("oh_max_run").toInt();
+        if (v >= 5 && v <= 60) ohMaxRunMin = (uint8_t)v;
+    }
     saveMotorConfig();
-    server.sendHeader("Location", "/");
-    server.send(302, "text/plain", "");
+    sendOk();
 }
 
 // ---------------------------------------------------------------------------

@@ -44,6 +44,11 @@ class Status {
   final bool ugBuzzer;    // buzzer countdown running for UG motor
   final String txFw;      // transmitter firmware version
   final String mgmtIp;    // ESP32 management IP (WiFi STA IP)
+  final String ohLastKnown; // last valid OH state before UNKNOWN
+  final bool txLost;      // transmitter declared lost
+  final int  ohStartLevel; // motor start threshold (TankState enum)
+  final int  ohStopLevel;  // motor stop threshold
+  final int  ohMaxRunMin;  // max motor runtime in minutes
 
   const Status({
     required this.ohState,
@@ -67,6 +72,11 @@ class Status {
     required this.ugBuzzer,
     required this.txFw,
     required this.mgmtIp,
+    required this.ohLastKnown,
+    required this.txLost,
+    required this.ohStartLevel,
+    required this.ohStopLevel,
+    required this.ohMaxRunMin,
   });
 
   factory Status.fromJson(Map<String, dynamic> j) => Status(
@@ -93,6 +103,11 @@ class Status {
         ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
         txFw:       j['tx_fw']        as String? ?? '',
         mgmtIp:     j['ip']           as String? ?? '',
+        ohLastKnown: j['oh_last_known'] as String? ?? '',
+        txLost:     j['tx_lost']      as bool?   ?? false,
+        ohStartLevel: j['oh_start_level'] as int? ?? 1,
+        ohStopLevel:  j['oh_stop_level']  as int? ?? 4,
+        ohMaxRunMin:  j['oh_max_run_min'] as int? ?? 20,
       );
 }
 

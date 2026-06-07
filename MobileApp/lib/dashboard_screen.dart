@@ -38,9 +38,10 @@ class _TankCircle extends StatelessWidget {
     bool   isUnknown = false;
 
     if (state == 'FULL')  { pct = 1.0; color = _green;  label = 'FULL'; }
-    else if (state == 'LOW')  { pct = 0.3; color = _orange; label = 'LOW'; }
-    else if (state == 'EMPTY'){ pct = 0.0; color = _red;    label = 'EMPTY'; }
-    else if (state.isNotEmpty){ color = _orange; label = '?'; isUnknown = true; }
+    else if (state == 'HALF')  { pct = 0.5; color = _blue;   label = 'HALF'; }
+    else if (state == 'LOW')   { pct = 0.2; color = _orange; label = 'LOW'; }
+    else if (state == 'EMPTY') { pct = 0.0; color = _red;    label = 'EMPTY'; }
+    else if (state.isNotEmpty) { color = _orange; label = '?'; isUnknown = true; }
 
     return SizedBox(
       width: 100, height: 100,
@@ -572,6 +573,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                     if (!svc.connected)
                       const _Banner('Disconnected — reconnecting…', isError: false),
+                    if (s?.txLost == true)
+                      const _Banner('⚠ Transmitter lost — no signal received', isError: true),
                     // ── Tank cards ──
                     Row(children: [
                       Expanded(child: _TankCard(
@@ -687,6 +690,90 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendSettingControl('ug_disp_only', v)),
                         _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendSettingControl('ug_ignore',    v)),
                         _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendSettingControl('buzzer_delay', v)),
+                        const Divider(color: Color(0xFF303030), height: 16),
+                        // Motor Start Level
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('OH Motor Start Level', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              DropdownButton<int>(
+                                value: s?.ohStartLevel ?? 1,
+                                isDense: true,
+                                dropdownColor: const Color(0xFF1f1f1f),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                underline: const SizedBox(),
+                                items: const [
+                                  DropdownMenuItem(value: 1, child: Text('EMPTY')),
+                                  DropdownMenuItem(value: 2, child: Text('LOW')),
+                                  DropdownMenuItem(value: 3, child: Text('HALF')),
+                                ],
+                                onChanged: s != null
+                                  ? (v) { if (v != null) svc.sendControl({'cmd': 'set_setting', 'key': 'oh_start_level', 'value': v}); }
+                                  : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Motor Stop Level
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('OH Motor Stop Level', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              DropdownButton<int>(
+                                value: s?.ohStopLevel ?? 4,
+                                isDense: true,
+                                dropdownColor: const Color(0xFF1f1f1f),
+                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                underline: const SizedBox(),
+                                items: const [
+                                  DropdownMenuItem(value: 2, child: Text('LOW')),
+                                  DropdownMenuItem(value: 3, child: Text('HALF')),
+                                  DropdownMenuItem(value: 4, child: Text('FULL')),
+                                ],
+                                onChanged: s != null
+                                  ? (v) { if (v != null) svc.sendControl({'cmd': 'set_setting', 'key': 'oh_stop_level', 'value': v}); }
+                                  : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Max Motor Runtime
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('OH Max Runtime (min)', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              SizedBox(
+                                width: 70,
+                                child: TextField(
+                                  controller: TextEditingController(text: '${s?.ohMaxRunMin ?? 20}'),
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blue)),
+                                  ),
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  onSubmitted: (v) {
+                                    final val = int.tryParse(v);
+                                    if (val != null && val >= 5 && val <= 60) {
+                                      svc.sendControl({'cmd': 'set_setting', 'key': 'oh_max_run_min', 'value': val});
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(color: Color(0xFF303030), height: 16),
                         // LCD Backlight mode
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
@@ -966,6 +1053,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       child: Column(children: [
                         _InfoRow('WiFi',        s != null ? '${s.wifiRssi} dBm' : '—'),
                         _InfoRow('LoRa',        null, loraOk: s?.loraOk),
+                        _InfoRow('Transmitter', null, loraOk: s != null ? !s.txLost : null),
                         _InfoRow('Uptime',      s != null ? _formatUptime(s.uptimeS) : '—'),
                         _InfoRow('Controller',  s?.fw ?? '—'),
                         _InfoRow('Transmitter', s?.txFw.isNotEmpty == true ? s!.txFw : '—'),

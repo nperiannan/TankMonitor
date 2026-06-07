@@ -94,7 +94,9 @@ void checkSchedules() {
         if (!s.isRunning && nowStr == s.time) {
             Log(INFO, "[Sched] " + String(i) + " (" + (isUG?"UG":"OH") + ") starting at " + s.time
                 + " for " + String(s.duration) + " min");
-            if (isUG) turnOnUGMotor(); else turnOnOHMotor();
+            // Set motor source BEFORE calling turnOn so auto-control won't interfere
+            if (isUG) { ugMotorSource = MOTOR_SRC_SCHEDULED; turnOnUGMotor(); }
+            else      { ohMotorSource = MOTOR_SRC_SCHEDULED; turnOnOHMotor(); }
             s.isRunning = true;
             s.startTime = millis();
         }

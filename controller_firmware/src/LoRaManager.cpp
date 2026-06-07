@@ -14,16 +14,9 @@ static int           retryCount       = 0;
 static unsigned long lastReinitMs     = 0;
 static float         lastRSSI         = 0.0f;
 static float         lastSNR          = 0.0f;
-
-// ---------------------------------------------------------------------------
-//  Derive TankState from a legacy distance packet
-// ---------------------------------------------------------------------------
-static TankState stateFromDistance(uint16_t distanceMm) {
-    uint16_t cm = distanceMm / 100;
-    if (cm <= LORA_LEGACY_FULL_THRESHOLD)  return TANK_STATE_FULL;
-    if (cm >= LORA_LEGACY_LOW_THRESHOLD)   return TANK_STATE_LOW;
-    return TANK_STATE_UNKNOWN;
-}
+static uint8_t       missedPackets    = 0;          // counts consecutive missed 30s windows
+static unsigned long lastExpectedMs   = 0;          // millis() at which next packet is expected
+static bool          transmitterLost  = false;      // true after LORA_MAX_MISSED_PACKETS misses
 
 // ---------------------------------------------------------------------------
 //  Public API
@@ -72,12 +65,20 @@ void pollLoRa() {
         return;
     }
 
-    // --- Check for stale OH state ---
-    if (lastLoraReceivedTime > 0 &&
-        millis() - lastLoraReceivedTime >= LORA_STALE_TIMEOUT_MS &&
-        ohTankState != TANK_STATE_UNKNOWN) {
-        Log(WARN, "[LoRa] OH tank data stale – marking UNKNOWN");
-        ohTankState = TANK_STATE_UNKNOWN;
+    // --- Missed-packet detection ---
+    // Transmitter sends every 30 s. After 10 consecutive misses → transmitter lost.
+    if (lastLoraReceivedTime > 0 && !transmitterLost) {
+        unsigned long elapsed = millis() - lastLoraReceivedTime;
+        uint8_t windowsMissed = (uint8_t)(elapsed / LORA_EXPECTED_INTERVAL_MS);
+        if (windowsMissed > missedPackets) {
+            missedPackets = windowsMissed;
+        }
+        if (missedPackets >= LORA_MAX_MISSED_PACKETS && ohTankState != TANK_STATE_UNKNOWN) {
+            transmitterLost = true;
+            Log(WARN, "[LoRa] Transmitter lost – " + String(missedPackets) + " packets missed, marking UNKNOWN");
+            ohLastKnownState = ohTankState;
+            ohTankState = TANK_STATE_UNKNOWN;
+        }
     }
 
     // --- Poll radio (non-blocking) ---
@@ -92,6 +93,8 @@ void pollLoRa() {
         }
         retryCount       = 0;
         lastLoraReceivedTime = millis();
+        missedPackets    = 0;
+        transmitterLost  = false;
         lastRSSI         = radio.getRSSI();
         lastSNR          = radio.getSNR();
 
@@ -105,22 +108,27 @@ void pollLoRa() {
 
         if (pktType == LORA_PKT_FLOAT_SWITCH && sizeof(FloatPacket) <= sizeof(buf)) {
             FloatPacket* fp = reinterpret_cast<FloatPacket*>(buf);
-            if (fp->full) newState = TANK_STATE_FULL;
-            else if (fp->low) newState = TANK_STATE_LOW;
-            Log(INFO, "[LoRa] Float pkt: low=" + String(fp->low)
-                      + " full=" + String(fp->full)
+            if (fp->sw_full)      newState = TANK_STATE_FULL;
+            else if (fp->sw_half) newState = TANK_STATE_HALF;
+            else if (fp->sw_low)  newState = TANK_STATE_LOW;
+            else                  newState = TANK_STATE_EMPTY;
+            Log(INFO, "[LoRa] Float pkt: low=" + String(fp->sw_low)
+                      + " half=" + String(fp->sw_half)
+                      + " full=" + String(fp->sw_full)
                       + " → " + tankStateStr(newState));
-        } else if (pktType == LORA_PKT_DISTANCE && sizeof(DistancePacket) <= sizeof(buf)) {
-            DistancePacket* dp = reinterpret_cast<DistancePacket*>(buf);
-            newState = stateFromDistance(dp->distance);
-            Log(INFO, "[LoRa] Legacy distance pkt: " + String(dp->distance / 100)
-                      + "cm → " + tankStateStr(newState));
+
         } else {
             Log(WARN, "[LoRa] Unknown packet type: 0x" + String(pktType, HEX));
         }
 
         if (newState != ohTankState) {
+            if (ohTankState != TANK_STATE_UNKNOWN) {
+                ohLastKnownState = ohTankState;
+            }
             ohTankState = newState;
+            if (newState != TANK_STATE_UNKNOWN) {
+                ohLastKnownState = newState;
+            }
             addHistoryRecord(HIST_OH_STATE_CHG, ohTankState, ugTankState);
         } else {
             ohTankState = newState;
@@ -143,5 +151,6 @@ void pollLoRa() {
 }
 
 bool isLoraOperational() { return loraReady; }
+bool isTransmitterLost() { return transmitterLost; }
 float getLoraRSSI()      { return lastRSSI;  }
 float getLoraSNR()       { return lastSNR;   }

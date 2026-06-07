@@ -21,6 +21,11 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
+#include <Preferences.h>
+
+// Task-local Preferences instance — avoids thread-safety crash with the
+// global 'preferences' object used by MotorControl on Core 1.
+static Preferences wifiPrefs;
 
 // ---------------------------------------------------------------------------
 //  Internal state -- only touched inside the WiFi task (Core 0)
@@ -79,9 +84,9 @@ static TaskHandle_t wifiTaskHandle = nullptr;
 // ---------------------------------------------------------------------------
 
 static void loadNetworks() {
-    preferences.begin(NVS_WIFI_NS, true);
-    String json = preferences.getString(NVS_KEY_WIFI_JSON, "[]");
-    preferences.end();
+    wifiPrefs.begin(NVS_WIFI_NS, true);
+    String json = wifiPrefs.getString(NVS_KEY_WIFI_JSON, "[]");
+    wifiPrefs.end();
 
     StaticJsonDocument<1024> doc;
     if (deserializeJson(doc, json) != DeserializationError::Ok) return;
@@ -105,9 +110,9 @@ static void saveNetworks() {
     }
     String json;
     serializeJson(doc, json);
-    preferences.begin(NVS_WIFI_NS, false);
-    preferences.putString(NVS_KEY_WIFI_JSON, json);
-    preferences.end();
+    wifiPrefs.begin(NVS_WIFI_NS, false);
+    wifiPrefs.putString(NVS_KEY_WIFI_JSON, json);
+    wifiPrefs.end();
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +140,9 @@ static void doSynchronizeTime() {
     lastNtpSyncEpoch   = epoch;
     lastNtpAutoSyncMs  = millis();
 
-    preferences.begin(NVS_WIFI_NS, false);
-    preferences.putUInt("ntp_epoch", (uint32_t)epoch);
-    preferences.end();
+    wifiPrefs.begin(NVS_WIFI_NS, false);
+    wifiPrefs.putUInt("ntp_epoch", (uint32_t)epoch);
+    wifiPrefs.end();
 
     timeval tv = { .tv_sec = epoch, .tv_usec = 0 };
     settimeofday(&tv, nullptr);
@@ -248,9 +253,9 @@ static void wifiTask(void* /*param*/) {
     isAPMode = true;
 
     // Restore persisted NTP epoch
-    preferences.begin(NVS_WIFI_NS, true);
-    lastNtpSyncEpoch = (time_t)preferences.getUInt("ntp_epoch", 0);
-    preferences.end();
+    wifiPrefs.begin(NVS_WIFI_NS, true);
+    lastNtpSyncEpoch = (time_t)wifiPrefs.getUInt("ntp_epoch", 0);
+    wifiPrefs.end();
 
     // If DS3231 lost power (battery dead/missing) initRTC() falls back to compile
     // time which is stale.  Restore the last-known-good NTP epoch from NVS so
@@ -414,9 +419,9 @@ static void wifiTask(void* /*param*/) {
             lastEpochSaveMs = millis();
             time_t nowEpoch = time(nullptr);
             if (nowEpoch > (time_t)lastNtpSyncEpoch) {
-                preferences.begin(NVS_WIFI_NS, false);
-                preferences.putUInt("ntp_epoch", (uint32_t)nowEpoch);
-                preferences.end();
+                wifiPrefs.begin(NVS_WIFI_NS, false);
+                wifiPrefs.putUInt("ntp_epoch", (uint32_t)nowEpoch);
+                wifiPrefs.end();
             }
         }
 

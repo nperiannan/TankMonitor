@@ -26,9 +26,13 @@
 
 TankState      ugTankState           = TANK_STATE_UNKNOWN;  // display ? until sensor confirms; motor won't fire (hardware OFF + grace period)
 TankState      ohTankState           = TANK_STATE_UNKNOWN;
+TankState      ohLastKnownState      = TANK_STATE_UNKNOWN;
 
 bool           ohMotorRunning        = false;
 bool           ugMotorRunning        = false;
+
+MotorSource    ohMotorSource         = MOTOR_SRC_NONE;
+MotorSource    ugMotorSource         = MOTOR_SRC_NONE;
 
 bool           loraOperational       = false;
 unsigned long  lastLoraReceivedTime  = 0;
@@ -43,6 +47,10 @@ bool           ugIgnoreForOH         = false;
 bool           buzzerDelayEnabled    = true;
 uint8_t        lcdBacklightMode      = LCD_BL_AUTO;
 
+TankState      ohStartLevel          = TANK_STATE_EMPTY;
+TankState      ohStopLevel           = TANK_STATE_FULL;
+uint8_t        ohMaxRunMin           = 20;
+
 Preferences    preferences;
 
 // =============================================================================
@@ -51,6 +59,7 @@ Preferences    preferences;
 
 void setup() {
     Serial.begin(115200);
+    delay(3000);  // Wait for USB CDC to enumerate so early messages are visible
 
     // --- CRITICAL: force relay pins OFF immediately before any other init ---
     // Prevents relay from energising during ESP32 GPIO floating at boot.
