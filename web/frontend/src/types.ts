@@ -17,6 +17,13 @@ export interface Status {
   fw:            string
   time:          string
   schedules:     Schedule[]
+  // v2.0 fields
+  oh_last_known:   string   // last known OH level when transmitter lost
+  tx_lost:         boolean  // true when transmitter hasn't reported in 90s
+  oh_start_level:  number   // motor start threshold (1=EMPTY, 2=LOW, 3=HALF)
+  oh_stop_level:   number   // motor stop threshold (2=LOW, 3=HALF, 4=FULL)
+  oh_max_run_min:  number   // max motor runtime in minutes (5-60)
+  tx_fw:           string   // transmitter firmware version
   // Settings
   oh_disp_only:  boolean
   ug_disp_only:  boolean
@@ -33,7 +40,7 @@ export interface ControlCmd {
   duration?: number
   index?:    number
   key?:      string
-  value?:    boolean
+  value?:    boolean | number
   mode?:     string
   url?:      string
   pass?:     string

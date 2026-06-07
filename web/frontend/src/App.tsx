@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '1.3.8'
+const WEB_APP_VERSION = '2.0.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -144,6 +144,7 @@ function TankCircle({ state, darkMode }: { state: string; darkMode: boolean }) {
   let color = '#8c8c8c'
 
   if      (state === 'FULL')  { pct = 1.0; color = '#52c41a' }
+  else if (state === 'HALF')  { pct = 0.6; color = '#1890ff' }
   else if (state === 'LOW')   { pct = 0.3; color = '#fa8c16' }
   else if (state === 'EMPTY') { pct = 0.0; color = '#ff4d4f' }
 
@@ -511,8 +512,10 @@ export default function App() {
   const sysRows: [string, React.ReactNode][] = [
     ['WiFi',        s?.wifi_rssi != null ? `${s.wifi_rssi} dBm` : '—'],
     ['LoRa',        <Tag color={s?.lora_ok ? 'success' : (s ? 'error' : 'default')}>{s?.lora_ok ? 'OK' : (s ? 'FAIL' : '—')}</Tag>],
+    ['Transmitter', <Tag color={s?.tx_lost === false ? 'success' : s?.tx_lost === true ? 'error' : 'default'}>{s?.tx_lost === false ? 'OK' : s?.tx_lost === true ? 'LOST' : '—'}</Tag>],
     ['Uptime',      s ? formatUptime(s.uptime_s) : '—'],
     ['Firmware',    s?.fw ?? '—'],
+    ['TX Firmware', s?.tx_fw ?? '—'],
     ['Web App',     backendVersion ?? WEB_APP_VERSION],
     ['Last update', lastUpdate ? lastUpdate.toLocaleTimeString() : '—'],
   ]
@@ -576,6 +579,13 @@ export default function App() {
         {ctrlError && (
           <Alert message={ctrlError} type="error" showIcon closable style={{ marginBottom: 12 }} />
         )}
+        {s?.tx_lost && (
+          <Alert
+            message="Transmitter Lost — No signal from OH tank transmitter for over 90 seconds"
+            type="warning" showIcon
+            style={{ marginBottom: 12 }}
+          />
+        )}
 
         {/* ── Tank Cards (2-column, mirrors ESP32 layout) ── */}
         <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
@@ -598,6 +608,11 @@ export default function App() {
               onOff={() => ctrl({ cmd: 'oh_off' })}
               darkMode={darkMode}
             />
+            {s?.tx_lost && s?.oh_last_known && s.oh_last_known !== 'UNKNOWN' && (
+              <div style={{ textAlign: 'center', fontSize: 11, color: '#fa8c16', marginTop: 4 }}>
+                Last known: {s.oh_last_known}
+              </div>
+            )}
           </Col>
         </Row>
 
@@ -665,7 +680,7 @@ export default function App() {
           {/* LCD Backlight Mode */}
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            padding: '7px 0', fontSize: 13,
+            padding: '7px 0', borderBottom: `1px solid ${rowBd}`, fontSize: 13,
           }}>
             <span>LCD Backlight</span>
             <Select
@@ -686,6 +701,70 @@ export default function App() {
           </div>
 
           {/* MQTT Password */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', borderBottom: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
+          }}>
+            <span>OH Motor Start Level</span>
+            <Select
+              size="small"
+              style={{ width: 170 }}
+              disabled={!s}
+              value={s?.oh_start_level ?? 1}
+              onChange={(v: number) => ctrlSetting(
+                { cmd: 'set_setting', key: 'oh_start_level', value: v },
+                'oh_start_level', v,
+              )}
+              options={[
+                { value: 1, label: 'EMPTY' },
+                { value: 2, label: 'LOW' },
+                { value: 3, label: 'HALF' },
+              ]}
+            />
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', borderBottom: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
+          }}>
+            <span>OH Motor Stop Level</span>
+            <Select
+              size="small"
+              style={{ width: 170 }}
+              disabled={!s}
+              value={s?.oh_stop_level ?? 4}
+              onChange={(v: number) => ctrlSetting(
+                { cmd: 'set_setting', key: 'oh_stop_level', value: v },
+                'oh_stop_level', v,
+              )}
+              options={[
+                { value: 2, label: 'LOW' },
+                { value: 3, label: 'HALF' },
+                { value: 4, label: 'FULL' },
+              ]}
+            />
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', borderBottom: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
+          }}>
+            <span>OH Max Motor Runtime</span>
+            <InputNumber
+              size="small"
+              style={{ width: 170 }}
+              disabled={!s}
+              min={5}
+              max={60}
+              addonAfter="min"
+              value={s?.oh_max_run_min ?? 20}
+              onChange={(v) => {
+                if (v == null) return
+                ctrlSetting(
+                  { cmd: 'set_setting', key: 'oh_max_run_min', value: v },
+                  'oh_max_run_min', v,
+                )
+              }}
+            />
+          </div>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '7px 0', borderTop: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
