@@ -7,15 +7,7 @@ import 'setup_screen.dart';
 import 'dashboard_screen.dart';
 import 'claim_screen.dart';
 import 'admin_screen.dart';
-
-const _bg     = Color(0xFF141414);
-const _cardBg = Color(0xFF1f1f1f);
-const _cardBd = Color(0xFF303030);
-const _label  = Color(0xFF8c8c8c);
-const _blue   = Color(0xFF1890ff);
-const _green  = Color(0xFF52c41a);
-const _red    = Color(0xFFff4d4f);
-const _orange = Color(0xFFfa8c16);
+import 'theme_data.dart';
 
 class DeviceListScreen extends StatefulWidget {
   /// When [autoNavigate] is true (default), a single device skips straight
@@ -73,31 +65,31 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: _cardBg,
-        title: const Text('Rename device', style: TextStyle(color: Colors.white)),
+        backgroundColor: cardBg(context),
+        title: Text('Rename device', style: TextStyle(color: textColor(context))),
         content: TextField(
           controller: nameCtrl,
           autofocus: true,
           decoration: InputDecoration(
             hintText: 'Display name',
-            hintStyle: const TextStyle(color: _label),
-            filled: true, fillColor: const Color(0xFF262626),
+            hintStyle: TextStyle(color: labelColor(context)),
+            filled: true, fillColor: subtleBg(context),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _cardBd)),
+                borderSide: BorderSide(color: cardBd(context))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _cardBd)),
+                borderSide: BorderSide(color: cardBd(context))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _blue, width: 2)),
+                borderSide: BorderSide(color: accentBlue(context), width: 2)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-          style: const TextStyle(color: Colors.white),
+          style: TextStyle(color: textColor(context)),
           onSubmitted: (_) => Navigator.pop(context, true),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Rename', style: TextStyle(color: _blue)),
+            child: Text('Rename', style: TextStyle(color: accentBlue(context))),
           ),
         ],
       ),
@@ -121,17 +113,17 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: _cardBg,
-        title: const Text('Remove device?', style: TextStyle(color: Colors.white)),
+        backgroundColor: cardBg(context),
+        title: Text('Remove device?', style: TextStyle(color: textColor(context))),
         content: Text(
           'Remove "${d.displayName}" from your account?',
-          style: const TextStyle(color: _label, fontSize: 13),
+          style: TextStyle(color: labelColor(context), fontSize: 13),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove', style: TextStyle(color: _red)),
+            child: const Text('Remove', style: TextStyle(color: kRed)),
           ),
         ],
       ),
@@ -172,38 +164,38 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       });
     }
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg(context),
         elevation: 0,
         automaticallyImplyLeading: false,
-        title: const Text('💧 My Devices',
-            style: TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 18)),
+        title: Text('💧 My Devices',
+            style: TextStyle(color: accentBlue(context), fontWeight: FontWeight.w700, fontSize: 18)),
         actions: [
           if (svc.isAdmin)
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings, color: _orange, size: 22),
+              icon: const Icon(Icons.admin_panel_settings, color: kOrange, size: 22),
               tooltip: 'Admin: Users & Devices',
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AdminScreen()),
               ),
             ),
           IconButton(
-            icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),
+            icon: Icon(Icons.settings_ethernet, color: labelColor(context), size: 20),
             tooltip: 'Server settings',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SetupScreen()),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: _label, size: 20),
+            icon: Icon(Icons.logout, color: labelColor(context), size: 20),
             tooltip: 'Sign out',
             onPressed: _logout,
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: _blue,
+        backgroundColor: accentBlue(context),
         tooltip: 'Claim device',
         onPressed: () async {
           await Navigator.of(context).push(
@@ -211,7 +203,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           );
           _load(); // refresh after returning
         },
-        child: const Icon(Icons.add, color: Colors.white),
+        child: Icon(Icons.add, color: textColor(context)),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -234,13 +226,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.devices_other, size: 64, color: _label),
+          Icon(Icons.devices_other, size: 64, color: labelColor(context)),
           const SizedBox(height: 16),
-          const Text('No devices yet',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+          Text('No devices yet',
+              style: TextStyle(color: textColor(context), fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(height: 8),
-          const Text('Tap + to claim your first device',
-              style: TextStyle(color: _label, fontSize: 13)),
+          Text('Tap + to claim your first device',
+              style: TextStyle(color: labelColor(context), fontSize: 13)),
         ],
       ),
     );
@@ -254,13 +246,13 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: _cardBg,
-          border: Border.all(color: _cardBd),
+          color: cardBg(context),
+          border: Border.all(color: cardBd(context)),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            Icon(typeIcon, color: d.online ? _green : _label, size: 36),
+            Icon(typeIcon, color: d.online ? kGreen : kDarkLabel, size: 36),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -271,8 +263,8 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                       Expanded(
                         child: Text(
                           d.displayName.isNotEmpty ? d.displayName : d.mac,
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                          style: TextStyle(
+                              color: textColor(context), fontWeight: FontWeight.w600, fontSize: 15),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -282,7 +274,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         decoration: BoxDecoration(
                           color: d.online
                               ? const Color(0xFF162312)
-                              : const Color(0xFF262626),
+                              : subtleBg(context),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                               color: d.online
@@ -292,25 +284,25 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         child: Text(
                           d.online ? '● Online' : '○ Offline',
                           style: TextStyle(
-                              color: d.online ? _green : _label, fontSize: 11),
+                              color: d.online ? kGreen : kDarkLabel, fontSize: 11),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 3),
                   Text(typeLabel,
-                      style: const TextStyle(color: _blue, fontSize: 12, fontWeight: FontWeight.w500)),
+                      style: TextStyle(color: accentBlue(context), fontSize: 12, fontWeight: FontWeight.w500)),
                   const SizedBox(height: 2),
                   Text(d.mac,
-                      style: const TextStyle(
-                          color: _label, fontSize: 11, fontFamily: 'monospace')),
+                      style: TextStyle(
+                          color: labelColor(context), fontSize: 11, fontFamily: 'monospace')),
                   if (d.fwVersion.isNotEmpty)
                     Text('FW ${d.fwVersion}',
-                        style: const TextStyle(color: _label, fontSize: 11)),
+                        style: TextStyle(color: labelColor(context), fontSize: 11)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: _label, size: 20),
+            Icon(Icons.chevron_right, color: labelColor(context), size: 20),
           ],
         ),
       ),
@@ -329,7 +321,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
   void _showDeviceOptions(Device d) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: _cardBg,
+      backgroundColor: cardBg(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -341,19 +333,19 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
               child: Text(
                 d.displayName.isNotEmpty ? d.displayName : d.mac,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w600, fontSize: 16),
+                style: TextStyle(
+                    color: textColor(context), fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
-            const Divider(color: _cardBd, height: 1),
+            Divider(color: kDarkCardBd, height: 1),
             ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline, color: Colors.white),
-              title: const Text('Rename', style: TextStyle(color: Colors.white)),
+              leading: Icon(Icons.drive_file_rename_outline, color: textColor(context)),
+              title: Text('Rename', style: TextStyle(color: textColor(context))),
               onTap: () { Navigator.pop(context); _rename(d); },
             ),
             ListTile(
-              leading: const Icon(Icons.link_off, color: _red),
-              title: const Text('Remove from account', style: TextStyle(color: _red)),
+              leading: const Icon(Icons.link_off, color: kRed),
+              title: const Text('Remove from account', style: TextStyle(color: kRed)),
               onTap: () { Navigator.pop(context); _unclaim(d); },
             ),
             const SizedBox(height: 8),

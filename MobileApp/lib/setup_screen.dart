@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'dashboard_screen.dart';
+import 'theme_data.dart';
 
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
@@ -54,19 +55,19 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget build(BuildContext context) {
     final canGoBack = Navigator.of(context).canPop();
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
+      backgroundColor: scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1f1f1f),
+        backgroundColor: cardBg(context),
         elevation: 0,
         leading: canGoBack
             ? BackButton(
-                color: const Color(0xFF8c8c8c),
+                color: labelColor(context),
                 onPressed: () => Navigator.of(context).pop(),
               )
             : null,
         automaticallyImplyLeading: false,
-        title: const Text('Server Settings',
-            style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
+        title: Text('Server Settings',
+            style: TextStyle(color: textColor(context), fontSize: 16, fontWeight: FontWeight.w600)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -75,22 +76,22 @@ class _SetupScreenState extends State<SetupScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 '💧 Tank Monitor',
                 style: TextStyle(
                   fontSize: 28, fontWeight: FontWeight.w700,
-                  color: Color(0xFF1890ff),
+                  color: accentBlue(context),
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Configure server addresses.\nThe app auto-selects based on your current network.',
-                style: TextStyle(color: Color(0xFF8c8c8c), fontSize: 13),
+                style: TextStyle(color: labelColor(context), fontSize: 13),
               ),
               const SizedBox(height: 36),
 
               // ── WiFi URL ─────────────────────────────────────────────────
-              const _FieldLabel(icon: Icons.wifi, color: Color(0xFF1890ff),
+              _FieldLabel(icon: Icons.wifi, color: accentBlue(context),
                 text: 'WiFi / Home Network URL'),
               const SizedBox(height: 6),
               Form(
@@ -109,8 +110,8 @@ class _SetupScreenState extends State<SetupScreen> {
                   const SizedBox(height: 24),
 
                   // ── Mobile URL ──────────────────────────────────────────
-                  const _FieldLabel(icon: Icons.signal_cellular_alt,
-                    color: Color(0xFFfa8c16), text: 'Mobile Data / Internet URL'),
+                  _FieldLabel(icon: Icons.signal_cellular_alt,
+                    color: accentOrange(context), text: 'Mobile Data / Internet URL'),
                   const SizedBox(height: 6),
                   _UrlField(
                     controller: _mobileCtrl,
@@ -129,18 +130,18 @@ class _SetupScreenState extends State<SetupScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF111b2e),
-                  border: Border.all(color: const Color(0xFF1890ff).withOpacity(0.35)),
+                  color: accentBlue(context).withOpacity(0.08),
+                  border: Border.all(color: accentBlue(context).withOpacity(0.35)),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Row(children: [
-                  Icon(Icons.info_outline, color: Color(0xFF1890ff), size: 16),
-                  SizedBox(width: 8),
+                child: Row(children: [
+                  Icon(Icons.info_outline, color: accentBlue(context), size: 16),
+                  const SizedBox(width: 8),
                   Expanded(child: Text(
                     'On WiFi → uses WiFi URL automatically.\n'
                     'On mobile data → uses Mobile URL automatically.\n'
                     'Switches instantly if you change networks.',
-                    style: TextStyle(color: Color(0xFF8c8c8c), fontSize: 12),
+                    style: TextStyle(color: labelColor(context), fontSize: 12),
                   )),
                 ]),
               ),
@@ -152,7 +153,7 @@ class _SetupScreenState extends State<SetupScreen> {
                 child: ElevatedButton(
                   onPressed: _connecting ? null : _connect,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1890ff),
+                    backgroundColor: accentBlue(context),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8)),
@@ -182,7 +183,7 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) => Row(children: [
     Icon(icon, color: color, size: 15),
     const SizedBox(width: 6),
-    Text(text, style: const TextStyle(color: Color(0xFF8c8c8c), fontSize: 12)),
+    Text(text, style: TextStyle(color: labelColor(context), fontSize: 12)),
   ]);
 }
 
@@ -195,24 +196,24 @@ class _UrlField extends StatelessWidget {
   @override
   Widget build(BuildContext context) => TextFormField(
     controller: controller,
-    style: const TextStyle(color: Colors.white),
+    style: TextStyle(color: textColor(context)),
     keyboardType: TextInputType.url,
     autocorrect: false,
     decoration: InputDecoration(
       labelText: label,
       hintText: hint,
-      labelStyle: const TextStyle(color: Color(0xFF8c8c8c)),
-      hintStyle: const TextStyle(color: Color(0xFF434343)),
+      labelStyle: TextStyle(color: labelColor(context)),
+      hintStyle: TextStyle(color: labelColor(context).withOpacity(0.5)),
       filled: true,
-      fillColor: const Color(0xFF1f1f1f),
+      fillColor: cardBg(context),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF303030))),
+        borderSide: BorderSide(color: cardBd(context))),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF303030))),
+        borderSide: BorderSide(color: cardBd(context))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF1890ff))),
+        borderSide: BorderSide(color: accentBlue(context))),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFFff4d4f))),
+        borderSide: const BorderSide(color: kRed)),
     ),
     validator: (v) {
       if (v == null || v.trim().isEmpty) return 'Required';
@@ -236,12 +237,12 @@ class _DefaultChip extends StatelessWidget {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFF1890ff).withOpacity(0.08),
-        border: Border.all(color: const Color(0xFF1890ff).withOpacity(0.4)),
+        color: accentBlue(context).withOpacity(0.08),
+        border: Border.all(color: accentBlue(context).withOpacity(0.4)),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text('↩ $label',
-        style: const TextStyle(color: Color(0xFF1890ff), fontSize: 11)),
+        style: TextStyle(color: accentBlue(context), fontSize: 11)),
     ),
   );
 }

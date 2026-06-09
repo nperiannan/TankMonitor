@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
-
-const _bg     = Color(0xFF141414);
-const _cardBg = Color(0xFF1f1f1f);
-const _cardBd = Color(0xFF303030);
-const _label  = Color(0xFF8c8c8c);
-const _blue   = Color(0xFF1890ff);
-const _red    = Color(0xFFff4d4f);
+import 'theme_data.dart';
 
 class ClaimScreen extends StatefulWidget {
   const ClaimScreen({super.key});
@@ -59,32 +53,32 @@ class _ClaimScreenState extends State<ClaimScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg(context),
         elevation: 0,
-        leading: BackButton(color: _label.withOpacity(0.8)),
-        title: const Text('Claim Device',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 17)),
+        leading: BackButton(color: kDarkLabel.withOpacity(0.8)),
+        title: Text('Claim Device',
+            style: TextStyle(color: textColor(context), fontWeight: FontWeight.w600, fontSize: 17)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Add a device to your account by entering its MAC address.',
-              style: TextStyle(color: _label, fontSize: 13),
+              style: TextStyle(color: labelColor(context), fontSize: 13),
             ),
             const SizedBox(height: 6),
-            const Text(
+            Text(
               'You can find the MAC address on the device LCD screen or physical label.',
-              style: TextStyle(color: _label, fontSize: 13),
+              style: TextStyle(color: labelColor(context), fontSize: 13),
             ),
             const SizedBox(height: 24),
 
             // ── Device type ──────────────────────────────────────────────
-            const Text('Device Type', style: TextStyle(color: _label, fontSize: 12)),
+            Text('Device Type', style: TextStyle(color: labelColor(context), fontSize: 12)),
             const SizedBox(height: 8),
             Row(
               children: _deviceTypes.map((t) => Expanded(
@@ -96,10 +90,10 @@ class _ClaimScreenState extends State<ClaimScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: _typeId == t.id
-                            ? _blue.withOpacity(0.12)
-                            : const Color(0xFF1f1f1f),
+                            ? kBlue.withOpacity(0.12)
+                            : cardBg(context),
                         border: Border.all(
-                          color: _typeId == t.id ? _blue : _cardBd,
+                          color: _typeId == t.id ? kBlue : kDarkCardBd,
                           width: _typeId == t.id ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -107,11 +101,11 @@ class _ClaimScreenState extends State<ClaimScreen> {
                       child: Column(
                         children: [
                           Icon(t.icon,
-                            color: _typeId == t.id ? _blue : _label, size: 26),
+                            color: _typeId == t.id ? kBlue : kDarkLabel, size: 26),
                           const SizedBox(height: 4),
                           Text(t.label,
                             style: TextStyle(
-                              color: _typeId == t.id ? _blue : _label,
+                              color: _typeId == t.id ? kBlue : kDarkLabel,
                               fontSize: 12, fontWeight: FontWeight.w600)),
                         ],
                       ),
@@ -133,35 +127,35 @@ class _ClaimScreenState extends State<ClaimScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: _red, size: 16),
+                    const Icon(Icons.error_outline, color: kRed, size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(_error!,
-                          style: const TextStyle(color: _red, fontSize: 13)),
+                          style: const TextStyle(color: kRed, fontSize: 13)),
                     ),
                   ],
                 ),
               ),
 
-            const Text('MAC address', style: TextStyle(color: _label, fontSize: 12)),
+            Text('MAC address', style: TextStyle(color: labelColor(context), fontSize: 12)),
             const SizedBox(height: 6),
             TextField(
               controller: _macCtrl,
               decoration: _inputDec('e.g. AA:BB:CC:DD:EE:FF', Icons.memory_outlined),
               textCapitalization: TextCapitalization.characters,
               textInputAction: TextInputAction.next,
-              style: const TextStyle(color: Colors.white, fontFamily: 'monospace'),
+              style: TextStyle(color: textColor(context), fontFamily: 'monospace'),
             ),
             const SizedBox(height: 16),
 
-            const Text('Device name', style: TextStyle(color: _label, fontSize: 12)),
+            Text('Device name', style: TextStyle(color: labelColor(context), fontSize: 12)),
             const SizedBox(height: 6),
             TextField(
               controller: _nameCtrl,
               decoration: _inputDec('e.g. Rooftop Tank', Icons.label_outline),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _claim(),
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: textColor(context)),
             ),
             const SizedBox(height: 28),
 
@@ -170,7 +164,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
               child: FilledButton(
                 onPressed: _loading ? null : _claim,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _blue,
+                  backgroundColor: accentBlue(context),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
@@ -190,19 +184,19 @@ class _ClaimScreenState extends State<ClaimScreen> {
 
   InputDecoration _inputDec(String hint, IconData icon) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: _label),
-        prefixIcon: Icon(icon, color: _label, size: 20),
+        hintStyle: TextStyle(color: labelColor(context)),
+        prefixIcon: Icon(icon, color: kDarkLabel, size: 20),
         filled: true,
-        fillColor: const Color(0xFF1f1f1f),
+        fillColor: cardBg(context),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _cardBd)),
+            borderSide: BorderSide(color: cardBd(context))),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _cardBd)),
+            borderSide: BorderSide(color: cardBd(context))),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: const BorderSide(color: _blue, width: 2)),
+            borderSide: BorderSide(color: accentBlue(context), width: 2)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       );
 }

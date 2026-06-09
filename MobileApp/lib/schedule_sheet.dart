@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'models.dart';
 import 'tank_service.dart';
-
-const _cardBg = Color(0xFF1f1f1f);
-const _blue   = Color(0xFF1890ff);
-const _label  = Color(0xFF8c8c8c);
-const _cardBd = Color(0xFF303030);
+import 'theme_data.dart';
 
 class ScheduleSheet extends StatefulWidget {
   final TankService svc;
@@ -52,7 +48,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
       initialTime: _time,
       builder: (ctx, child) => Theme(
         data: ThemeData.dark().copyWith(
-          colorScheme: const ColorScheme.dark(primary: _blue),
+          colorScheme: const ColorScheme.dark(primary: kBlue),
         ),
         child: child!,
       ),
@@ -102,11 +98,11 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
           )),
           const SizedBox(height: 16),
           Text(_isEdit ? 'Edit Schedule' : 'Add Schedule',
-            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: textColor(context), fontSize: 17, fontWeight: FontWeight.w700)),
           const SizedBox(height: 20),
 
           // Motor selector
-          const Text('Motor', style: TextStyle(color: _label, fontSize: 12)),
+          Text('Motor', style: TextStyle(color: labelColor(context), fontSize: 12)),
           const SizedBox(height: 6),
           Row(children: [
             _MotorChip(label: 'OH — Overhead',   value: 0, group: _motor, onTap: () => setState(() => _motor = 0)),
@@ -116,7 +112,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
           const SizedBox(height: 16),
 
           // Time picker
-          const Text('Start Time', style: TextStyle(color: _label, fontSize: 12)),
+          Text('Start Time', style: TextStyle(color: labelColor(context), fontSize: 12)),
           const SizedBox(height: 6),
           GestureDetector(
             onTap: _pickTime,
@@ -124,42 +120,42 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF141414),
-                border: Border.all(color: _cardBd),
+                color: scaffoldBg(context),
+                border: Border.all(color: cardBd(context)),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _tod12hr(_time),
-                style: const TextStyle(color: Colors.white, fontSize: 15),
+                style: TextStyle(color: textColor(context), fontSize: 15),
               ),
             ),
           ),
           const SizedBox(height: 16),
 
           // Duration
-          const Text('Duration (minutes)', style: TextStyle(color: _label, fontSize: 12)),
+          Text('Duration (minutes)', style: TextStyle(color: labelColor(context), fontSize: 12)),
           const SizedBox(height: 6),
           TextField(
             controller: _durCtrl,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: textColor(context)),
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: InputDecoration(
               filled: true,
-              fillColor: const Color(0xFF141414),
+              fillColor: scaffoldBg(context),
               suffixText: 'min',
-              suffixStyle: const TextStyle(color: _label),
+              suffixStyle: TextStyle(color: labelColor(context)),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _cardBd),
+                borderSide: BorderSide(color: cardBd(context)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _cardBd),
+                borderSide: BorderSide(color: cardBd(context)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: _blue),
+                borderSide: BorderSide(color: accentBlue(context)),
               ),
             ),
           ),
@@ -171,7 +167,7 @@ class _ScheduleSheetState extends State<ScheduleSheet> {
             child: ElevatedButton(
               onPressed: _submitting ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: _blue, foregroundColor: Colors.white,
+                backgroundColor: accentBlue(context), foregroundColor: textColor(context),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               child: _submitting
@@ -203,13 +199,13 @@ class _MotorChip extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? _blue.withOpacity(0.15) : const Color(0xFF141414),
-            border: Border.all(color: selected ? _blue : _cardBd),
+            color: selected ? kBlue.withOpacity(0.15) : scaffoldBg(context),
+            border: Border.all(color: selected ? kBlue : kDarkCardBd),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Center(child: Text(label,
             style: TextStyle(
-              color: selected ? _blue : _label,
+              color: selected ? kBlue : kDarkLabel,
               fontSize: 12, fontWeight: FontWeight.w600))),
         ),
       ),

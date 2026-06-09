@@ -4,6 +4,7 @@ import 'tank_service.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
 import 'register_screen.dart';
+import 'theme_data.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -65,7 +66,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
+      backgroundColor: scaffoldBg(context),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -76,17 +77,17 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const Text('💧', style: TextStyle(fontSize: 52)),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'Tank Monitor',
                   style: TextStyle(
                     fontSize: 24, fontWeight: FontWeight.bold,
-                    color: Color(0xFF1890ff),
+                    color: accentBlue(context),
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Sign in to continue',
-                  style: TextStyle(fontSize: 13, color: Color(0xFF8c8c8c)),
+                  style: TextStyle(fontSize: 13, color: labelColor(context)),
                 ),
                 const SizedBox(height: 32),
 
@@ -95,18 +96,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2A1215),
-                      border: Border.all(color: const Color(0xFF58181C)),
+                      color: kRed.withOpacity(0.1),
+                      border: Border.all(color: kRed.withOpacity(0.3)),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, color: Color(0xFFff4d4f), size: 16),
+                        const Icon(Icons.error_outline, color: kRed, size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _error!,
-                            style: const TextStyle(color: Color(0xFFff4d4f), fontSize: 13),
+                            style: const TextStyle(color: kRed, fontSize: 13),
                           ),
                         ),
                       ],
@@ -115,7 +116,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 TextField(
                   controller: _userCtrl,
-                  decoration: _inputDecoration('Username', Icons.person_outline),
+                  style: TextStyle(color: textColor(context)),
+                  decoration: _inputDecoration(context, 'Username', Icons.person_outline),
                   textInputAction: TextInputAction.next,
                   autofillHints: const [AutofillHints.username],
                 ),
@@ -123,11 +125,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextField(
                   controller: _passCtrl,
                   obscureText: _obscure,
-                  decoration: _inputDecoration('Password', Icons.lock_outline).copyWith(
+                  style: TextStyle(color: textColor(context)),
+                  decoration: _inputDecoration(context, 'Password', Icons.lock_outline).copyWith(
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscure ? Icons.visibility_off : Icons.visibility,
-                        color: const Color(0xFF8c8c8c), size: 20,
+                        color: labelColor(context), size: 20,
                       ),
                       onPressed: () => setState(() => _obscure = !_obscure),
                     ),
@@ -143,7 +146,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: FilledButton(
                     onPressed: _loading ? null : _login,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1890ff),
+                      backgroundColor: accentBlue(context),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -160,15 +164,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('New here? ',
-                        style: TextStyle(color: Color(0xFF8c8c8c), fontSize: 13)),
+                    Text('New here? ',
+                        style: TextStyle(color: labelColor(context), fontSize: 13)),
                     GestureDetector(
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const RegisterScreen()),
                       ),
-                      child: const Text('Create account',
+                      child: Text('Create account',
                           style: TextStyle(
-                              color: Color(0xFF1890ff),
+                              color: accentBlue(context),
                               fontSize: 13,
                               fontWeight: FontWeight.w600)),
                     ),
@@ -182,24 +186,24 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint, IconData icon) {
+  InputDecoration _inputDecoration(BuildContext context, String hint, IconData icon) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Color(0xFF8c8c8c)),
-      prefixIcon: Icon(icon, color: const Color(0xFF8c8c8c), size: 20),
+      hintStyle: TextStyle(color: labelColor(context)),
+      prefixIcon: Icon(icon, color: labelColor(context), size: 20),
       filled: true,
-      fillColor: const Color(0xFF1f1f1f),
+      fillColor: cardBg(context),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF303030)),
+        borderSide: BorderSide(color: cardBd(context)),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF303030)),
+        borderSide: BorderSide(color: cardBd(context)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: Color(0xFF1890ff), width: 2),
+        borderSide: BorderSide(color: accentBlue(context), width: 2),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );

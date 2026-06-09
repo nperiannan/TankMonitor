@@ -14,233 +14,24 @@ import 'schedule_sheet.dart';
 import 'setup_screen.dart';
 import 'login_screen.dart';
 import 'device_list_screen.dart';
+import 'app_preferences.dart';
+import 'dashboard_themes.dart';
+import 'theme_data.dart';
 
-// ─── Colours (mirrors Ant Design dark theme) ────────────────────────────────
-const _bg      = Color(0xFF141414);
-const _cardBg  = Color(0xFF1f1f1f);
-const _cardBd  = Color(0xFF303030);
-const _rowBd   = Color(0xFF303030);
-const _label   = Color(0xFF8c8c8c);
-const _blue    = Color(0xFF1890ff);
-const _green   = Color(0xFF52c41a);
-const _orange  = Color(0xFFfa8c16);
-const _red     = Color(0xFFff4d4f);
-// ─── Tank arc circle ─────────────────────────────────────────────────────────
-class _TankCircle extends StatelessWidget {
-  final String state;
-  const _TankCircle(this.state);
-
-  @override
-  Widget build(BuildContext context) {
-    double pct    = 0;
-    Color  color  = _label;
-    String label  = '--';
-    bool   isUnknown = false;
-
-    if (state == 'FULL')  { pct = 1.0; color = _green;  label = 'FULL'; }
-    else if (state == 'HALF')  { pct = 0.5; color = _blue;   label = 'HALF'; }
-    else if (state == 'LOW')   { pct = 0.2; color = _orange; label = 'LOW'; }
-    else if (state == 'EMPTY') { pct = 0.0; color = _red;    label = 'EMPTY'; }
-    else if (state.isNotEmpty) { color = _orange; label = '?'; isUnknown = true; }
-
-    return SizedBox(
-      width: 100, height: 100,
-      child: CustomPaint(
-        painter: _ArcPainter(pct: pct, color: color),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: isUnknown ? 28 : 13,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ArcPainter extends CustomPainter {
-  final double pct;
-  final Color color;
-  const _ArcPainter({required this.pct, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r  = size.width / 2 - 6;
-    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
-
-    // Track
-    canvas.drawArc(rect, 0, 2 * pi, false,
-      Paint()..color = const Color(0xFF303030)..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round);
-
-    // Fill
-    if (pct > 0) {
-      canvas.drawArc(rect, -pi / 2, 2 * pi * pct, false,
-        Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_ArcPainter old) => old.pct != pct || old.color != color;
-}
-
-// ─── Motor status pill ────────────────────────────────────────────────────────
-class _MotorPill extends StatelessWidget {
-  final bool on;
-  const _MotorPill(this.on);
-
-  @override
-  Widget build(BuildContext context) {
-    final bg  = on ? const Color(0xFF162312) : const Color(0xFF2a1215);
-    final clr = on ? _green : _red;
-    final bd  = on ? const Color(0xFF274916) : const Color(0xFF58181c);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      decoration: BoxDecoration(
-        color: bg,
-        border: Border.all(color: bd),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text('● ${on ? "ON" : "OFF"}',
-        style: TextStyle(color: clr, fontSize: 12, fontWeight: FontWeight.w700)),
-    );
-  }
-}
-
-// ─── Tank card ────────────────────────────────────────────────────────────────
-class _TankCard extends StatefulWidget {
-  final String title;
-  final String tankState;
-  final bool motorOn;
-  final bool buzzerActive;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-
-  const _TankCard({
-    required this.title, required this.tankState, required this.motorOn,
-    required this.buzzerActive, required this.onOn, required this.onOff,
-  });
-
-  @override
-  State<_TankCard> createState() => _TankCardState();
-}
-
-class _TankCardState extends State<_TankCard> with SingleTickerProviderStateMixin {
-  late AnimationController _pulseCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 550),
-    );
-    if (widget.buzzerActive) _pulseCtrl.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(_TankCard old) {
-    super.didUpdateWidget(old);
-    if (widget.buzzerActive && !old.buzzerActive) {
-      _pulseCtrl.repeat(reverse: true);
-    } else if (!widget.buzzerActive && old.buzzerActive) {
-      _pulseCtrl
-        ..stop()
-        ..value = 0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _pulseCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        border: Border.all(color: _cardBd),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        children: [
-          Text(widget.title.toUpperCase(),
-            style: const TextStyle(color: _label, fontSize: 10, letterSpacing: 1)),
-          const SizedBox(height: 10),
-          _TankCircle(widget.tankState),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF262626), borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Motor', style: TextStyle(color: _label, fontSize: 11)),
-                Row(children: [
-                  // ── Buzzer indicator ──
-                  AnimatedBuilder(
-                    animation: _pulseCtrl,
-                    builder: (_, __) {
-                      final active = widget.buzzerActive;
-                      return Opacity(
-                        opacity: active ? (0.35 + 0.65 * _pulseCtrl.value) : 1.0,
-                        child: Tooltip(
-                          message: active ? 'Buzzer active' : 'Buzzer off',
-                          child: Icon(
-                            active
-                              ? Icons.notifications_active
-                              : Icons.notifications_off_outlined,
-                            color: active ? _orange : const Color(0xFF434343),
-                            size: 17,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _MotorPill(widget.motorOn),
-                ]),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(children: [
-            Expanded(child: ElevatedButton(
-              onPressed: widget.onOn,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _blue, foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              child: const Text('ON', style: TextStyle(fontSize: 13)),
-            )),
-            const SizedBox(width: 6),
-            Expanded(child: ElevatedButton(
-              onPressed: widget.onOff,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2a1215), foregroundColor: _red,
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                side: const BorderSide(color: _red),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              child: const Text('OFF', style: TextStyle(fontSize: 13)),
-            )),
-          ]),
-        ],
-      ),
-    );
-  }
-}
+// ─── Colours (resolved from theme for backward-compat helpers) ──────────────
+const _blue    = kBlue;
+const _green   = kGreen;
+const _orange  = kOrange;
+const _red     = kRed;
+// These are still used by many helper widgets below.
+// They get the right dark-mode values; the theme-aware widgets in
+// dashboard_themes.dart use cardBg()/cardBd()/labelColor() instead.
+const _bg      = kDarkBg;
+const _cardBg  = kDarkCard;
+const _cardBd  = kDarkCardBd;
+const _label   = kDarkLabel;
+const _rowBd   = kDarkCardBd;
+// ─── Tank/Motor widgets are now in dashboard_themes.dart ─────────────────────
 
 // ─── Dashboard screen ─────────────────────────────────────────────────────────
 class DashboardScreen extends StatefulWidget {
@@ -384,11 +175,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _confirmFlash(BuildContext ctx, TankService svc) {
     showDialog(context: ctx, builder: (_) => AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text('Flash firmware to ESP32?', style: TextStyle(color: Colors.white)),
-      content: const Text(
+      backgroundColor: cardBg(ctx),
+      title: Text('Flash firmware to ESP32?', style: TextStyle(color: textColor(ctx))),
+      content: Text(
         'The ESP32 will download and install the staged firmware, then reboot.',
-        style: TextStyle(color: _label, fontSize: 13)),
+        style: TextStyle(color: labelColor(ctx), fontSize: 13)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
@@ -408,14 +199,34 @@ class _DashboardScreenState extends State<DashboardScreen>
     final svc = context.read<TankService>();
     final url = svc.latestApkUrl;
     if (url == null) return;
+
+    // Guard: re-verify the version is actually newer before downloading
+    final latest = svc.latestAppVersion;
+    if (latest == null || !svc.updateAvailable) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No update available')),
+        );
+      }
+      return;
+    }
+
     setState(() => _downloadProgress = 0);
+    File? file;
     try {
       final client = http.Client();
       final request = http.Request('GET', Uri.parse(url));
       final response = await client.send(request);
+
+      // Guard: HTTP must return 200
+      if (response.statusCode != 200) {
+        client.close();
+        throw Exception('Server returned ${response.statusCode}');
+      }
+
       final total = response.contentLength ?? 0;
       final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/TankMonitor-update.apk');
+      file = File('${dir.path}/TankMonitor-update.apk');
       final sink = file.openWrite();
       int received = 0;
       await for (final chunk in response.stream) {
@@ -426,13 +237,34 @@ class _DashboardScreenState extends State<DashboardScreen>
       await sink.flush();
       await sink.close();
       client.close();
+
+      // Guard: file must exist and be > 1 MB (a valid APK is at least several MB)
+      if (!file.existsSync()) {
+        throw Exception('Downloaded file not found');
+      }
+      final fileSize = file.lengthSync();
+      if (fileSize < 1024 * 1024) {
+        throw Exception('Downloaded file too small (${fileSize} bytes) — likely corrupt');
+      }
+
+      // Guard: verify APK (ZIP) magic bytes — PK\x03\x04
+      final header = file.openSync()..setPositionSync(0);
+      final magic = header.readSync(4);
+      header.closeSync();
+      if (magic.length < 4 || magic[0] != 0x50 || magic[1] != 0x4B ||
+          magic[2] != 0x03 || magic[3] != 0x04) {
+        throw Exception('Downloaded file is not a valid APK');
+      }
+
       if (mounted) setState(() => _downloadProgress = null);
       await OpenFilex.open(file.path);
     } catch (e) {
+      // Cleanup corrupt download
+      try { file?.deleteSync(); } catch (_) {}
       if (mounted) {
         setState(() => _downloadProgress = null);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Download failed: $e')),
+          SnackBar(content: Text('Update failed: $e')),
         );
       }
     }
@@ -440,11 +272,11 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _confirmRollback(BuildContext ctx, TankService svc) {
     showDialog(context: ctx, builder: (_) => AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text('Rollback firmware?', style: TextStyle(color: Colors.white)),
-      content: const Text(
+      backgroundColor: cardBg(ctx),
+      title: Text('Rollback firmware?', style: TextStyle(color: textColor(ctx))),
+      content: Text(
         'ESP32 will reboot into the previous OTA partition.',
-        style: TextStyle(color: _label, fontSize: 13)),
+        style: TextStyle(color: labelColor(ctx), fontSize: 13)),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
@@ -500,9 +332,9 @@ class _DashboardScreenState extends State<DashboardScreen>
     final bool buzzerFallback   = noPerMotorBuzzer && (s?.buzzerActive ?? false);
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg(context),
         elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,14 +342,14 @@ class _DashboardScreenState extends State<DashboardScreen>
           children: [
             Text(
               '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
-              style: const TextStyle(
+              style: TextStyle(
                   color: _blue, fontWeight: FontWeight.w700, fontSize: 17),
               overflow: TextOverflow.ellipsis,
             ),
             if ((svc.currentDevice?.typeId ?? '').isNotEmpty)
               Text(
                 svc.currentDevice!.typeId,
-                style: const TextStyle(color: _label, fontSize: 11),
+                style: TextStyle(color: labelColor(context), fontSize: 11),
                 overflow: TextOverflow.ellipsis,
               ),
           ],
@@ -527,28 +359,28 @@ class _DashboardScreenState extends State<DashboardScreen>
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
               Icon(Icons.circle, size: 8,
-                color: svc.connected ? _green : _red),
+                color: svc.connected ? accentGreen(context) : accentRed(context)),
               const SizedBox(width: 4),
               Text(svc.connected ? 'Live' : 'Offline',
-                style: const TextStyle(color: _label, fontSize: 12)),
+                style: TextStyle(color: labelColor(context), fontSize: 12)),
             ]),
           ),
           IconButton(
-            icon: const Icon(Icons.devices, color: _label, size: 20),
+            icon: Icon(Icons.devices, color: labelColor(context), size: 20),
             tooltip: 'Switch device',
             onPressed: () => Navigator.of(context).pushReplacement(
               MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.settings_ethernet, color: _label, size: 20),
+            icon: Icon(Icons.settings_ethernet, color: labelColor(context), size: 20),
             tooltip: 'Change server',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SetupScreen()),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.logout, color: _label, size: 20),
+            icon: Icon(Icons.logout, color: labelColor(context), size: 20),
             tooltip: 'Sign out',
             onPressed: _logout,
           ),
@@ -575,26 +407,32 @@ class _DashboardScreenState extends State<DashboardScreen>
                       const _Banner('Disconnected — reconnecting…', isError: false),
                     if (s?.txLost == true)
                       const _Banner('⚠ Transmitter lost — no signal received', isError: true),
-                    // ── Tank cards ──
-                    Row(children: [
-                      Expanded(child: _TankCard(
-                        title: 'Underground',
-                        tankState: s?.ugState ?? '',
-                        motorOn: s?.ugMotor ?? false,
-                        buzzerActive: (s?.ugBuzzer ?? false) || buzzerFallback,
-                        onOn:  () => svc.sendControl({'cmd': 'ug_on'}),
-                        onOff: () => svc.sendControl({'cmd': 'ug_off'}),
-                      )),
-                      const SizedBox(width: 10),
-                      Expanded(child: _TankCard(
-                        title: 'Overhead',
-                        tankState: s?.ohState ?? '',
-                        motorOn: s?.ohMotor ?? false,
-                        buzzerActive: (s?.ohBuzzer ?? false) || buzzerFallback,
-                        onOn:  () => svc.sendControl({'cmd': 'oh_on'}),
-                        onOff: () => svc.sendControl({'cmd': 'oh_off'}),
-                      )),
-                    ]),
+                    // ── Tank + Motor cards (switchable concept) ──
+                    Builder(builder: (_) {
+                      final prefs = context.watch<AppPreferences>();
+                      final data = DashboardData(
+                        status: s,
+                        connected: svc.connected,
+                        txLost: s?.txLost ?? false,
+                        ugMotorName: prefs.ugMotorName,
+                        ohMotorName: prefs.ohMotorName,
+                        ugBuzzer: (s?.ugBuzzer ?? false) || buzzerFallback,
+                        ohBuzzer: (s?.ohBuzzer ?? false) || buzzerFallback,
+                        onUgOn:  () => svc.sendControl({'cmd': 'ug_on'}),
+                        onUgOff: () => svc.sendControl({'cmd': 'ug_off'}),
+                        onOhOn:  () => svc.sendControl({'cmd': 'oh_on'}),
+                        onOhOff: () => svc.sendControl({'cmd': 'oh_off'}),
+                      );
+                      switch (prefs.concept) {
+                        case DashboardConcept.waterFill: return ConceptADashboard(d: data);
+                        case DashboardConcept.arcGauge:  return ConceptBDashboard(d: data);
+                        case DashboardConcept.compact:   return ConceptCDashboard(d: data);
+                        case DashboardConcept.grid:      return ConceptDDashboard(d: data);
+                        case DashboardConcept.pill:      return ConceptEDashboard(d: data);
+                        case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
+                        case DashboardConcept.pro:       return ConceptGDashboard(d: data);
+                      }
+                    }),
                     const SizedBox(height: 12),
                     // ── Schedules ──
                     Builder(builder: (ctx) {
@@ -614,15 +452,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                       final hasMore = allScheds.length > defaultEntries.length;
 
                       return _SectionCard(
-                        title: s?.time != null
-                            ? 'MOTOR SCHEDULER  ·  ${_to12hr(s!.time)}'
-                            : 'MOTOR SCHEDULER',
+                        title: 'Scheduler',
+                        subtitle: s?.time != null ? 'Time: ${_to12hr(s!.time)}' : null,
+                        titleMixed: true,
                         trailing: Row(children: [
                           _SmallButton(
                             label: '+ Add',
                             onTap: () => showModalBottomSheet(
                               context: ctx, isScrollControlled: true,
-                              backgroundColor: _cardBg,
+                              backgroundColor: cardBg(context),
                               builder: (_) => ScheduleSheet(svc: svc),
                             ),
                           ),
@@ -635,10 +473,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         child: Column(
                           children: [
                             if (s == null || allScheds.isEmpty)
-                              const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                                 child: Center(child: Text('No schedules yet',
-                                  style: TextStyle(color: _label, fontSize: 13))),
+                                  style: TextStyle(color: labelColor(context), fontSize: 13))),
                               )
                             else
                               ...showEntries.map((sch) => _ScheduleRow(
@@ -658,12 +496,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                                         _schedExpanded
                                             ? 'Show less'
                                             : 'Show all ${allScheds.length} schedules',
-                                        style: const TextStyle(color: _blue, fontSize: 12),
+                                        style: TextStyle(color: accentBlue(context), fontSize: 12),
                                       ),
                                       const SizedBox(width: 4),
                                       Icon(
                                         _schedExpanded ? Icons.expand_less : Icons.expand_more,
-                                        color: _blue, size: 16,
+                                        color: accentBlue(context), size: 16,
                                       ),
                                     ],
                                   ),
@@ -682,27 +520,36 @@ class _DashboardScreenState extends State<DashboardScreen>
                   key: const PageStorageKey('settings'),
                   padding: const EdgeInsets.all(12),
                   children: [
-                    // ── Settings ──
+                    // ── Dashboard Theme ──
+                    _DashboardThemePicker(),
+                    const SizedBox(height: 10),
+                    // ── App Theme ──
+                    _AppThemePicker(),
+                    const SizedBox(height: 10),
+                    // ── Motor Names ──
+                    _MotorNameEditor(),
+                    const SizedBox(height: 10),
+                    // ── Device Settings ──
                     _SectionCard(
-                      title: 'SETTINGS',
+                      title: 'DEVICE SETTINGS',
                       child: Column(children: [
                         _SettingRow('OH Display Only',         s?.ohDispOnly,  (v) => svc.sendSettingControl('oh_disp_only', v)),
                         _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendSettingControl('ug_disp_only', v)),
                         _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendSettingControl('ug_ignore',    v)),
                         _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendSettingControl('buzzer_delay', v)),
-                        const Divider(color: Color(0xFF303030), height: 16),
+                        Divider(color: cardBd(context), height: 16),
                         // Motor Start Level
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('OH Motor Start Level', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              Text('OH Motor Start Level', style: TextStyle(color: textColor(context), fontSize: 13)),
                               DropdownButton<int>(
                                 value: s?.ohStartLevel ?? 1,
                                 isDense: true,
-                                dropdownColor: const Color(0xFF1f1f1f),
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                dropdownColor: cardBg(context),
+                                style: TextStyle(color: textColor(context), fontSize: 13),
                                 underline: const SizedBox(),
                                 items: const [
                                   DropdownMenuItem(value: 1, child: Text('EMPTY')),
@@ -722,12 +569,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('OH Motor Stop Level', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              Text('OH Motor Stop Level', style: TextStyle(color: textColor(context), fontSize: 13)),
                               DropdownButton<int>(
                                 value: s?.ohStopLevel ?? 4,
                                 isDense: true,
-                                dropdownColor: const Color(0xFF1f1f1f),
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                dropdownColor: cardBg(context),
+                                style: TextStyle(color: textColor(context), fontSize: 13),
                                 underline: const SizedBox(),
                                 items: const [
                                   DropdownMenuItem(value: 2, child: Text('LOW')),
@@ -747,19 +594,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('OH Max Runtime (min)', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              Text('OH Max Runtime (min)', style: TextStyle(color: textColor(context), fontSize: 13)),
                               SizedBox(
                                 width: 70,
                                 child: TextField(
                                   controller: TextEditingController(text: '${s?.ohMaxRunMin ?? 20}'),
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                                  decoration: const InputDecoration(
+                                  style: TextStyle(color: textColor(context), fontSize: 13),
+                                  decoration: InputDecoration(
                                     isDense: true,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-                                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.blue)),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: cardBd(context))),
+                                    focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue)),
                                   ),
                                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                                   onSubmitted: (v) {
@@ -773,19 +620,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ],
                           ),
                         ),
-                        const Divider(color: Color(0xFF303030), height: 16),
+                        Divider(color: cardBd(context), height: 16),
                         // LCD Backlight mode
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('LCD Backlight', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              Text('LCD Backlight', style: TextStyle(color: textColor(context), fontSize: 13)),
                               DropdownButton<int>(
                                 value: s?.lcdBlMode ?? 0,
                                 isDense: true,
-                                dropdownColor: const Color(0xFF1f1f1f),
-                                style: const TextStyle(color: Colors.white, fontSize: 13),
+                                dropdownColor: cardBg(context),
+                                style: TextStyle(color: textColor(context), fontSize: 13),
                                 underline: const SizedBox(),
                                 items: const [
                                   DropdownMenuItem(value: 0, child: Text('Auto')),
@@ -805,7 +652,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text('MQTT Password', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                              Text('MQTT Password', style: TextStyle(color: textColor(context), fontSize: 13)),
                               TextButton(
                                 onPressed: s != null ? () => _changeMqttPassword(context, svc) : null,
                                 style: TextButton.styleFrom(
@@ -849,7 +696,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     _SectionCard(
                       title: 'FIRMWARE UPDATE (OTA)',
                       trailing: IconButton(
-                        icon: const Icon(Icons.refresh, size: 17, color: Colors.white54),
+                        icon: Icon(Icons.refresh, size: 17, color: labelColor(context)),
                         tooltip: 'Refresh OTA status',
                         onPressed: _otaBusy ? null : _loadOtaStatus,
                       ),
@@ -858,21 +705,21 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           // Current firmware version
                           Text('Current: ${s?.fw ?? '—'}',
-                            style: const TextStyle(color: _label, fontSize: 12)),
+                            style: TextStyle(color: labelColor(context), fontSize: 12)),
                           const SizedBox(height: 10),
 
                           // ── Step 1: Staged firmware status ──
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0d0d0d),
+                              color: subtleBg(context),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('STEP 1 — STAGE FIRMWARE',
-                                  style: TextStyle(color: _label, fontSize: 10, letterSpacing: 0.8)),
+                                Text('STEP 1 — STAGE FIRMWARE',
+                                  style: TextStyle(color: labelColor(context), fontSize: 10, letterSpacing: 0.8)),
                                 const SizedBox(height: 6),
                                 if (_uploadProgress != null) ...[
                                   // Uploading…
@@ -881,14 +728,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
                                     const SizedBox(width: 8),
                                     Text('Uploading… ${(_uploadProgress! * 100).toStringAsFixed(0)}%',
-                                      style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                      style: TextStyle(color: textColor(context).withOpacity(0.7), fontSize: 12)),
                                   ]),
                                   const SizedBox(height: 6),
                                   ClipRRect(
                                     borderRadius: BorderRadius.circular(3),
                                     child: LinearProgressIndicator(
                                       value: _uploadProgress,
-                                      backgroundColor: const Color(0xFF303030),
+                                      backgroundColor: cardBd(context),
                                       color: _blue,
                                       minHeight: 4,
                                     ),
@@ -910,14 +757,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     Expanded(child: Text(
                                       '${_otaStagedName.isEmpty ? 'firmware.bin' : _otaStagedName}'
                                       '  —  ${(_otaStagedSize / 1024).toStringAsFixed(0)} KB',
-                                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                                      style: TextStyle(color: textColor(context), fontSize: 12),
                                     )),
                                   ]),
                                   if (_otaStagedAt.isNotEmpty) ...[
                                     const SizedBox(height: 2),
                                     Text(
                                       'Uploaded ${DateTime.tryParse(_otaStagedAt)?.toLocal().toString().substring(0, 16) ?? _otaStagedAt}',
-                                      style: const TextStyle(color: _label, fontSize: 11),
+                                      style: TextStyle(color: labelColor(context), fontSize: 11),
                                     ),
                                   ],
                                   const SizedBox(height: 6),
@@ -947,14 +794,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0d0d0d),
+                              color: subtleBg(context),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text('STEP 2 — FLASH TO DEVICE',
-                                  style: TextStyle(color: _label, fontSize: 10, letterSpacing: 0.8)),
+                                Text('STEP 2 — FLASH TO DEVICE',
+                                  style: TextStyle(color: labelColor(context), fontSize: 10, letterSpacing: 0.8)),
                                 const SizedBox(height: 8),
 
                                 // Phase message + countdown
@@ -985,7 +832,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               : _otaPhase == 'ack_received' ? '✅ ESP32 confirmed — downloading…'
                                               : _otaPhase == 'downloading'  ? '⬇️ ESP32 is flashing firmware…'
                                               : 'In progress…',
-                                                style: const TextStyle(color: Colors.white70, fontSize: 12),
+                                                style: TextStyle(color: textColor(context).withOpacity(0.7), fontSize: 12),
                                               ),
                                             ]),
                                             const SizedBox(height: 6),
@@ -993,9 +840,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                               children: [
                                                 Text('${_otaSecondsElapsed}s / 150s',
-                                                  style: const TextStyle(color: _label, fontSize: 10)),
+                                                  style: TextStyle(color: labelColor(context), fontSize: 10)),
                                                 Text('${150 - _otaSecondsElapsed > 0 ? 150 - _otaSecondsElapsed : 0}s remaining',
-                                                  style: const TextStyle(color: _label, fontSize: 10)),
+                                                  style: TextStyle(color: labelColor(context), fontSize: 10)),
                                               ],
                                             ),
                                             const SizedBox(height: 4),
@@ -1003,7 +850,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               borderRadius: BorderRadius.circular(3),
                                               child: LinearProgressIndicator(
                                                 value: (_otaSecondsElapsed / 150).clamp(0.0, 1.0),
-                                                backgroundColor: const Color(0xFF303030),
+                                                backgroundColor: cardBd(context),
                                                 color: _blue,
                                                 minHeight: 6,
                                               ),
@@ -1059,10 +906,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _InfoRow('Transmitter', s?.txFw.isNotEmpty == true ? s!.txFw : '—'),
                         _InfoRow('Web App',     svc.webAppVersion ?? '—'),
                         _InfoRow('Mobile App',  mobileAppVersion),
-                        const Divider(color: Color(0xFF303030), height: 16),
+                        const Divider(height: 16),
                         _InfoRow('Device MAC',  svc.currentDevice?.mac ?? '—'),
                         _InfoRow('Device IP',   s?.mgmtIp.isNotEmpty == true ? s!.mgmtIp : '—'),
-                        const Divider(color: Color(0xFF303030), height: 16),
+                        const Divider(height: 16),
                         _InfoRow('User',        svc.currentUsername ?? '—'),
                         _InfoRow('Access Level', _accessLevel(svc), last: true),
                       ]),
@@ -1087,7 +934,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         children: [
                           if (_deviceLogs.isNotEmpty)
                             IconButton(
-                              icon: const Icon(Icons.copy_outlined, size: 17, color: Colors.white54),
+                              icon: Icon(Icons.copy_outlined, size: 17, color: labelColor(context)),
                               tooltip: 'Copy logs',
                               onPressed: () {
                                 final text = _deviceLogs.reversed.join('\n');
@@ -1096,8 +943,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ),
                           IconButton(
                             icon: _logsLoading
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white54))
-                                : const Icon(Icons.refresh, size: 18, color: Colors.white54),
+                                ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: labelColor(context)))
+                                : Icon(Icons.refresh, size: 18, color: labelColor(context)),
                             onPressed: s == null || _logsLoading ? null : () async {
                               svc.sendControl({'cmd': 'get_logs'});
                               await Future.delayed(const Duration(seconds: 2));
@@ -1125,13 +972,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                const Text('Log Level',
-                                  style: TextStyle(color: Colors.white70, fontSize: 13)),
+                                Text('Log Level',
+                                  style: TextStyle(color: textColor(context), fontSize: 13)),
                                 DropdownButton<String>(
                                   value: s?.logLevel ?? 'info',
                                   isDense: true,
-                                  dropdownColor: const Color(0xFF1f1f1f),
-                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                  dropdownColor: cardBg(context),
+                                  style: TextStyle(color: textColor(context), fontSize: 13),
                                   underline: const SizedBox(),
                                   items: const [
                                     DropdownMenuItem(
@@ -1155,19 +1002,19 @@ class _DashboardScreenState extends State<DashboardScreen>
                               padding: const EdgeInsets.only(bottom: 4),
                               child: Text(
                                 'Last received: ${DateTime.tryParse(_logsAt!)?.toLocal().toString().substring(0, 19) ?? _logsAt}',
-                                style: const TextStyle(color: _label, fontSize: 11),
+                                style: TextStyle(color: labelColor(context), fontSize: 11),
                               ),
                             ),
                           Container(
                             constraints: const BoxConstraints(maxHeight: 200),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF0d0d0d),
+                              color: subtleBg(context),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: SingleChildScrollView(
                               padding: const EdgeInsets.all(8),
                               child: _deviceLogs.isEmpty
-                                ? const Text('No logs — tap Refresh to load.', style: TextStyle(color: _label, fontSize: 11))
+                                ? Text('No logs — tap Refresh to load.', style: TextStyle(color: labelColor(context), fontSize: 11))
                                 : Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: _deviceLogs.reversed.map((line) => Text(
@@ -1177,7 +1024,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                         fontSize: 10,
                                         color: line.contains('[WARN]') ? Colors.orange
                                              : line.contains('[ERROR]') ? Colors.red
-                                             : Colors.white60,
+                                             : labelColor(context),
                                       ),
                                     )).toList(),
                                   ),
@@ -1218,9 +1065,9 @@ class _DashboardScreenState extends State<DashboardScreen>
             }
           }
         },
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg(context),
         selectedItemColor: _blue,
-        unselectedItemColor: _label,
+        unselectedItemColor: labelColor(context),
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
@@ -1310,8 +1157,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _confirmClear(BuildContext ctx, TankService svc) {
     showDialog(context: ctx, builder: (_) => AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text('Clear all schedules?', style: TextStyle(color: Colors.white)),
+      backgroundColor: cardBg(ctx),
+      title: Text('Clear all schedules?', style: TextStyle(color: textColor(ctx))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
@@ -1324,8 +1171,8 @@ class _DashboardScreenState extends State<DashboardScreen>
 
   void _confirmReboot(BuildContext ctx, TankService svc) {
     showDialog(context: ctx, builder: (_) => AlertDialog(
-      backgroundColor: _cardBg,
-      title: const Text('Reboot ESP32?', style: TextStyle(color: Colors.white)),
+      backgroundColor: cardBg(ctx),
+      title: Text('Reboot ESP32?', style: TextStyle(color: textColor(ctx))),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
@@ -1343,29 +1190,29 @@ class _DashboardScreenState extends State<DashboardScreen>
       context: ctx,
       builder: (dCtx) => StatefulBuilder(
         builder: (dCtx, setState) => AlertDialog(
-          backgroundColor: _cardBg,
-          title: const Text('Change MQTT Password', style: TextStyle(color: Colors.white)),
+          backgroundColor: cardBg(ctx),
+          title: Text('Change MQTT Password', style: TextStyle(color: textColor(ctx))),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
                 'Enter new password. The device will save it and reconnect.\nChange the broker password after.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: ctrl,
                 obscureText: obscure,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: textColor(ctx)),
                 decoration: InputDecoration(
                   labelText: 'New password',
-                  labelStyle: const TextStyle(color: Colors.white54),
-                  enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                  labelStyle: TextStyle(color: labelColor(ctx)),
+                  enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: cardBd(ctx))),
                   focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.blue)),
                   suffixIcon: IconButton(
-                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white54, size: 18),
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, color: labelColor(ctx), size: 18),
                     onPressed: () => setState(() => obscure = !obscure),
                   ),
                 ),
@@ -1389,6 +1236,204 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 } // end _DashboardScreenState
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Settings widgets: Dashboard Theme Picker, App Theme, Motor Names
+// ═══════════════════════════════════════════════════════════════════════════════
+
+class _DashboardThemePicker extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
+    const items = [
+      (DashboardConcept.waterFill, '🌊', 'Water Fill',  'Blue water, side-by-side'),
+      (DashboardConcept.arcGauge,  '🎯', 'Arc Gauge',   'Classic ring meters'),
+      (DashboardConcept.compact,   '📊', 'Compact',     'Horizontal info-dense'),
+      (DashboardConcept.grid,      '💧', 'Aqua Grid',   '2×3 grid layout'),
+      (DashboardConcept.pill,      '💊', 'Pill',        'All-in-one rows'),
+      (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
+      (DashboardConcept.pro,       '✨', 'Pro',          'Unified cards'),
+    ];
+
+    return _SectionCard(
+      title: 'DASHBOARD THEME',
+      child: GridView.count(
+        crossAxisCount: 3,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 8, crossAxisSpacing: 8,
+        childAspectRatio: 0.85,
+        children: items.map((item) {
+          final selected = prefs.concept == item.$1;
+          return GestureDetector(
+            onTap: () => prefs.setConcept(item.$1),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: selected ? _blue.withOpacity(0.12) : subtleBg(context),
+                border: Border.all(color: selected ? _blue : cardBd(context), width: selected ? 2 : 1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(item.$2, style: const TextStyle(fontSize: 24)),
+                  const SizedBox(height: 4),
+                  Text(item.$3, style: TextStyle(
+                    color: selected ? _blue : textColor(context),
+                    fontSize: 11, fontWeight: FontWeight.w600),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(item.$4, style: TextStyle(
+                    color: labelColor(context), fontSize: 9),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (selected) ...[
+                    const SizedBox(height: 4),
+                    Text('★', style: TextStyle(color: _blue, fontSize: 10, fontWeight: FontWeight.w700)),
+                  ],
+                ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _AppThemePicker extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
+    const items = [
+      (AppThemeMode.light,  '☀️', 'Light'),
+      (AppThemeMode.dark,   '🌙', 'Dark'),
+      (AppThemeMode.system, '💻', 'System'),
+    ];
+
+    return _SectionCard(
+      title: 'APP THEME',
+      child: Row(
+        children: items.map((item) {
+          final selected = prefs.themeMode == item.$1;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => prefs.setThemeMode(item.$1),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: selected ? _blue.withOpacity(0.12) : subtleBg(context),
+                  border: Border.all(color: selected ? _blue : cardBd(context), width: selected ? 2 : 1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(item.$2, style: const TextStyle(fontSize: 22)),
+                    const SizedBox(height: 4),
+                    Text(item.$3, style: TextStyle(
+                      color: selected ? _blue : textColor(context),
+                      fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                    if (selected) ...[
+                      const SizedBox(height: 4),
+                      Text('★ SELECTED', style: TextStyle(color: _blue, fontSize: 9, fontWeight: FontWeight.w700)),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _MotorNameEditor extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
+    return _SectionCard(
+      title: 'MOTOR NAMES',
+      child: Column(children: [
+        Text('Tap to rename. Applies to all dashboard themes.',
+          style: TextStyle(color: labelColor(context), fontSize: 11)),
+        const SizedBox(height: 10),
+        _MotorNameRow(label: 'Underground', currentName: prefs.ugMotorName,
+          onRename: (n) => prefs.setMotorName('UG', n)),
+        const SizedBox(height: 6),
+        _MotorNameRow(label: 'Overhead', currentName: prefs.ohMotorName,
+          onRename: (n) => prefs.setMotorName('OH', n)),
+      ]),
+    );
+  }
+}
+
+class _MotorNameRow extends StatelessWidget {
+  final String label;
+  final String currentName;
+  final ValueChanged<String> onRename;
+  const _MotorNameRow({required this.label, required this.currentName, required this.onRename});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        final ctrl = TextEditingController(text: currentName);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: cardBg(context),
+            title: Text('Rename $label Motor', style: TextStyle(color: textColor(context))),
+            content: TextField(
+              controller: ctrl,
+              autofocus: true,
+              style: TextStyle(color: textColor(context)),
+              decoration: InputDecoration(
+                hintText: 'Motor name',
+                hintStyle: TextStyle(color: labelColor(context)),
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: cardBd(context))),
+                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: kBlue)),
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () {
+                  final name = ctrl.text.trim();
+                  if (name.isNotEmpty) onRename(name);
+                  Navigator.pop(ctx);
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: subtleBg(context),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: cardBd(context), style: BorderStyle.solid),
+        ),
+        child: Row(children: [
+          Expanded(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: labelColor(context), fontSize: 10)),
+              Text(currentName, style: TextStyle(color: textColor(context), fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          )),
+          Icon(Icons.edit, color: labelColor(context), size: 16),
+        ]),
+      ),
+    );
+  }
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -1472,7 +1517,7 @@ class _UpdateBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF162312),
+        color: _green.withOpacity(0.1),
         border: Border.all(color: _green),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -1485,14 +1530,14 @@ class _UpdateBanner extends StatelessWidget {
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: const Color(0xFF274916),
+                  backgroundColor: _green.withOpacity(0.2),
                   color: _green,
                 ),
                 if (progress != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: Text('${(progress! * 100).toStringAsFixed(0)}%',
-                        style: const TextStyle(color: _label, fontSize: 11)),
+                        style: TextStyle(color: labelColor(context), fontSize: 11)),
                   ),
               ],
             )
@@ -1511,7 +1556,7 @@ class _UpdateBanner extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF274916),
+                      color: _green.withOpacity(0.15),
                       border: Border.all(color: _green),
                       borderRadius: BorderRadius.circular(6),
                     ),
@@ -1535,7 +1580,7 @@ class _Banner extends StatelessWidget {
     margin: const EdgeInsets.only(bottom: 10),
     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: isError ? const Color(0xFF2a1215) : const Color(0xFF2b2111),
+      color: isError ? _red.withOpacity(0.1) : _orange.withOpacity(0.1),
       border: Border.all(color: isError ? _red : _orange),
       borderRadius: BorderRadius.circular(8),
     ),
@@ -1589,21 +1634,39 @@ class _SummaryLine extends StatelessWidget {
 
 class _SectionCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final Widget child;
   final Widget? trailing;
-  const _SectionCard({required this.title, required this.child, this.trailing});
+  final bool titleMixed;
+  const _SectionCard({required this.title, required this.child, this.trailing, this.titleMixed = false, this.subtitle});
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: _cardBg, border: Border.all(color: _cardBd),
+      color: cardBg(context), border: Border.all(color: cardBd(context)),
       borderRadius: BorderRadius.circular(12),
     ),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(child: Text(title,
-          style: const TextStyle(color: _label, fontSize: 10, letterSpacing: 1))),
+      Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Expanded(child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (subtitle != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(subtitle!,
+                  style: TextStyle(color: labelColor(context), fontSize: 11)),
+              ),
+            Text(title,
+              style: TextStyle(
+                color: titleMixed ? textColor(context) : labelColor(context),
+                fontSize: titleMixed ? 14 : 10,
+                fontWeight: titleMixed ? FontWeight.w700 : FontWeight.w400,
+                letterSpacing: titleMixed ? 0.3 : 1,
+              )),
+          ],
+        )),
         if (trailing != null) trailing!,
       ]),
       const SizedBox(height: 10),
@@ -1619,19 +1682,22 @@ class _SmallButton extends StatelessWidget {
   const _SmallButton({required this.label, required this.onTap, this.danger = false});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: danger ? const Color(0xFF2a1215) : _blue.withOpacity(0.15),
-        border: Border.all(color: danger ? _red : _blue),
-        borderRadius: BorderRadius.circular(6),
+  Widget build(BuildContext context) {
+    final clr = danger ? accentRed(context) : accentBlue(context);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: clr.withOpacity(0.1),
+          border: Border.all(color: clr),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(label,
+          style: TextStyle(color: clr, fontSize: 11, fontWeight: FontWeight.w600)),
       ),
-      child: Text(label,
-        style: TextStyle(color: danger ? _red : _blue, fontSize: 12, fontWeight: FontWeight.w600)),
-    ),
-  );
+    );
+  }
 }
 
 class _ActionButton extends StatelessWidget {
@@ -1650,8 +1716,8 @@ class _ActionButton extends StatelessWidget {
       icon: Icon(icon, size: 16),
       label: Text(label),
       style: OutlinedButton.styleFrom(
-        foregroundColor: danger ? _red : Colors.white70,
-        side: BorderSide(color: danger ? _red : _cardBd),
+        foregroundColor: danger ? _red : textColor(context).withOpacity(0.7),
+        side: BorderSide(color: danger ? _red : cardBd(context)),
         padding: const EdgeInsets.symmetric(vertical: 10),
       ),
     ),
@@ -1667,51 +1733,51 @@ class _ScheduleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     margin: const EdgeInsets.symmetric(vertical: 3),
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-    decoration: isNext
-        ? BoxDecoration(
-            color: const Color(0xFF162312),
-            border: const Border(
-              left: BorderSide(color: _green, width: 3),
-            ),
-            borderRadius: BorderRadius.circular(4),
-          )
-        : const BoxDecoration(),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: isNext
+          ? accentGreen(context).withOpacity(0.08)
+          : subtleBg(context),
+      border: isNext
+          ? Border(left: BorderSide(color: accentGreen(context), width: 3))
+          : null,
+      borderRadius: BorderRadius.circular(12),
+    ),
     child: Row(children: [
       Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: sch.m == 'OH' ? const Color(0xFF111b2e) : const Color(0xFF1a1135),
-          border: Border.all(color: sch.m == 'OH' ? _blue : const Color(0xFF722ed1)),
-          borderRadius: BorderRadius.circular(4),
+          color: sch.m == 'OH' ? accentGreen(context).withOpacity(0.1) : const Color(0xFF7c4dff).withOpacity(0.1),
+          border: Border.all(color: sch.m == 'OH' ? accentGreen(context) : const Color(0xFF7c4dff)),
+          borderRadius: BorderRadius.circular(6),
         ),
         child: Text(sch.m,
           style: TextStyle(
-            color: sch.m == 'OH' ? _blue : const Color(0xFFb37feb),
-            fontSize: 11, fontWeight: FontWeight.w700)),
+            color: sch.m == 'OH' ? accentGreen(context) : const Color(0xFF7c4dff),
+            fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
       ),
+      const SizedBox(width: 10),
+      Text(_to12hr(sch.t), style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
       const SizedBox(width: 8),
-      Text(_to12hr(sch.t), style: const TextStyle(color: Colors.white, fontSize: 13)),
-      const SizedBox(width: 6),
-      Text('${sch.d} min', style: const TextStyle(color: _label, fontSize: 12)),
+      Text('${sch.d} min', style: TextStyle(color: labelColor(context), fontSize: 11)),
       if (isNext) ...[        
         const SizedBox(width: 6),
-        const Text('Next', style: TextStyle(color: _green, fontSize: 11, fontWeight: FontWeight.w600)),
+        Text('Next', style: TextStyle(color: accentGreen(context), fontSize: 10, fontWeight: FontWeight.w600)),
       ],
       const Spacer(),
       IconButton(
-        icon: const Icon(Icons.edit_outlined, color: _blue, size: 18),
+        icon: Icon(Icons.edit_outlined, color: accentBlue(context), size: 18),
         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
         tooltip: 'Edit',
         onPressed: () => showModalBottomSheet(
           context: context, isScrollControlled: true,
-          backgroundColor: _cardBg,
+          backgroundColor: cardBg(context),
           builder: (_) => ScheduleSheet(svc: svc, editSchedule: sch),
         ),
       ),
-      const SizedBox(width: 4),
+      const SizedBox(width: 8),
       IconButton(
-        icon: const Icon(Icons.delete_outline, color: _red, size: 18),
+        icon: Icon(Icons.delete_outline, color: accentRed(context), size: 18),
         padding: EdgeInsets.zero, constraints: const BoxConstraints(),
         onPressed: () => svc.sendControl({'cmd': 'sched_remove', 'index': sch.i}),
       ),
@@ -1730,9 +1796,9 @@ class _SettingRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 8),
     decoration: BoxDecoration(
-      border: last ? null : const Border(bottom: BorderSide(color: _rowBd))),
+      border: last ? null : Border(bottom: BorderSide(color: cardBd(context)))),
     child: Row(children: [
-      Expanded(child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 13))),
+      Expanded(child: Text(label, style: TextStyle(color: textColor(context), fontSize: 13))),
       Switch(
         value: value ?? false,
         onChanged: value == null ? null : onChange,
@@ -1753,22 +1819,22 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 7),
     decoration: BoxDecoration(
-      border: last ? null : const Border(bottom: BorderSide(color: _rowBd))),
+      border: last ? null : Border(bottom: BorderSide(color: cardBd(context)))),
     child: Row(children: [
-      Text(label, style: const TextStyle(color: _label, fontSize: 13)),
+      Text(label, style: TextStyle(color: labelColor(context), fontSize: 13)),
       const Spacer(),
       if (loraOk != null)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
-            color: loraOk! ? const Color(0xFF162312) : const Color(0xFF2a1215),
+            color: loraOk! ? accentGreen(context).withOpacity(0.1) : accentRed(context).withOpacity(0.1),
             borderRadius: BorderRadius.circular(4),
           ),
           child: Text(loraOk! ? 'OK' : 'FAIL',
-            style: TextStyle(color: loraOk! ? _green : _red, fontSize: 11, fontWeight: FontWeight.w700)),
+            style: TextStyle(color: loraOk! ? accentGreen(context) : accentRed(context), fontSize: 11, fontWeight: FontWeight.w700)),
         )
       else
-        Text(value ?? '—', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13)),
+        Text(value ?? '—', style: TextStyle(color: textColor(context), fontWeight: FontWeight.w500, fontSize: 13)),
     ]),
   );
 }

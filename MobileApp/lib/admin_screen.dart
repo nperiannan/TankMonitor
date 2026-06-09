@@ -1,14 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
-
-const _bg     = Color(0xFF141414);
-const _cardBg = Color(0xFF1f1f1f);
-const _cardBd = Color(0xFF303030);
-const _label  = Color(0xFF8c8c8c);
-const _blue   = Color(0xFF1890ff);
-const _green  = Color(0xFF52c41a);
-const _orange = Color(0xFFfa8c16);
+import 'theme_data.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -38,17 +31,17 @@ class _AdminScreenState extends State<AdminScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: scaffoldBg(context),
       appBar: AppBar(
-        backgroundColor: _cardBg,
+        backgroundColor: cardBg(context),
         elevation: 0,
-        title: const Text(
+        title: Text(
           '👥 Users & Devices',
-          style: TextStyle(color: _blue, fontWeight: FontWeight.w700, fontSize: 18),
+          style: TextStyle(color: accentBlue(context), fontWeight: FontWeight.w700, fontSize: 18),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: _label, size: 20),
+            icon: const Icon(Icons.refresh, color: kDarkLabel, size: 20),
             tooltip: 'Refresh',
             onPressed: _load,
           ),
@@ -57,9 +50,9 @@ class _AdminScreenState extends State<AdminScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _users.isEmpty
-              ? const Center(
+              ? Center(
                   child: Text('No users found',
-                      style: TextStyle(color: _label, fontSize: 15)))
+                      style: TextStyle(color: labelColor(context), fontSize: 15)))
               : RefreshIndicator(
                   onRefresh: _load,
                   child: ListView.separated(
@@ -80,16 +73,16 @@ class _AdminScreenState extends State<AdminScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: _cardBg,
-        border: Border.all(color: _cardBd),
+        color: cardBg(context),
+        border: Border.all(color: cardBd(context)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         collapsedBackgroundColor: Colors.transparent,
         backgroundColor: Colors.transparent,
-        iconColor: _label,
-        collapsedIconColor: _label,
+        iconColor: kDarkLabel,
+        collapsedIconColor: kDarkLabel,
         leading: CircleAvatar(
           backgroundColor: isAdmin
               ? const Color(0xFF391085)
@@ -97,8 +90,8 @@ class _AdminScreenState extends State<AdminScreen> {
           radius: 18,
           child: Text(
             username.isNotEmpty ? username[0].toUpperCase() : '?',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+            style: TextStyle(
+                color: textColor(context), fontWeight: FontWeight.w700, fontSize: 15),
           ),
         ),
         title: Row(
@@ -106,8 +99,8 @@ class _AdminScreenState extends State<AdminScreen> {
             Expanded(
               child: Text(
                 username,
-                style: const TextStyle(
-                    color: Colors.white,
+                style: TextStyle(
+                    color: textColor(context),
                     fontWeight: FontWeight.w600,
                     fontSize: 15),
                 overflow: TextOverflow.ellipsis,
@@ -123,7 +116,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   border: Border.all(color: const Color(0xFF531DAB)),
                 ),
                 child: const Text('admin',
-                    style: TextStyle(color: _orange, fontSize: 10)),
+                    style: TextStyle(color: kOrange, fontSize: 10)),
               ),
             ],
           ],
@@ -134,15 +127,15 @@ class _AdminScreenState extends State<AdminScreen> {
             devices.isEmpty
                 ? 'No devices claimed'
                 : '${devices.length} device${devices.length == 1 ? '' : 's'}',
-            style: const TextStyle(color: _label, fontSize: 12),
+            style: TextStyle(color: labelColor(context), fontSize: 12),
           ),
         ),
         children: devices.isEmpty
             ? [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(14, 0, 14, 12),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                   child: Text('No devices claimed',
-                      style: TextStyle(color: _label, fontSize: 13)),
+                      style: TextStyle(color: labelColor(context), fontSize: 13)),
                 ),
               ]
             : devices.map((d) => _deviceRow(d)).toList(),
@@ -162,13 +155,13 @@ class _AdminScreenState extends State<AdminScreen> {
       margin: const EdgeInsets.fromLTRB(14, 0, 14, 10),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF141414),
+        color: scaffoldBg(context),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _cardBd),
+        border: Border.all(color: cardBd(context)),
       ),
       child: Row(
         children: [
-          Icon(Icons.memory, color: online ? _green : _label, size: 28),
+          Icon(Icons.memory, color: online ? kGreen : kDarkLabel, size: 28),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -179,8 +172,8 @@ class _AdminScreenState extends State<AdminScreen> {
                     Expanded(
                       child: Text(
                         name,
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: textColor(context),
                             fontWeight: FontWeight.w500,
                             fontSize: 13),
                         overflow: TextOverflow.ellipsis,
@@ -193,7 +186,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       decoration: BoxDecoration(
                         color: online
                             ? const Color(0xFF162312)
-                            : const Color(0xFF262626),
+                            : subtleBg(context),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: online
@@ -203,7 +196,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       child: Text(
                         online ? '● Online' : '○ Offline',
                         style: TextStyle(
-                            color: online ? _green : _label, fontSize: 10),
+                            color: online ? kGreen : kDarkLabel, fontSize: 10),
                       ),
                     ),
                   ],
@@ -211,12 +204,12 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 3),
                 Text(mac,
                     style: const TextStyle(
-                        color: _label,
+                        color: kDarkLabel,
                         fontSize: 10,
                         fontFamily: 'monospace')),
                 if (fw.isNotEmpty)
                   Text('FW $fw',
-                      style: const TextStyle(color: _label, fontSize: 10)),
+                      style: TextStyle(color: labelColor(context), fontSize: 10)),
               ],
             ),
           ),

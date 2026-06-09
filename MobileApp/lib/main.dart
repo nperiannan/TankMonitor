@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
+import 'app_preferences.dart';
+import 'theme_data.dart';
 import 'login_screen.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => TankService(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => TankService()),
+        ChangeNotifierProvider(create: (_) => AppPreferences()),
+      ],
       child: const TankMonitorApp(),
     ),
   );
@@ -19,19 +24,13 @@ class TankMonitorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
     return MaterialApp(
       title: 'Tank Monitor',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF141414),
-        colorScheme: const ColorScheme.dark(primary: Color(0xFF1890ff)),
-        switchTheme: SwitchThemeData(
-          thumbColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.selected) ? const Color(0xFF1890ff) : null),
-          trackColor: WidgetStateProperty.resolveWith(
-              (s) => s.contains(WidgetState.selected) ? const Color(0xFF1890ff).withOpacity(0.4) : null),
-        ),
-      ),
+      theme: lightTheme,
+      darkTheme: darkTheme,
+      themeMode: prefs.effectiveThemeMode,
       home: const _Startup(),
     );
   }
@@ -60,7 +59,8 @@ class _StartupState extends State<_Startup> {
 
   Future<void> _init() async {
     final svc = context.read<TankService>();
-    await svc.loadToken();
+    final prefs = context.read<AppPreferences>();
+    await Future.wait([svc.loadToken(), prefs.load()]);
     if (svc.authToken == null) {
       setState(() { _home = const LoginScreen(); _ready = true; });
       return;
@@ -85,7 +85,6 @@ class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF141414),
       body: Center(child: Text('💧', style: TextStyle(fontSize: 48))),
     );
   }
