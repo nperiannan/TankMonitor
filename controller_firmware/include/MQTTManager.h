@@ -13,4 +13,17 @@ void mqttLoop();
 // Safe to call even when disconnected (no-op).
 void publishMQTTStatus();
 
+// Reload MQTT broker/port/user/pass from NVS and reconnect.
+// Call after changing broker settings via web UI.
+void reloadMQTTConfig();
+
+// Return current MQTT broker hostname (for web UI display).
+const char* getMQTTBroker();
+
+// Return current MQTT port.
+int getMQTTPort();
+
+// Return true if MQTT client is currently connected.
+bool isMQTTConnected();
+
 #endif // MQTT_MANAGER_H

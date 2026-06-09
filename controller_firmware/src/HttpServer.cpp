@@ -9,6 +9,7 @@
 #include "Display.h"
 #include "Scheduler.h"
 #include "History.h"
+#include "MQTTManager.h"
 #include <WebServer.h>   // Arduino ESP32 WebServer library
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -261,6 +262,25 @@ input:checked+.sld::before{transform:translateX(18px)}
       <button class="btn btn-o" style="flex:none;padding:6px 14px;font-size:13px" onclick="setMqttPass()">Set</button>
     </div>
   </div>
+</div>
+
+<!-- MQTT Broker -->
+<div class="card-full">
+  <div class="ctitle">MQTT Broker</div>
+  <div class="trow" style="gap:8px">
+    <span class="tlbl" style="white-space:nowrap">Broker Host</span>
+    <input id="mqtt_broker" class="inp" type="text" placeholder="hostname or IP" style="flex:1">
+  </div>
+  <div class="trow" style="gap:8px">
+    <span class="tlbl" style="white-space:nowrap">Port</span>
+    <input id="mqtt_port" class="inp" type="number" min="1" max="65535" placeholder="1883" style="width:100px">
+  </div>
+  <div style="display:flex;gap:6px;margin-top:10px">
+    <button class="btn btn-p" onclick="saveMqttBroker()">Save &amp; Reconnect</button>
+    <button class="btn btn-g" onclick="setMqttPreset('fqdn')">Use FQDN</button>
+    <button class="btn btn-g" onclick="setMqttPreset('lan')">Use LAN IP</button>
+  </div>
+  <div id="mqttStatus" style="font-size:11px;color:var(--tx2);margin-top:6px"></div>
 </div>
 
 <!-- WiFi Networks -->
@@ -741,11 +761,40 @@ function clearHistoryData(){
     else toast('Failed','err');
   }).catch(function(){toast('Failed','err');});
 }
+// ---- MQTT broker config ----
+function loadMqttConfig(){
+  fetch('/mqttconfig').then(function(r){return r.json();}).then(function(d){
+    document.getElementById('mqtt_broker').value=d.broker||'';
+    document.getElementById('mqtt_port').value=d.port||1883;
+    document.getElementById('mqttStatus').textContent='Current: '+d.broker+':'+d.port+(d.connected?' (Connected)':' (Disconnected)');
+    document.getElementById('mqttStatus').style.color=d.connected?'var(--green)':'var(--red)';
+  }).catch(function(){});
+}
+function saveMqttBroker(){
+  var b=document.getElementById('mqtt_broker').value.trim();
+  var p=document.getElementById('mqtt_port').value;
+  if(!b){toast('Broker host required','err');return;}
+  fetch('/setmqttbroker',{method:'POST',body:new URLSearchParams({broker:b,port:p})})
+    .then(function(r){return r.json();}).then(function(d){
+      toast(d.ok?'MQTT broker saved, reconnecting...':'Failed',d.ok?'ok':'err');
+      setTimeout(loadMqttConfig,3000);
+    }).catch(function(){toast('Failed','err');});
+}
+function setMqttPreset(type){
+  if(type==='fqdn'){
+    document.getElementById('mqtt_broker').value='nperiannan-nas.freemyip.com';
+    document.getElementById('mqtt_port').value='1883';
+  }else{
+    document.getElementById('mqtt_broker').value='192.168.0.102';
+    document.getElementById('mqtt_port').value='1883';
+  }
+}
 setInterval(refreshStatus,5000);
 setInterval(loadLogs,10000);
 refreshStatus();
 loadSchedules();
 loadLogs();
+loadMqttConfig();
 </script>
 </body></html>)rawhtml";
 
@@ -1157,6 +1206,39 @@ static void handleSetMqttPass() {
 }
 
 // ---------------------------------------------------------------------------
+//  GET /mqttconfig  – return current MQTT broker, port, connection status
+// ---------------------------------------------------------------------------
+
+static void handleMqttConfig() {
+    StaticJsonDocument<256> doc;
+    doc["broker"]    = getMQTTBroker();
+    doc["port"]      = getMQTTPort();
+    doc["connected"] = isMQTTConnected();
+    String out;
+    serializeJson(doc, out);
+    sendJson(200, out);
+}
+
+// ---------------------------------------------------------------------------
+//  POST /setmqttbroker  – update MQTT broker host & port in NVS, reconnect
+// ---------------------------------------------------------------------------
+
+static void handleSetMqttBroker() {
+    String broker = server.arg("broker");
+    int    port   = server.arg("port").toInt();
+    if (broker.isEmpty()) { sendError("broker required"); return; }
+    if (port < 1 || port > 65535) port = MQTT_PORT_DEFAULT;
+    Preferences prefs;
+    prefs.begin(MQTT_NVS_NS, false);
+    prefs.putString("broker", broker);
+    prefs.putInt("port", port);
+    prefs.end();
+    reloadMQTTConfig();
+    Log(INFO, "[Web] MQTT broker set to " + broker + ":" + String(port));
+    sendOk();
+}
+
+// ---------------------------------------------------------------------------
 //  Setup & loop
 // ---------------------------------------------------------------------------
 
@@ -1179,6 +1261,8 @@ void setupWebServer() {
     server.on("/setlcdmode",         HTTP_POST, handleSetLcdMode);
     server.on("/setloglevel",        HTTP_POST, handleSetLogLevel);
     server.on("/setmqttpass",        HTTP_POST, handleSetMqttPass);
+    server.on("/mqttconfig",         HTTP_GET,  handleMqttConfig);
+    server.on("/setmqttbroker",      HTTP_POST, handleSetMqttBroker);
     server.on("/schedulelist",       HTTP_GET,  handleScheduleList);
     server.on("/updateAllSchedules", HTTP_POST, handleUpdateAllSchedules);
     server.on("/cancelSchedule",     HTTP_POST, handleCancelSchedule);

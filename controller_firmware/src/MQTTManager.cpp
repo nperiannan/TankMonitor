@@ -471,6 +471,18 @@ void mqttLoop() {
     }
 }
 
+void reloadMQTTConfig() {
+    loadConfig();
+    s_mqtt.disconnect();   // mqttLoop() will reconnect with new settings
+    s_usingFallback  = false;
+    s_connectFailures = 0;
+    Log(INFO, "[MQTT] Config reloaded — broker=" + String(s_broker) + ":" + String(s_port));
+}
+
+const char* getMQTTBroker() { return s_broker; }
+int         getMQTTPort()   { return s_port; }
+bool        isMQTTConnected() { return s_mqtt.connected(); }
+
 void publishMQTTStatus() {
     if (!s_mqtt.connected()) return;
 
