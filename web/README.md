@@ -9,6 +9,7 @@ Go backend + React/Ant Design frontend, deployed as a Docker container on TerraM
 ## Features
 
 ### Backend (Go)
+
 - **Auth** — JWT-based login/register with SQLite user store
 - **MQTT bridge** — Connects to Mosquitto broker, relays status → WebSocket and control commands → MQTT
 - **WebSocket** — Real-time push of device status to connected web/mobile clients
@@ -18,6 +19,7 @@ Go backend + React/Ant Design frontend, deployed as a Docker container on TerraM
 - **Transparent pass-through** — No field parsing; forwards MQTT JSON payloads as-is to clients
 
 ### Frontend (React SPA)
+
 - **Tank status** — Animated arc gauges for OH and UG tanks (FULL / HALF / LOW / EMPTY / UNKNOWN)
 - **Motor control** — ON/OFF buttons with status pills and buzzer indicator
 - **Transmitter lost warning** — Banner when no LoRa signal for 90+ seconds, shows last known OH state
@@ -32,7 +34,7 @@ Go backend + React/Ant Design frontend, deployed as a Docker container on TerraM
 
 ## Project Structure
 
-```
+```text
 web/
 ├── backend/
 │   └── main.go           # Go server (auth, MQTT bridge, WebSocket, OTA, REST API)
@@ -51,7 +53,7 @@ web/
 ## API Endpoints
 
 | Method | Path | Description |
-|--------|------|-------------|
+| --- | --- | --- |
 | POST | `/api/auth/register` | Create account |
 | POST | `/api/auth/login` | Login, returns JWT |
 | GET | `/api/version` | Web app version |
@@ -85,7 +87,7 @@ cd backend && go run main.go
 ## Environment Variables
 
 | Variable | Description | Default |
-|----------|-------------|---------|
+| --- | --- | --- |
 | `MQTT_BROKER` | Mosquitto broker address | `192.168.0.102` |
 | `MQTT_PORT` | Broker port | `1883` |
 | `MQTT_USER` | MQTT username | `tankmonitor` |
@@ -96,6 +98,6 @@ cd backend && go run main.go
 ## Access
 
 | | URL |
-|---|---|
-| LAN | http://192.168.0.102:1880 |
-| Public | http://nperiannan-nas.freemyip.com:1880 |
+| --- | --- |
+| LAN | <http://192.168.0.102:1880> |
+| Public | <http://nperiannan-nas.freemyip.com:1880> |

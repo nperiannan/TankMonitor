@@ -22,7 +22,7 @@ Flutter Android app for remote monitoring and control of the TankMonitor ESP32 s
 ## Screens
 
 | Screen | Description |
-|--------|-------------|
+| --- | --- |
 | Login | Username/password sign-in |
 | Register | Create new account |
 | Setup | Configure WiFi + Mobile Data server URLs |
@@ -33,7 +33,7 @@ Flutter Android app for remote monitoring and control of the TankMonitor ESP32 s
 
 ## Project Structure
 
-```
+```text
 MobileApp/
 ├── lib/
 │   ├── main.dart              # App entry, routing, Provider setup
@@ -61,8 +61,9 @@ The release APK is at `build/app/outputs/flutter-apk/app-release.apk`.
 
 ## Install
 
-Download the latest APK from [GitHub Releases](https://github.com/nperiannan/TankMonitor/releases) (tag prefix `app/`).
+Download the latest APK from [GitHub Releases](https://github.com/nperiannan/TankMonitor/releases) (tag prefix `MobileApp/`).
 
 On first launch:
+
 1. Enter server URL: `http://nperiannan-nas.freemyip.com:1880`
 2. Log in with your credentials
