@@ -159,7 +159,7 @@ bash build_web.sh
 The script:
 1. `source ~/.bashrc` + `conda activate base` (sets up environment)
 2. `git -C .. pull origin master` (pulls latest `web/` changes)
-3. `docker build -t tankmonitor-web:2.0.3 .`
+3. `docker build -t tankmonitor-web:2.1.0 .`
 4. Stops/removes old container and starts a fresh one with all required env vars
 
 ### Check container logs
