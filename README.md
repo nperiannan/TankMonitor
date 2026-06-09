@@ -4,7 +4,7 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 
 ## Repository Structure
 
-```
+```text
 TankMonitor/
 ├── controller_firmware/   ESP32-S3 firmware (PlatformIO + Arduino framework)
 ├── web/                   Go backend + React/Ant Design frontend (Docker-deployed on TNAS)
@@ -14,7 +14,7 @@ TankMonitor/
 ## Versions
 
 | Component | Latest |
-|-----------|--------|
+| --- | --- |
 | Controller Firmware | v2.1.0 |
 | Web App | v2.1.0 |
 | Mobile App | v2.0.0 |
@@ -24,7 +24,7 @@ TankMonitor/
 ## Hardware
 
 | Component | Details |
-|-----------|---------|
+| --- | --- |
 | Controller | ESP32-S3 Nebula S3 |
 | OH Relay | GPIO 1 (RLY1 — Overhead tank motor) |
 | UG Relay | GPIO 2 (RLY2 — Underground tank motor) |
@@ -48,14 +48,14 @@ When no home Wi-Fi is configured, or while the device is booting, the ESP32
 broadcasts its own AP for initial setup.
 
 | Parameter | Value |
-|-----------|-------|
+| --- | --- |
 | SSID | `TankMonitor` |
 | Password | *(see private config)* |
 | IP address | `192.168.4.1` |
-| Config page | http://192.168.4.1 |
+| Config page | <http://192.168.4.1> |
 
 > **Initial Wi-Fi setup**: Connect your phone/laptop to the `TankMonitor` AP,
-> open http://192.168.4.1 in a browser, and add your home Wi-Fi SSID/password.
+> open <http://192.168.4.1> in a browser, and add your home Wi-Fi SSID/password.
 > The device will reboot and connect to your home network.
 
 ---
@@ -63,7 +63,7 @@ broadcasts its own AP for initial setup.
 ### MQTT Broker (Mosquitto on TNAS)
 
 | Parameter | Value |
-|-----------|-------|
+| --- | --- |
 | LAN host | `192.168.0.102` |
 | Public domain | `nperiannan-nas.freemyip.com` |
 | Port | `1883` (plain) |
@@ -78,9 +78,9 @@ broadcasts its own AP for initial setup.
 ### Web App
 
 | Parameter | Value |
-|-----------|-------|
-| LAN URL | http://192.168.0.102:1880 |
-| Public URL | http://nperiannan-nas.freemyip.com:1880 |
+| --- | --- |
+| LAN URL | <http://192.168.0.102:1880> |
+| Public URL | <http://nperiannan-nas.freemyip.com:1880> |
 | Username | `admin` |
 | Password | *(see private config)* |
 
@@ -91,6 +91,7 @@ broadcasts its own AP for initial setup.
 Install the latest APK from the [GitHub Releases](https://github.com/nperiannan/TankMonitor/releases/latest).
 
 On first launch:
+
 1. Enter the server URL: `http://nperiannan-nas.freemyip.com:1880`
 2. Username: `admin`
 3. Password: *(see private config)*
@@ -102,7 +103,7 @@ On first launch:
 ### Where it runs
 
 | Service | Host | Container name |
-|---------|------|----------------|
+| --- | --- | --- |
 | Web App | `192.168.0.102:1880` → container port 8080 | `tankmonitor-web` |
 | MQTT Broker | `192.168.0.102:1883` | `mosquitto` |
 
@@ -113,7 +114,7 @@ SSH access: `nperiannan@192.168.0.102` (password: see private config)
 Configure these rules on your home router (ER605 or similar):
 
 | External Port | Internal IP | Internal Port | Protocol | Service |
-|---------------|-------------|---------------|----------|---------|
+| --- | --- | --- | --- | --- |
 | 1880 | 192.168.0.102 | 1880 | TCP | Web App |
 | 1883 | 192.168.0.102 | 1883 | TCP | MQTT |
 
@@ -157,6 +158,7 @@ bash build_web.sh
 ```
 
 The script:
+
 1. `source ~/.bashrc` + `conda activate base` (sets up environment)
 2. `git -C .. pull origin master` (pulls latest `web/` changes)
 3. `docker build -t tankmonitor-web:2.1.0 .`
@@ -209,7 +211,7 @@ staging it at `/Volume1/docker/tankmonitor-data/ota/{MAC}.bin`.
 
 ### OTA via Web App
 
-1. Open http://192.168.0.102:1880, log in.
+1. Open <http://192.168.0.102:1880>, log in.
 2. Go to **Firmware Update (OTA)** → click **Upload firmware.bin** → select the `.bin` file.
 3. Click **Flash to ESP32** → confirm.
 4. A 150-second progress bar tracks the update phases until `success`.
@@ -242,10 +244,10 @@ gh release create vX.Y.Z \
 ## LCD Backlight Modes
 
 | Mode | Behaviour |
-|------|-----------|
+| --- | --- |
 | Auto | Off 7:00 AM – 5:30 PM (daytime), On at night |
-| On   | Always on |
-| Off  | Always off |
+| On | Always on |
+| Off | Always off |
 
 Configurable from the web app (Settings card) or mobile app (Settings section).
 

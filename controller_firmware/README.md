@@ -21,7 +21,7 @@ Water tank monitoring and motor control system built on the **Kinetic Dynamics N
 ## Hardware
 
 | Component | Details |
-|---|---|
+| --- | --- |
 | MCU | ESP32-S3, 240 MHz dual-core, 320 KB RAM, 4 MB Flash |
 | Board | Kinetic Dynamics Nebula S3 |
 | RTC | DS3231 on I2C (SDA=18, SCL=17) |
@@ -37,11 +37,13 @@ Water tank monitoring and motor control system built on the **Kinetic Dynamics N
 **Prerequisites:** PlatformIO Core or PlatformIO IDE extension.
 
 ### OTA (over WiFi)
+
 ```bash
 pio run -e nebulas3 --target upload
 ```
 
 ### Serial (USB, COM7)
+
 ```bash
 pio run -e nebulas3_serial --target upload
 ```
@@ -51,7 +53,7 @@ Hold **BOOT** button during "Connecting..." if auto-reset doesn't trigger.
 ## Network Configuration
 
 | Service | Default |
-|---|---|
+| --- | --- |
 | AP SSID | `TankMonitor` |
 | AP Password | `tank1234` |
 | AP IP | `192.168.4.1` |
@@ -65,13 +67,14 @@ Hold **BOOT** button during "Connecting..." if auto-reset doesn't trigger.
 ## WiFi State Machine
 
 Networks are tried in priority order (top = highest priority in web UI):
+
 - 3 attempts per SSID, 10 s timeout each
 - After all SSIDs fail: 15-minute cooldown before retrying
 - Async WiFi scan before each round (AP stays alive during scan)
 
 ## Project Structure
 
-```
+```text
 controller_firmware/
 ├── include/          # Header files + Config.h (all pin/config constants)
 ├── src/              # Source files
@@ -95,7 +98,7 @@ controller_firmware/
 ## REST API Endpoints
 
 | Method | Path | Description |
-|--------|------|-------------|
+| --- | --- | --- |
 | GET | `/mqttconfig` | Returns current MQTT broker, port, and connection status |
 | POST | `/setmqttbroker` | Sets broker host and port, saves to NVS, reconnects |
 | GET | `/status` | Returns full system status JSON |
