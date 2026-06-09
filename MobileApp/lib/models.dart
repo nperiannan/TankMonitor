@@ -28,6 +28,9 @@ class Status {
   final bool ohMotor;
   final bool ugMotor;
   final bool loraOk;
+  final double loraRssi;
+  final double loraSNR;
+  final String lastLoraReceived;
   final int wifiRssi;
   final int uptimeS;
   final String fw;
@@ -56,6 +59,9 @@ class Status {
     required this.ohMotor,
     required this.ugMotor,
     required this.loraOk,
+    required this.loraRssi,
+    required this.loraSNR,
+    required this.lastLoraReceived,
     required this.wifiRssi,
     required this.uptimeS,
     required this.fw,
@@ -85,6 +91,9 @@ class Status {
         ohMotor:    j['oh_motor']    as bool?   ?? false,
         ugMotor:    j['ug_motor']    as bool?   ?? false,
         loraOk:     j['lora_ok']     as bool?   ?? false,
+        loraRssi:   (j['loraRSSI']   as num?)?.toDouble() ?? 0.0,
+        loraSNR:    (j['loraSNR']    as num?)?.toDouble() ?? 0.0,
+        lastLoraReceived: j['lastLoraReceived'] as String? ?? '',
         wifiRssi:   j['wifi_rssi']   as int?    ?? 0,
         uptimeS:    j['uptime_s']    as int?    ?? 0,
         fw:         j['fw']          as String? ?? '',

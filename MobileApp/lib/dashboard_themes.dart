@@ -18,6 +18,10 @@ class DashboardData {
   final VoidCallback onUgOff;
   final VoidCallback onOhOn;
   final VoidCallback onOhOff;
+  final bool loraOk;
+  final double loraRssi;
+  final double loraSNR;
+  final String lastLoraReceived;
 
   const DashboardData({
     required this.status,
@@ -31,6 +35,10 @@ class DashboardData {
     required this.onUgOff,
     required this.onOhOn,
     required this.onOhOff,
+    this.loraOk = true,
+    this.loraRssi = 0.0,
+    this.loraSNR = 0.0,
+    this.lastLoraReceived = '',
   });
 }
 
@@ -53,16 +61,16 @@ class ConceptDDashboard extends StatelessWidget {
             Expanded(child: _SemiCircleTankCard(
               label: 'Underground',
               state: s?.ugState ?? '',
-              showLora: false,
-              loraOk: true,
               context: context,
             )),
             const SizedBox(width: 10),
             Expanded(child: _SemiCircleTankCard(
               label: 'Overhead',
               state: s?.ohState ?? '',
-              showLora: true,
-              loraOk: s?.loraOk ?? true,
+              loraOk: d.loraOk,
+              loraRssi: d.loraRssi,
+              loraSNR: d.loraSNR,
+              lastLoraReceived: d.lastLoraReceived,
               context: context,
             )),
           ],
@@ -130,16 +138,16 @@ class ConceptFDashboard extends StatelessWidget {
             Expanded(child: _ArcTankCard(
               label: 'Underground',
               state: s?.ugState ?? '',
-              showLora: false,
-              loraOk: true,
               context: context,
             )),
             const SizedBox(width: 10),
             Expanded(child: _ArcTankCard(
               label: 'Overhead',
               state: s?.ohState ?? '',
-              showLora: true,
-              loraOk: s?.loraOk ?? true,
+              loraOk: d.loraOk,
+              loraRssi: d.loraRssi,
+              loraSNR: d.loraSNR,
+              lastLoraReceived: d.lastLoraReceived,
               context: context,
             )),
           ],
@@ -411,9 +419,6 @@ class _SemiCircleGauge extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('~${(pctVal * 100).toInt()}%',
-                  style: TextStyle(color: labelColor(context), fontSize: size * 0.09)),
-                const SizedBox(height: 1),
                 Text(label,
                   style: TextStyle(
                     color: color,
@@ -544,15 +549,19 @@ class _SemiCirclePainter extends CustomPainter {
 class _SemiCircleTankCard extends StatelessWidget {
   final String label;
   final String state;
-  final bool showLora;
-  final bool loraOk;
+  final bool? loraOk;
+  final double? loraRssi;
+  final double? loraSNR;
+  final String? lastLoraReceived;
   final BuildContext context;
 
   const _SemiCircleTankCard({
     required this.label, required this.state,
-    required this.showLora, required this.loraOk,
     required this.context,
+    this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
   });
+
+  bool get _isOH => loraOk != null;
 
   @override
   Widget build(BuildContext _) {
@@ -579,7 +588,12 @@ class _SemiCircleTankCard extends StatelessWidget {
             children: [
               Text(label.toUpperCase(),
                 style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-              if (showLora) _LoraBadge(loraOk: loraOk),
+              if (_isOH)
+                _RfAntennaIcon(
+                  loraOk: loraOk!, loraRssi: loraRssi ?? 0,
+                  loraSNR: loraSNR ?? 0, lastLoraReceived: lastLoraReceived ?? '',
+                  size: 16, context: context,
+                ),
             ],
           ),
         ),
@@ -590,94 +604,149 @@ class _SemiCircleTankCard extends StatelessWidget {
   }
 }
 
-// ─── LoRa badge ──────────────────────────────────────────────────────────────
-class _LoraBadge extends StatefulWidget {
+// ─── RF Antenna icon with tooltip ────────────────────────────────────────────
+class _RfAntennaIcon extends StatelessWidget {
   final bool loraOk;
-  const _LoraBadge({required this.loraOk});
+  final double loraRssi;
+  final double loraSNR;
+  final String lastLoraReceived;
+  final double size;
+  final BuildContext context;
 
-  @override
-  State<_LoraBadge> createState() => _LoraBadgeState();
-}
+  const _RfAntennaIcon({
+    required this.loraOk, required this.loraRssi,
+    required this.loraSNR, required this.lastLoraReceived,
+    required this.context, this.size = 18,
+  });
 
-class _LoraBadgeState extends State<_LoraBadge>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _blinkCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    // 5-second cycle: 3s blue (0.0→0.6) then 2s grey (0.6→1.0)
-    _blinkCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..repeat();
+  String get _tooltipText {
+    if (!loraOk) return 'RF: No signal';
+    final rssi = loraRssi.toStringAsFixed(1);
+    final snr = loraSNR.toStringAsFixed(1);
+    final last = lastLoraReceived.isNotEmpty ? lastLoraReceived : '—';
+    return 'RF: $rssi dBm  SNR: $snr dB\nLast: $last';
   }
 
   @override
-  void dispose() {
-    _blinkCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext _) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final loraBlue = isDark ? const Color(0xFF448aff) : const Color(0xFF0d47a1);
-    final greyColor = isDark ? const Color(0xFF78909c) : const Color(0xFF90a4ae);
+    final color = loraOk
+        ? (isDark ? const Color(0xFF66bb6a) : const Color(0xFF43a047))
+        : kRed;
+    return GestureDetector(
+      onTap: () => _showRfModal(context, isDark),
+      child: Icon(Icons.cell_tower, color: color, size: size),
+    );
+  }
 
-    return AnimatedBuilder(
-      animation: _blinkCtrl,
-      builder: (_, __) {
-        final Color color;
-        final Color bg;
-        final IconData icon;
+  void _showRfModal(BuildContext ctx, bool isDark) {
+    final rssi = loraRssi.toStringAsFixed(1);
+    final snr = loraSNR.toStringAsFixed(1);
+    final last = lastLoraReceived.isNotEmpty ? lastLoraReceived : '—';
 
-        if (!widget.loraOk) {
-          // Not OK: blink red (fade in/out over 1s cycle)
-          final redPhase = (_blinkCtrl.value * 5).remainder(1.0);
-          final redOpacity = (redPhase < 0.5 ? redPhase * 2 : (1.0 - redPhase) * 2).clamp(0.3, 1.0);
-          color = kRed.withOpacity(redOpacity);
-          bg = kRed.withOpacity(0.15 * redOpacity);
-          icon = Icons.cell_tower;
-        } else {
-          // OK: 3s blue then 2s grey (cycle value 0→0.6 = blue, 0.6→1.0 = grey)
-          final isBluePhase = _blinkCtrl.value < 0.6;
-          if (isBluePhase) {
-            color = loraBlue;
-            bg = loraBlue.withOpacity(0.22);
-          } else {
-            color = greyColor;
-            bg = greyColor.withOpacity(0.1);
-          }
-          icon = Icons.cell_tower;
-        }
+    // Signal quality label
+    final String quality;
+    final Color qualityClr;
+    if (!loraOk) {
+      quality = 'No Signal';
+      qualityClr = kRed;
+    } else if (loraRssi > -80) {
+      quality = 'Excellent';
+      qualityClr = isDark ? const Color(0xFF66bb6a) : const Color(0xFF43a047);
+    } else if (loraRssi > -100) {
+      quality = 'Good';
+      qualityClr = isDark ? const Color(0xFFfdd835) : const Color(0xFFF9A825);
+    } else if (loraRssi > -115) {
+      quality = 'Weak';
+      qualityClr = isDark ? const Color(0xFFffa726) : const Color(0xFFef6c00);
+    } else {
+      quality = 'Very Weak';
+      qualityClr = kRed;
+    }
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Color.lerp(bg, Colors.white, isDark ? 0.08 : 0.3)!,
-                bg,
-                Color.lerp(bg, Colors.black, 0.08)!,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2), width: 1),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.12), blurRadius: 6, offset: const Offset(0, 3)),
-              BoxShadow(color: Colors.white.withOpacity(isDark ? 0.05 : 0.5), blurRadius: 1, offset: const Offset(0, -1)),
+    showDialog(
+      context: ctx,
+      builder: (c) => Dialog(
+        backgroundColor: isDark ? const Color(0xFF1e1e1e) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(children: [
+                Icon(Icons.cell_tower, color: qualityClr, size: 24),
+                const SizedBox(width: 10),
+                Text('RF Signal Status',
+                  style: TextStyle(
+                    color: textColor(ctx),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  )),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.of(c).pop(),
+                  child: Icon(Icons.close, color: labelColor(ctx), size: 20),
+                ),
+              ]),
+              const SizedBox(height: 16),
+              // Signal quality badge
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: qualityClr.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                  child: Text(quality,
+                    style: TextStyle(
+                      color: qualityClr,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                    )),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Detail rows
+              _rfRow(ctx, 'RSSI', '$rssi dBm', isDark),
+              const SizedBox(height: 8),
+              _rfRow(ctx, 'SNR', '$snr dB', isDark),
+              const SizedBox(height: 8),
+              _rfRow(ctx, 'Last Received', last, isDark),
+              const SizedBox(height: 8),
+              _rfRow(ctx, 'Link', loraOk ? 'Connected' : 'Lost', isDark,
+                  valueColor: loraOk ? qualityClr : kRed),
             ],
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: color, size: 14),
-            const SizedBox(width: 4),
-            Text('LoRa', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
-          ]),
-        );
-      },
+        ),
+      ),
+    );
+  }
+
+  static Widget _rfRow(BuildContext ctx, String label, String value, bool isDark,
+      {Color? valueColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+            style: TextStyle(color: labelColor(ctx), fontSize: 12, fontWeight: FontWeight.w500)),
+          Text(value,
+            style: TextStyle(
+              color: valueColor ?? textColor(ctx),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            )),
+        ],
+      ),
     );
   }
 }
@@ -737,15 +806,19 @@ class _MotorPill extends StatelessWidget {
 class _ArcTankCard extends StatelessWidget {
   final String label;
   final String state;
-  final bool showLora;
-  final bool loraOk;
+  final bool? loraOk;
+  final double? loraRssi;
+  final double? loraSNR;
+  final String? lastLoraReceived;
   final BuildContext context;
 
   const _ArcTankCard({
     required this.label, required this.state,
-    required this.showLora, required this.loraOk,
     required this.context,
+    this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
   });
+
+  bool get _isOH => loraOk != null;
 
   @override
   Widget build(BuildContext _) {
@@ -772,7 +845,12 @@ class _ArcTankCard extends StatelessWidget {
             children: [
               Text(label.toUpperCase(),
                 style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-              if (showLora) _LoraBadge(loraOk: loraOk),
+              if (_isOH)
+                _RfAntennaIcon(
+                  loraOk: loraOk!, loraRssi: loraRssi ?? 0,
+                  loraSNR: loraSNR ?? 0, lastLoraReceived: lastLoraReceived ?? '',
+                  size: 16, context: context,
+                ),
             ],
           ),
         ),
@@ -1118,8 +1196,10 @@ class ConceptGDashboard extends StatelessWidget {
         motorName: d.ohMotorName,
         motorOn: s?.ohMotor ?? false,
         buzzer: d.ohBuzzer,
-        showLora: true,
-        loraOk: s?.loraOk ?? true,
+        loraOk: d.loraOk,
+        loraRssi: d.loraRssi,
+        loraSNR: d.loraSNR,
+        lastLoraReceived: d.lastLoraReceived,
         onOn: d.onOhOn,
         onOff: d.onOhOff,
         context: context,
@@ -1131,8 +1211,6 @@ class ConceptGDashboard extends StatelessWidget {
         motorName: d.ugMotorName,
         motorOn: s?.ugMotor ?? false,
         buzzer: d.ugBuzzer,
-        showLora: false,
-        loraOk: true,
         onOn: d.onUgOn,
         onOff: d.onUgOff,
         context: context,
@@ -1148,8 +1226,10 @@ class _ProTankCard extends StatelessWidget {
   final String motorName;
   final bool motorOn;
   final bool buzzer;
-  final bool showLora;
-  final bool loraOk;
+  final bool? loraOk;
+  final double? loraRssi;
+  final double? loraSNR;
+  final String? lastLoraReceived;
   final VoidCallback onOn;
   final VoidCallback onOff;
   final BuildContext context;
@@ -1157,10 +1237,12 @@ class _ProTankCard extends StatelessWidget {
   const _ProTankCard({
     required this.label, required this.state,
     required this.motorName, required this.motorOn,
-    required this.buzzer, required this.showLora,
-    required this.loraOk, required this.onOn,
+    required this.buzzer, required this.onOn,
     required this.onOff, required this.context,
+    this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
   });
+
+  bool get _isOH => loraOk != null;
 
   @override
   Widget build(BuildContext _) {
@@ -1203,7 +1285,7 @@ class _ProTankCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Header row: label + LoRa + state badge
+                  // ── Header row: label + RF icon + state badge
                   Row(children: [
                     Icon(
                       Icons.water_drop_outlined,
@@ -1219,9 +1301,13 @@ class _ProTankCard extends StatelessWidget {
                         letterSpacing: 0.2,
                       ),
                     ),
-                    if (showLora) ...[
-                      const SizedBox(width: 8),
-                      _LoraBadge(loraOk: loraOk),
+                    if (_isOH) ...[
+                      const SizedBox(width: 6),
+                      _RfAntennaIcon(
+                        loraOk: loraOk!, loraRssi: loraRssi ?? 0,
+                        loraSNR: loraSNR ?? 0, lastLoraReceived: lastLoraReceived ?? '',
+                        size: 16, context: context,
+                      ),
                     ],
                     const Spacer(),
                     // State badge

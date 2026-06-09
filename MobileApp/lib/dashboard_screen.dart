@@ -422,6 +422,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         onUgOff: () => svc.sendControl({'cmd': 'ug_off'}),
                         onOhOn:  () => svc.sendControl({'cmd': 'oh_on'}),
                         onOhOff: () => svc.sendControl({'cmd': 'oh_off'}),
+                        loraOk: s?.loraOk ?? true,
+                        loraRssi: s?.loraRssi ?? 0.0,
+                        loraSNR: s?.loraSNR ?? 0.0,
+                        lastLoraReceived: s?.lastLoraReceived ?? '',
                       );
                       switch (prefs.concept) {
                         case DashboardConcept.grid:      return ConceptDDashboard(d: data);
@@ -701,6 +705,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           // Current firmware version
                           Text('Current: ${s?.fw ?? '—'}',
