@@ -1,7 +1,7 @@
 # build_web.ps1 — Build & deploy web backend Docker image to NAS
 # Usage: .\build_web.ps1 [-Version <tag>] [-NasHost <host>] [-NasUser <user>]
 param(
-    [string]$Version = "2.0.3",
+    [string]$Version = "2.1.0",
     [string]$NasHost = "192.168.0.102",
     [string]$NasUser = "nperiannan",
     [string]$NasRepoPath = "/Volume1/docker/TankMonitor",

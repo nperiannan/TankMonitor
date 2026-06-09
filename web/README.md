@@ -3,7 +3,7 @@
 Go backend + React/Ant Design frontend, deployed as a Docker container on TerraMaster NAS.
 
 - **Backend version**: 2.1.0
-- **Frontend version**: 2.0.0
+- **Frontend version**: 2.1.0
 - **Docker image**: `tankmonitor-web:2.1.0`
 
 ## Features
