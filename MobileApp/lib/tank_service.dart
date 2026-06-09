@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'models.dart';
+import 'notification_service.dart';
 
 const _kWifiUrl   = 'wifi_url';
 const _kMobileUrl = 'mobile_url';
@@ -15,7 +16,7 @@ const _kAuthToken = 'auth_token';
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.2.0';
+const mobileAppVersion = '2.3.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -39,6 +40,12 @@ class TankService extends ChangeNotifier {
   Status? status;
   bool connected = false;
   String? error;
+
+  // ── Motor notification tracking ──────────────────────────────────────────
+  bool _prevUgMotor = false;
+  bool _prevOhMotor = false;
+  bool _hasReceivedFirstStatus = false;
+  bool motorNotifyEnabled = false;
 
   // Optimistic setting overrides: status-JSON key → {value, expiresAt}.
   // Applied in the WS listener so the UI doesn't flicker back to the old
@@ -196,6 +203,7 @@ class TankService extends ChangeNotifier {
             final raw = jsonDecode(data as String) as Map<String, dynamic>;
             _lastRawStatus = raw; // store pre-pending snapshot
             status = Status.fromJson(_applyPending(raw));
+            _checkMotorStateChange();
             if (!connected) {
               connected = true;
               fetchVersion(); // fire and forget
@@ -609,6 +617,45 @@ class TankService extends ChangeNotifier {
       status = Status.fromJson(_applyPending(Map<String, dynamic>.from(_lastRawStatus!)));
       notifyListeners();
     }
+  }
+
+  /// Check if motor states changed and fire notifications.
+  void _checkMotorStateChange() {
+    final s = status;
+    if (s == null) return;
+
+    if (!_hasReceivedFirstStatus) {
+      // First status — just record, don't notify.
+      _prevUgMotor = s.ugMotor;
+      _prevOhMotor = s.ohMotor;
+      _hasReceivedFirstStatus = true;
+      return;
+    }
+
+    if (!motorNotifyEnabled) {
+      _prevUgMotor = s.ugMotor;
+      _prevOhMotor = s.ohMotor;
+      return;
+    }
+
+    if (s.ugMotor != _prevUgMotor) {
+      final action = s.ugMotor ? 'turned ON' : 'turned OFF';
+      NotificationService.showMotorNotification(
+        title: 'UG Motor $action',
+        body: 'Underground motor has $action',
+      );
+    }
+
+    if (s.ohMotor != _prevOhMotor) {
+      final action = s.ohMotor ? 'turned ON' : 'turned OFF';
+      NotificationService.showMotorNotification(
+        title: 'OH Motor $action',
+        body: 'Overhead motor has $action',
+      );
+    }
+
+    _prevUgMotor = s.ugMotor;
+    _prevOhMotor = s.ohMotor;
   }
 
   /// Patch a raw status JSON map with non-expired pending overrides.

@@ -35,150 +35,6 @@ class DashboardData {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Concept A — Water-fill gauges · side-by-side tanks · separate motor cards
-// ═══════════════════════════════════════════════════════════════════════════════
-class ConceptADashboard extends StatelessWidget {
-  final DashboardData d;
-  const ConceptADashboard({super.key, required this.d});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = d.status;
-    return Column(children: [
-      // Tank cards side by side
-      Row(children: [
-        Expanded(child: _WaterFillTankCard(
-          label: 'Underground',
-          state: s?.ugState ?? '',
-          showLora: false,
-          loraOk: true,
-          context: context,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _WaterFillTankCard(
-          label: 'Overhead',
-          state: s?.ohState ?? '',
-          showLora: true,
-          loraOk: s?.loraOk ?? true,
-          context: context,
-        )),
-      ]),
-      const SizedBox(height: 10),
-      _MotorControlCard(
-        motorName: d.ugMotorName,
-        motorOn: s?.ugMotor ?? false,
-        buzzer: d.ugBuzzer,
-        onOn: d.onUgOn,
-        onOff: d.onUgOff,
-        context: context,
-      ),
-      const SizedBox(height: 10),
-      _MotorControlCard(
-        motorName: d.ohMotorName,
-        motorOn: s?.ohMotor ?? false,
-        buzzer: d.ohBuzzer,
-        onOn: d.onOhOn,
-        onOff: d.onOhOff,
-        context: context,
-      ),
-    ]);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Concept B — Arc gauges · LoRa lost banner · buzzer
-// ═══════════════════════════════════════════════════════════════════════════════
-class ConceptBDashboard extends StatelessWidget {
-  final DashboardData d;
-  const ConceptBDashboard({super.key, required this.d});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = d.status;
-    return Column(children: [
-      if (s?.txLost == true)
-        _LostBanner(lastKnown: s?.ohLastKnown ?? '', context: context),
-      if (s?.txLost == true) const SizedBox(height: 10),
-      Row(children: [
-        Expanded(child: _ArcTankCard(
-          label: 'Underground',
-          state: s?.ugState ?? '',
-          showLora: false,
-          loraOk: true,
-          context: context,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _ArcTankCard(
-          label: 'Overhead',
-          state: s?.ohState ?? '',
-          showLora: true,
-          loraOk: s?.loraOk ?? true,
-          context: context,
-        )),
-      ]),
-      const SizedBox(height: 10),
-      _MotorControlCard(
-        motorName: d.ugMotorName,
-        motorOn: s?.ugMotor ?? false,
-        buzzer: d.ugBuzzer,
-        onOn: d.onUgOn,
-        onOff: d.onUgOff,
-        context: context,
-      ),
-      const SizedBox(height: 10),
-      _MotorControlCard(
-        motorName: d.ohMotorName,
-        motorOn: s?.ohMotor ?? false,
-        buzzer: d.ohBuzzer,
-        onOn: d.onOhOn,
-        onOff: d.onOhOff,
-        context: context,
-      ),
-    ]);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Concept C — Compact horizontal cards (arc gauge + motor inline)
-// ═══════════════════════════════════════════════════════════════════════════════
-class ConceptCDashboard extends StatelessWidget {
-  final DashboardData d;
-  const ConceptCDashboard({super.key, required this.d});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = d.status;
-    return Column(children: [
-      _HorizontalTankCard(
-        label: 'Underground',
-        state: s?.ugState ?? '',
-        motorName: d.ugMotorName,
-        motorOn: s?.ugMotor ?? false,
-        buzzer: d.ugBuzzer,
-        showLora: false,
-        loraOk: true,
-        onOn: d.onUgOn,
-        onOff: d.onUgOff,
-        context: context,
-      ),
-      const SizedBox(height: 10),
-      _HorizontalTankCard(
-        label: 'Overhead',
-        state: s?.ohState ?? '',
-        motorName: d.ohMotorName,
-        motorOn: s?.ohMotor ?? false,
-        buzzer: d.ohBuzzer,
-        showLora: true,
-        loraOk: s?.loraOk ?? true,
-        onOn: d.onOhOn,
-        onOff: d.onOhOff,
-        context: context,
-      ),
-    ]);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // Concept D — 2-col 3-row grid: tanks / motor status / motor controls
 // ═══════════════════════════════════════════════════════════════════════════════
 class ConceptDDashboard extends StatelessWidget {
@@ -190,23 +46,28 @@ class ConceptDDashboard extends StatelessWidget {
     final s = d.status;
     return Column(children: [
       // Row 1: tank gauges
-      Row(children: [
-        Expanded(child: _SemiCircleTankCard(
-          label: 'Underground',
-          state: s?.ugState ?? '',
-          showLora: false,
-          loraOk: true,
-          context: context,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _SemiCircleTankCard(
-          label: 'Overhead',
-          state: s?.ohState ?? '',
-          showLora: true,
-          loraOk: s?.loraOk ?? true,
-          context: context,
-        )),
-      ]),
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _SemiCircleTankCard(
+              label: 'Underground',
+              state: s?.ugState ?? '',
+              showLora: false,
+              loraOk: true,
+              context: context,
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _SemiCircleTankCard(
+              label: 'Overhead',
+              state: s?.ohState ?? '',
+              showLora: true,
+              loraOk: s?.loraOk ?? true,
+              context: context,
+            )),
+          ],
+        ),
+      ),
       const SizedBox(height: 10),
       // Row 2: motor status
       Row(children: [
@@ -248,47 +109,7 @@ class ConceptDDashboard extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Concept E — Pill cards: tank + motor + button in one streamlined row
-// ═══════════════════════════════════════════════════════════════════════════════
-class ConceptEDashboard extends StatelessWidget {
-  final DashboardData d;
-  const ConceptEDashboard({super.key, required this.d});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = d.status;
-    return Column(children: [
-      _PillCard(
-        label: 'Overhead',
-        state: s?.ohState ?? '',
-        motorName: d.ohMotorName,
-        motorOn: s?.ohMotor ?? false,
-        buzzer: d.ohBuzzer,
-        showLora: true,
-        loraOk: s?.loraOk ?? true,
-        onOn: d.onOhOn,
-        onOff: d.onOhOff,
-        context: context,
-      ),
-      const SizedBox(height: 10),
-      _PillCard(
-        label: 'Underground',
-        state: s?.ugState ?? '',
-        motorName: d.ugMotorName,
-        motorOn: s?.ugMotor ?? false,
-        buzzer: d.ugBuzzer,
-        showLora: false,
-        loraOk: true,
-        onOn: d.onUgOn,
-        onOff: d.onUgOff,
-        context: context,
-      ),
-    ]);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Concept F — Hybrid: B's arc gauges + D's 2-col motor grid (DEFAULT)
+// Concept F — Hybrid: arc gauges + 2-col motor grid (DEFAULT)
 // ═══════════════════════════════════════════════════════════════════════════════
 class ConceptFDashboard extends StatelessWidget {
   final DashboardData d;
@@ -302,23 +123,28 @@ class ConceptFDashboard extends StatelessWidget {
         _LostBanner(lastKnown: s?.ohLastKnown ?? '', context: context),
       if (s?.txLost == true) const SizedBox(height: 10),
       // Row 1: Arc gauges
-      Row(children: [
-        Expanded(child: _ArcTankCard(
-          label: 'Underground',
-          state: s?.ugState ?? '',
-          showLora: false,
-          loraOk: true,
-          context: context,
-        )),
-        const SizedBox(width: 10),
-        Expanded(child: _ArcTankCard(
-          label: 'Overhead',
-          state: s?.ohState ?? '',
-          showLora: true,
-          loraOk: s?.loraOk ?? true,
-          context: context,
-        )),
-      ]),
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _ArcTankCard(
+              label: 'Underground',
+              state: s?.ugState ?? '',
+              showLora: false,
+              loraOk: true,
+              context: context,
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: _ArcTankCard(
+              label: 'Overhead',
+              state: s?.ohState ?? '',
+              showLora: true,
+              loraOk: s?.loraOk ?? true,
+              context: context,
+            )),
+          ],
+        ),
+      ),
       const SizedBox(height: 10),
       // Row 2: motor status grid
       Row(children: [
@@ -364,14 +190,25 @@ class ConceptFDashboard extends StatelessWidget {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── State → colour / percentage / label ─────────────────────────────────────
+// Eye-pleasing Material palette colors — same meaning on both themes.
+const _kFullDark  = Color(0xFF66bb6a); // Green 400
+const _kFullLight = Color(0xFF43a047); // Green 600
+const _kHalfDark  = Color(0xFFfdd835); // Yellow 600
+const _kHalfLight = Color(0xFFF9A825); // Yellow 800
+const _kLowDark   = Color(0xFFffa726); // Orange 400
+const _kLowLight  = Color(0xFFef6c00); // Orange 800
+const _kEmptyDark = Color(0xFFef5350); // Red 400
+const _kEmptyLight= Color(0xFFd32f2f); // Red 700
+const _kUnknown   = Color(0xFF9e9e9e); // Grey 500
+
 Color _stateColor(String state, BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   switch (state) {
-    case 'FULL':  return isDark ? kBlue : kLightBlue;
-    case 'HALF':  return isDark ? kGreen : kLightBlue;
-    case 'LOW':   return isDark ? kOrange : kLightOrange;
-    case 'EMPTY': return isDark ? kRed : kLightRed;
-    default:      return const Color(0xFF8c8c8c);
+    case 'FULL':  return isDark ? _kFullDark  : _kFullLight;
+    case 'HALF':  return isDark ? _kHalfDark  : _kHalfLight;
+    case 'LOW':   return isDark ? _kLowDark   : _kLowLight;
+    case 'EMPTY': return isDark ? _kEmptyDark : _kEmptyLight;
+    default:      return _kUnknown;
   }
 }
 
@@ -389,151 +226,10 @@ String _stateLabel(String state) {
   if (state == 'FULL' || state == 'HALF' || state == 'LOW' || state == 'EMPTY') {
     return state;
   }
-  return state.isNotEmpty ? '?' : '--';
+  return state.isNotEmpty ? 'UNKN' : 'UNKN';
 }
 
-Color _waterBlue(BuildContext context) =>
-    Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF29b6f6)
-        : const Color(0xFF0288d1);
-
-// ─── Water fill circle (Concepts A, D) ───────────────────────────────────────
-class _WaterFillCircle extends StatefulWidget {
-  final String state;
-  final double size;
-  const _WaterFillCircle(this.state, {this.size = 120});
-
-  @override
-  State<_WaterFillCircle> createState() => _WaterFillCircleState();
-}
-
-class _WaterFillCircleState extends State<_WaterFillCircle>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _waveCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _waveCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _waveCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final pct   = _statePct(widget.state);
-    final color = _stateColor(widget.state, context);
-    final label = _stateLabel(widget.state);
-    final waterBlue = _waterBlue(context);
-
-    return SizedBox(
-      width: widget.size, height: widget.size,
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: color, width: 4),
-        ),
-        child: ClipOval(
-          child: Stack(
-            children: [
-              // Water fill
-              Align(
-                alignment: Alignment.bottomCenter,
-                child: FractionallySizedBox(
-                  heightFactor: pct > 0 ? (0.15 + 0.85 * pct) : 0,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          waterBlue.withOpacity(pct >= 1.0 ? 0.5 : 0.35),
-                          waterBlue.withOpacity(pct >= 1.0 ? 0.25 : 0.08),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Animated wave at the water surface
-              if (pct > 0)
-                AnimatedBuilder(
-                  animation: _waveCtrl,
-                  builder: (_, __) {
-                    final fillH = pct > 0 ? (0.15 + 0.85 * pct) : 0.0;
-                    final waterTop = 1.0 - fillH;
-                    // Clamp so wave is visible even when full
-                    final topPos = (widget.size * waterTop - 6).clamp(2.0, widget.size - 14);
-                    return Positioned(
-                      top: topPos,
-                      left: -widget.size * 0.1,
-                      right: -widget.size * 0.1,
-                      height: 14,
-                      child: CustomPaint(
-                        painter: _WavePainter(
-                          phase: _waveCtrl.value * 2 * pi,
-                          color: waterBlue.withOpacity(0.5),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              // Label
-              Center(
-                child: Text(label,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                    letterSpacing: 1,
-                    shadows: const [
-                      Shadow(blurRadius: 8, color: Color(0x80000000)),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Draws an animated sine wave for the water surface.
-class _WavePainter extends CustomPainter {
-  final double phase;
-  final Color color;
-  const _WavePainter({required this.phase, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = color..style = PaintingStyle.fill;
-    final path = Path();
-    path.moveTo(0, size.height);
-    for (double x = 0; x <= size.width; x += 1) {
-      final y = size.height * 0.5 +
-          sin((x / size.width) * 2 * pi + phase) * 3 +
-          sin((x / size.width) * 4 * pi + phase * 1.5) * 1.5;
-      path.lineTo(x, y);
-    }
-    path.lineTo(size.width, size.height);
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(_WavePainter old) => true;
-}
-
-// ─── Arc gauge circle (Concepts B, C, F) ─────────────────────────────────────
+// ─── Arc gauge circle (Concept F) ────────────────────────────────────────────
 class _ArcGaugeCircle extends StatelessWidget {
   final String state;
   final double size;
@@ -553,16 +249,16 @@ class _ArcGaugeCircle extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Text('~${(pct * 100).toInt()}%',
+                style: TextStyle(color: labelColor(context), fontSize: size * 0.10)),
+              const SizedBox(height: 2),
               Text(label,
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w800,
-                  fontSize: 18,
+                  fontSize: size * 0.17,
                 ),
               ),
-              if (pct > 0)
-                Text('~${(pct * 100).toInt()}%',
-                  style: TextStyle(color: labelColor(context), fontSize: 10)),
             ],
           ),
         ),
@@ -581,16 +277,101 @@ class _ArcPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final r  = size.width / 2 - 6;
+    final r  = size.width / 2 - 12;
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
+    const strokeW = 16.0;
 
-    canvas.drawArc(rect, 0, 2 * pi, false,
-      Paint()..color = trackColor..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round);
+    // 300° open arc (gap at bottom)
+    const totalAngle = 300.0 * pi / 180; // 300 degrees
+    const gapAngle   = (360.0 - 300.0) * pi / 180; // 60° gap
+    const startAngle = pi / 2 + gapAngle / 2; // start just past bottom-left
+
+    // ── Track: recessed 3D channel ──
+    // Outer shadow (makes it look carved into the surface)
+    canvas.drawArc(rect, startAngle, totalAngle, false,
+      Paint()
+        ..color = trackColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeW
+        ..strokeCap = StrokeCap.round);
+    // Inner shadow on track
+    final trackInner = Rect.fromCircle(center: Offset(cx, cy), radius: r - 2);
+    canvas.drawArc(trackInner, startAngle, totalAngle, false,
+      Paint()
+        ..color = Colors.black.withOpacity(0.15)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+    // Track outer highlight
+    final trackOuter = Rect.fromCircle(center: Offset(cx, cy), radius: r + 2);
+    canvas.drawArc(trackOuter, startAngle, totalAngle, false,
+      Paint()
+        ..color = Colors.white.withOpacity(0.06)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round);
 
     if (pct > 0) {
-      canvas.drawArc(rect, -pi / 2, 2 * pi * pct, false,
-        Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 8..strokeCap = StrokeCap.round);
+      final sweepAngle = totalAngle * pct;
+
+      // ── Subtle outer glow ──
+      canvas.drawArc(rect, startAngle, sweepAngle, false,
+        Paint()
+          ..color = color.withOpacity(0.10)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeW + 6
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+
+      // ── Main arc — clean uniform color ──
+      canvas.drawArc(rect, startAngle, sweepAngle, false,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeW
+          ..strokeCap = StrokeCap.round);
+
+      // ── Highlight edge (outer) — subtle white for 3D ──
+      final hlRect = Rect.fromCircle(center: Offset(cx, cy), radius: r + 3);
+      canvas.drawArc(hlRect, startAngle, sweepAngle, false,
+        Paint()
+          ..color = Colors.white.withOpacity(0.20)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round);
+
+      // ── Shadow edge (inner) — very subtle ──
+      final shRect = Rect.fromCircle(center: Offset(cx, cy), radius: r - 3);
+      canvas.drawArc(shRect, startAngle, sweepAngle, false,
+        Paint()
+          ..color = Colors.black.withOpacity(0.08)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round);
+
+      // ── Tip dot ──
+      final tipAngle = startAngle + sweepAngle;
+      final tipX = cx + r * cos(tipAngle);
+      final tipY = cy + r * sin(tipAngle);
+      canvas.drawCircle(Offset(tipX, tipY), 6,
+        Paint()..color = color);
+      canvas.drawCircle(Offset(tipX, tipY), 3,
+        Paint()..color = Colors.white.withOpacity(0.85));
+      canvas.drawCircle(Offset(tipX, tipY), 8,
+        Paint()
+          ..color = color.withOpacity(0.15)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
     }
+
+    // ── End-cap dots at track start/end ──
+    final capStartX = cx + r * cos(startAngle);
+    final capStartY = cy + r * sin(startAngle);
+    final capEndX = cx + r * cos(startAngle + totalAngle);
+    final capEndY = cy + r * sin(startAngle + totalAngle);
+    final capPaint = Paint()..color = trackColor;
+    canvas.drawCircle(Offset(capStartX, capStartY), strokeW / 2 - 1, capPaint);
+    canvas.drawCircle(Offset(capEndX, capEndY), strokeW / 2 - 1, capPaint);
   }
 
   @override
@@ -598,57 +379,51 @@ class _ArcPainter extends CustomPainter {
 }
 
 // ─── AntD semi-circle gauge (Concept D) ──────────────────────────────────────
-/// Eye-comfort green for Aqua Grid FULL state.
-const _comfortGreen = Color(0xFF52c41a);
-
-Color _antdStateColor(String state) {
-  switch (state) {
-    case 'FULL':  return _comfortGreen;
-    case 'HALF':  return kBlue;
-    case 'LOW':   return kOrange;
-    case 'EMPTY': return kRed;
-    default:      return const Color(0xFF8c8c8c);
-  }
+Color _antdStateColor(String state, BuildContext context) {
+  return _stateColor(state, context);
 }
 
 class _SemiCircleGauge extends StatelessWidget {
   final String state;
   final double size;
-  const _SemiCircleGauge(this.state, {this.size = 110});
+  const _SemiCircleGauge(this.state, {this.size = 120});
 
   @override
   Widget build(BuildContext context) {
-    final pct = _statePct(state);
-    final color = _antdStateColor(state);
+    final pctVal = _statePct(state);
+    final color = _antdStateColor(state, context);
     final label = _stateLabel(state);
 
     return SizedBox(
       width: size,
-      height: size * 0.62,
+      height: size * 0.65,
       child: CustomPaint(
         painter: _SemiCirclePainter(
-          pct: pct,
+          pct: pctVal,
           color: color,
           trackColor: cardBd(context),
           isDark: Theme.of(context).brightness == Brightness.dark,
         ),
         child: Align(
-          alignment: const Alignment(0, 0.6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 16,
-                  letterSpacing: 0.8,
+          alignment: const Alignment(0, 1.0),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('~${(pctVal * 100).toInt()}%',
+                  style: TextStyle(color: labelColor(context), fontSize: size * 0.09)),
+                const SizedBox(height: 1),
+                Text(label,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: size * 0.16,
+                    letterSpacing: 0.8,
+                  ),
                 ),
-              ),
-              if (pct > 0)
-                Text('${(pct * 100).toInt()}%',
-                  style: TextStyle(color: labelColor(context), fontSize: 10)),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -670,61 +445,77 @@ class _SemiCirclePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height - 4;
-    final r  = size.width / 2 - 8;
+    final r  = size.width / 2 - 10;
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
-    const strokeW = 10.0;
+    const strokeW = 14.0;
 
-    // Track (subtle)
+    // 3D track — recessed channel
     canvas.drawArc(rect, pi, pi, false,
       Paint()
         ..color = trackColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = strokeW
         ..strokeCap = StrokeCap.round);
+    // Inner shadow on track
+    final innerRect = Rect.fromCircle(center: Offset(cx, cy), radius: r - 2);
+    canvas.drawArc(innerRect, pi, pi, false,
+      Paint()
+        ..color = Colors.black.withOpacity(0.12)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
 
-    // Filled arc with 3D gradient
     if (pct > 0) {
       final sweepAngle = pi * pct;
-      final gradient = SweepGradient(
-        startAngle: pi,
-        endAngle: pi + sweepAngle,
-        colors: [
-          color.withOpacity(0.5),
-          color,
-          Color.lerp(color, Colors.white, 0.25)!,
-        ],
-        stops: const [0.0, 0.6, 1.0],
-      );
 
+      // Subtle outer glow
       canvas.drawArc(rect, pi, sweepAngle, false,
         Paint()
-          ..shader = gradient.createShader(rect)
+          ..color = color.withOpacity(isDark ? 0.15 : 0.08)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeW + 6
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+
+      // Main arc — uniform color (no dark gradient that mismatches)
+      canvas.drawArc(rect, pi, sweepAngle, false,
+        Paint()
+          ..color = color
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeW
           ..strokeCap = StrokeCap.round);
 
-      // Glow effect behind the arc
-      canvas.drawArc(rect, pi, sweepAngle, false,
+      // Highlight edge (outer) — subtle white for 3D
+      final highlightRect = Rect.fromCircle(center: Offset(cx, cy), radius: r + 3);
+      canvas.drawArc(highlightRect, pi, sweepAngle, false,
         Paint()
-          ..color = color.withOpacity(0.15)
+          ..color = Colors.white.withOpacity(isDark ? 0.12 : 0.25)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = strokeW + 8
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round);
 
-      // Bright dot at the tip
+      // Shadow edge (inner) — very subtle
+      final shadowRect = Rect.fromCircle(center: Offset(cx, cy), radius: r - 3);
+      canvas.drawArc(shadowRect, pi, sweepAngle, false,
+        Paint()
+          ..color = Colors.black.withOpacity(isDark ? 0.12 : 0.06)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5
+          ..strokeCap = StrokeCap.round);
+
+      // Tip dot
       final tipAngle = pi + sweepAngle;
       final tipX = cx + r * cos(tipAngle);
       final tipY = cy + r * sin(tipAngle);
       canvas.drawCircle(Offset(tipX, tipY), 5,
         Paint()..color = color);
-      canvas.drawCircle(Offset(tipX, tipY), 3,
-        Paint()..color = isDark ? Colors.white : Colors.white);
-      // Outer glow on tip
-      canvas.drawCircle(Offset(tipX, tipY), 8,
+      canvas.drawCircle(Offset(tipX, tipY), 2.5,
+        Paint()..color = Colors.white.withOpacity(0.85));
+      canvas.drawCircle(Offset(tipX, tipY), 7,
         Paint()
-          ..color = color.withOpacity(0.25)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+          ..color = color.withOpacity(0.15)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
     }
 
     // Scale ticks
@@ -765,23 +556,34 @@ class _SemiCircleTankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 14),
       decoration: BoxDecoration(
         color: cardBg(context),
         border: Border.all(color: cardBd(context)),
         borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label.toUpperCase(),
-              style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-            if (showLora) _LoraBadge(loraOk: loraOk),
-          ],
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 28),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label.toUpperCase(),
+                style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+              if (showLora) _LoraBadge(loraOk: loraOk),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _SemiCircleGauge(state),
       ]),
     );
@@ -804,24 +606,11 @@ class _LoraBadgeState extends State<_LoraBadge>
   @override
   void initState() {
     super.initState();
+    // 5-second cycle: 3s blue (0.0→0.6) then 2s grey (0.6→1.0)
     _blinkCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 1),
-    );
-    if (!widget.loraOk) _blinkCtrl.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(_LoraBadge old) {
-    super.didUpdateWidget(old);
-    if (widget.loraOk != old.loraOk) {
-      if (!widget.loraOk) {
-        _blinkCtrl.repeat(reverse: true);
-      } else {
-        _blinkCtrl.stop();
-        _blinkCtrl.value = 1.0;
-      }
-    }
+      duration: const Duration(seconds: 5),
+    )..repeat();
   }
 
   @override
@@ -832,30 +621,64 @@ class _LoraBadgeState extends State<_LoraBadge>
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.loraOk ? kBlue : kRed;
-    final bg    = widget.loraOk ? kBlue.withOpacity(0.12) : kRed.withOpacity(0.15);
-    final icon  = widget.loraOk ? Icons.wifi : Icons.wifi_off;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final loraBlue = isDark ? const Color(0xFF448aff) : const Color(0xFF0d47a1);
+    final greyColor = isDark ? const Color(0xFF78909c) : const Color(0xFF90a4ae);
 
-    final badge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: color, size: 14),
-        const SizedBox(width: 4),
-        Text('LoRa', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-      ]),
+    return AnimatedBuilder(
+      animation: _blinkCtrl,
+      builder: (_, __) {
+        final Color color;
+        final Color bg;
+        final IconData icon;
+
+        if (!widget.loraOk) {
+          // Not OK: blink red (fade in/out over 1s cycle)
+          final redPhase = (_blinkCtrl.value * 5).remainder(1.0);
+          final redOpacity = (redPhase < 0.5 ? redPhase * 2 : (1.0 - redPhase) * 2).clamp(0.3, 1.0);
+          color = kRed.withOpacity(redOpacity);
+          bg = kRed.withOpacity(0.15 * redOpacity);
+          icon = Icons.cell_tower;
+        } else {
+          // OK: 3s blue then 2s grey (cycle value 0→0.6 = blue, 0.6→1.0 = grey)
+          final isBluePhase = _blinkCtrl.value < 0.6;
+          if (isBluePhase) {
+            color = loraBlue;
+            bg = loraBlue.withOpacity(0.22);
+          } else {
+            color = greyColor;
+            bg = greyColor.withOpacity(0.1);
+          }
+          icon = Icons.cell_tower;
+        }
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.lerp(bg, Colors.white, isDark ? 0.08 : 0.3)!,
+                bg,
+                Color.lerp(bg, Colors.black, 0.08)!,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(isDark ? 0.3 : 0.2), width: 1),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.12), blurRadius: 6, offset: const Offset(0, 3)),
+              BoxShadow(color: Colors.white.withOpacity(isDark ? 0.05 : 0.5), blurRadius: 1, offset: const Offset(0, -1)),
+            ],
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 4),
+            Text('LoRa', style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+          ]),
+        );
+      },
     );
-
-    if (!widget.loraOk) {
-      return FadeTransition(
-        opacity: _blinkCtrl.drive(Tween(begin: 0.3, end: 1.0)),
-        child: badge,
-      );
-    }
-    return badge;
   }
 }
 
@@ -910,47 +733,7 @@ class _MotorPill extends StatelessWidget {
   }
 }
 
-// ─── Water fill tank card (A, D) ─────────────────────────────────────────────
-class _WaterFillTankCard extends StatelessWidget {
-  final String label;
-  final String state;
-  final bool showLora;
-  final bool loraOk;
-  final BuildContext context;
-
-  const _WaterFillTankCard({
-    required this.label, required this.state,
-    required this.showLora, required this.loraOk,
-    required this.context,
-  });
-
-  @override
-  Widget build(BuildContext _) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardBg(context),
-        border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label.toUpperCase(),
-              style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-            if (showLora) _LoraBadge(loraOk: loraOk),
-          ],
-        ),
-        const SizedBox(height: 16),
-        _WaterFillCircle(state, size: 140),
-        const SizedBox(height: 10),
-      ]),
-    );
-  }
-}
-
-// ─── Arc gauge tank card (B, F) ──────────────────────────────────────────────
+// ─── Arc gauge tank card (F) ─────────────────────────────────────────────────
 class _ArcTankCard extends StatelessWidget {
   final String label;
   final String state;
@@ -966,85 +749,36 @@ class _ArcTankCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardBg(context),
         border: Border.all(color: cardBd(context)),
         borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label.toUpperCase(),
-              style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-            if (showLora) _LoraBadge(loraOk: loraOk),
-          ],
+        ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 28),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label.toUpperCase(),
+                style: TextStyle(color: labelColor(context), fontSize: 11, letterSpacing: 1.2, fontWeight: FontWeight.w700)),
+              if (showLora) _LoraBadge(loraOk: loraOk),
+            ],
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         _ArcGaugeCircle(state, size: 140),
         const SizedBox(height: 10),
-      ]),
-    );
-  }
-}
-
-// ─── Motor control card (A, B) ───────────────────────────────────────────────
-class _MotorControlCard extends StatelessWidget {
-  final String motorName;
-  final bool motorOn;
-  final bool buzzer;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-  final BuildContext context;
-
-  const _MotorControlCard({
-    required this.motorName, required this.motorOn, required this.buzzer,
-    required this.onOn, required this.onOff, required this.context,
-  });
-
-  @override
-  Widget build(BuildContext _) {
-    final greenC = accentGreen(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: cardBg(context),
-        border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(children: [
-        // Animated gear icon
-        _GearIcon(motorOn: motorOn, buzzer: buzzer),
-        const SizedBox(width: 12),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(motorName, style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 2),
-            Row(children: [
-              Container(
-                width: 6, height: 6,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: motorOn ? greenC : labelColor(context),
-                  boxShadow: motorOn ? [BoxShadow(color: greenC.withOpacity(0.5), blurRadius: 6)] : null,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                motorOn ? 'Running' : 'Stopped',
-                style: TextStyle(color: labelColor(context), fontSize: 11),
-              ),
-              if (buzzer) ...[
-                const SizedBox(width: 6),
-                Icon(Icons.notifications_active, color: kOrange, size: 14),
-              ],
-            ]),
-          ],
-        )),
-        _PowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer),
       ]),
     );
   }
@@ -1064,34 +798,42 @@ class _GridMotorStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final greenC = accentGreen(context);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
       decoration: BoxDecoration(
         color: cardBg(context),
         border: Border.all(color: cardBd(context)),
         borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _GearIcon(motorOn: motorOn, buzzer: buzzer, size: 40),
-          const SizedBox(height: 8),
-          Text(motorName, style: TextStyle(color: textColor(context), fontSize: 12, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
+          _GearIcon(motorOn: motorOn, buzzer: buzzer, size: 48),
+          const SizedBox(height: 10),
+          Text(motorName, style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
           Row(mainAxisSize: MainAxisSize.min, children: [
             Container(
-              width: 6, height: 6,
+              width: 8, height: 8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: motorOn ? greenC : labelColor(context),
-                boxShadow: motorOn ? [BoxShadow(color: greenC.withOpacity(0.5), blurRadius: 6)] : null,
+                boxShadow: motorOn ? [BoxShadow(color: greenC.withOpacity(0.6), blurRadius: 8)] : null,
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             Text(
               motorOn ? 'Running' : 'Stopped',
-              style: TextStyle(color: labelColor(context), fontSize: 11),
+              style: TextStyle(color: labelColor(context), fontSize: 12, fontWeight: FontWeight.w500),
             ),
           ]),
         ],
@@ -1116,143 +858,27 @@ class _GridMotorButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: cardBg(context),
-        border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: _PowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer, expanded: true),
-    );
-  }
-}
-
-// ─── Horizontal tank card (C) ────────────────────────────────────────────────
-class _HorizontalTankCard extends StatelessWidget {
-  final String label;
-  final String state;
-  final String motorName;
-  final bool motorOn;
-  final bool buzzer;
-  final bool showLora;
-  final bool loraOk;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-  final BuildContext context;
-
-  const _HorizontalTankCard({
-    required this.label, required this.state,
-    required this.motorName, required this.motorOn,
-    required this.buzzer, required this.showLora,
-    required this.loraOk, required this.onOn,
-    required this.onOff, required this.context,
-  });
-
-  @override
-  Widget build(BuildContext _) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cardBg(context),
-        border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(children: [
-        _ArcGaugeCircle(state, size: 80),
-        const SizedBox(width: 14),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text(label, style: TextStyle(color: textColor(context), fontSize: 14, fontWeight: FontWeight.w700)),
-              if (showLora) ...[const SizedBox(width: 6), _LoraBadge(loraOk: loraOk)],
-            ]),
-            const SizedBox(height: 8),
-            Row(children: [
-              _GearIcon(motorOn: motorOn, buzzer: buzzer, size: 28),
-              const SizedBox(width: 8),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(motorName, style: TextStyle(color: textColor(context), fontSize: 12, fontWeight: FontWeight.w600)),
-                  Text(motorOn ? 'Running' : 'Stopped',
-                    style: TextStyle(color: labelColor(context), fontSize: 10)),
-                ],
-              )),
-              _PowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer, compact: true),
-            ]),
-          ],
-        )),
-      ]),
-    );
-  }
-}
-
-// ─── Pill card (E) ──────────────────────────────────────────────────────────
-class _PillCard extends StatelessWidget {
-  final String label;
-  final String state;
-  final String motorName;
-  final bool motorOn;
-  final bool buzzer;
-  final bool showLora;
-  final bool loraOk;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-  final BuildContext context;
-
-  const _PillCard({
-    required this.label, required this.state,
-    required this.motorName, required this.motorOn,
-    required this.buzzer, required this.showLora,
-    required this.loraOk, required this.onOn,
-    required this.onOff, required this.context,
-  });
-
-  @override
-  Widget build(BuildContext _) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: isDark
-              ? [const Color(0xFF1e212d).withOpacity(0.9), const Color(0xFF14161e).withOpacity(0.95)]
-              : [Colors.white.withOpacity(0.95), const Color(0xFFF5F5FA).withOpacity(0.98)],
-        ),
-        border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.08)),
-        borderRadius: BorderRadius.circular(22),
+        color: cardBg(context),
+        border: Border.all(color: cardBd(context)),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black45 : Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+          if (!isDark) BoxShadow(
+            color: Colors.white.withOpacity(0.7),
+            blurRadius: 4,
+            offset: const Offset(0, -2),
+          ),
+        ],
       ),
-      child: Row(children: [
-        // Mini water gauge circle
-        _WaterFillCircle(state, size: 64),
-        const SizedBox(width: 14),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Text(label, style: TextStyle(color: textColor(context), fontSize: 15, fontWeight: FontWeight.w700)),
-              if (showLora) ...[const SizedBox(width: 6), _LoraBadge(loraOk: loraOk)],
-            ]),
-            const SizedBox(height: 6),
-            Row(children: [
-              _GearIcon(motorOn: motorOn, buzzer: buzzer, size: 26),
-              const SizedBox(width: 8),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(motorName, style: TextStyle(color: textColor(context), fontSize: 12, fontWeight: FontWeight.w600)),
-                  Text(motorOn ? 'Running' : 'Stopped',
-                    style: TextStyle(color: labelColor(context), fontSize: 10)),
-                ],
-              )),
-              _RoundPowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer),
-            ]),
-          ],
-        )),
-      ]),
+      child: _PowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer, expanded: true),
     );
   }
 }
@@ -1303,12 +929,8 @@ class _GearIconState extends State<_GearIcon> with SingleTickerProviderStateMixi
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final greenC = accentGreen(context);
-    final bg = widget.motorOn
-        ? greenC.withOpacity(0.15)
-        : widget.buzzer
-            ? kOrange.withOpacity(0.15)
-            : cardBd(context);
     final iconColor = widget.motorOn
         ? greenC
         : widget.buzzer ? kOrange : labelColor(context);
@@ -1321,11 +943,42 @@ class _GearIconState extends State<_GearIcon> with SingleTickerProviderStateMixi
             : widget.buzzer
                 ? (0.5 - _ctrl.value) * 0.3
                 : 0.0;
+        final baseColor = widget.motorOn ? greenC : widget.buzzer ? kOrange : labelColor(context);
         return Container(
           width: widget.size, height: widget.size,
           decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(widget.size * 0.25),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color.lerp(baseColor.withOpacity(0.18), Colors.white, isDark ? 0.05 : 0.35)!,
+                baseColor.withOpacity(isDark ? 0.15 : 0.12),
+                Color.lerp(baseColor.withOpacity(0.12), Colors.black, 0.05)!,
+              ],
+            ),
+            borderRadius: BorderRadius.circular(widget.size * 0.28),
+            border: Border.all(
+              color: baseColor.withOpacity(isDark ? 0.15 : 0.08),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.35 : 0.12),
+                blurRadius: 12,
+                offset: const Offset(0, 5),
+              ),
+              BoxShadow(
+                color: Colors.white.withOpacity(isDark ? 0.06 : 0.5),
+                blurRadius: 2,
+                offset: const Offset(0, -1),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.2 : 0.06),
+                blurRadius: 3,
+                spreadRadius: -1,
+                offset: const Offset(2, 2),
+              ),
+            ],
           ),
           child: Transform.rotate(
             angle: angle,
@@ -1415,82 +1068,34 @@ class _PowerButton extends StatelessWidget {
         width: expanded ? double.infinity : null,
         padding: EdgeInsets.symmetric(
           horizontal: expanded ? 0 : 14,
-          vertical: expanded ? 8 : 7,
+          vertical: expanded ? 10 : 9,
         ),
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: gradient,
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(gradient[0], Colors.white, 0.25)!,
+              gradient[0],
+              Color.lerp(gradient[1], Colors.black, 0.1)!,
+            ],
           ),
           borderRadius: BorderRadius.circular(radius),
-          boxShadow: [BoxShadow(color: gradient[0].withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+          border: Border.all(color: Colors.white.withOpacity(0.2), width: 0.5),
+          boxShadow: [
+            BoxShadow(color: gradient[0].withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 3, offset: const Offset(0, 1)),
+          ],
         ),
         child: Row(
           mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: fg, size: 14),
-            const SizedBox(width: 5),
+            Icon(icon, color: fg, size: 16),
+            const SizedBox(width: 6),
             Text(text,
-              style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+              style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Round power button (Concept E pill) ─────────────────────────────────────
-class _RoundPowerButton extends StatelessWidget {
-  final bool motorOn;
-  final bool buzzer;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-  const _RoundPowerButton({required this.motorOn, required this.onOn, required this.onOff, this.buzzer = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final List<Color> gradient;
-    final Color fg;
-    final IconData icon;
-    final VoidCallback action;
-
-    if (buzzer) {
-      gradient = const [Color(0xFFe65100), Color(0xFFff6d00)];
-      fg = Colors.white;
-      icon = Icons.cancel_outlined;
-      action = onOff;
-    } else if (motorOn) {
-      gradient = const [Color(0xFFd32f2f), Color(0xFFff5252)];
-      fg = Colors.white;
-      icon = Icons.power_settings_new;
-      action = onOff;
-    } else {
-      if (isDark) {
-        gradient = const [Color(0xFF00c853), Color(0xFF00e676)];
-        fg = const Color(0xFF0a1a0a);
-      } else {
-        gradient = const [Color(0xFF1565c0), Color(0xFF1976D2)];
-        fg = Colors.white;
-      }
-      icon = Icons.power_settings_new;
-      action = onOn;
-    }
-
-    return GestureDetector(
-      onTap: action,
-      child: Container(
-        width: 42, height: 42,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: gradient,
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [BoxShadow(color: gradient[0].withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))],
-        ),
-        child: Icon(icon, color: fg, size: 20),
       ),
     );
   }

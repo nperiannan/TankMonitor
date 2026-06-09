@@ -424,11 +424,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         onOhOff: () => svc.sendControl({'cmd': 'oh_off'}),
                       );
                       switch (prefs.concept) {
-                        case DashboardConcept.waterFill: return ConceptADashboard(d: data);
-                        case DashboardConcept.arcGauge:  return ConceptBDashboard(d: data);
-                        case DashboardConcept.compact:   return ConceptCDashboard(d: data);
                         case DashboardConcept.grid:      return ConceptDDashboard(d: data);
-                        case DashboardConcept.pill:      return ConceptEDashboard(d: data);
                         case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
                         case DashboardConcept.pro:       return ConceptGDashboard(d: data);
                       }
@@ -528,6 +524,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 10),
                     // ── Motor Names ──
                     _MotorNameEditor(),
+                    const SizedBox(height: 10),
+                    // ── Notifications ──
+                    _NotificationSettings(),
                     const SizedBox(height: 10),
                     // ── Device Settings ──
                     _SectionCard(
@@ -1246,11 +1245,7 @@ class _DashboardThemePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final prefs = context.watch<AppPreferences>();
     const items = [
-      (DashboardConcept.waterFill, '🌊', 'Water Fill',  'Blue water, side-by-side'),
-      (DashboardConcept.arcGauge,  '🎯', 'Arc Gauge',   'Classic ring meters'),
-      (DashboardConcept.compact,   '📊', 'Compact',     'Horizontal info-dense'),
-      (DashboardConcept.grid,      '💧', 'Aqua Grid',   '2×3 grid layout'),
-      (DashboardConcept.pill,      '💊', 'Pill',        'All-in-one rows'),
+      (DashboardConcept.grid,      '💧', 'Aqua Grid',   'Semi-circle gauges'),
       (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
       (DashboardConcept.pro,       '✨', 'Pro',          'Unified cards'),
     ];
@@ -1430,6 +1425,38 @@ class _MotorNameRow extends StatelessWidget {
           )),
           Icon(Icons.edit, color: labelColor(context), size: 16),
         ]),
+      ),
+    );
+  }
+}
+
+class _NotificationSettings extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
+    return _SectionCard(
+      title: 'NOTIFICATIONS',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Motor On/Off Alerts',
+                  style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text('Get notified when motors turn on or off',
+                  style: TextStyle(color: labelColor(context), fontSize: 11)),
+              ],
+            ),
+          ),
+          Switch(
+            value: prefs.motorNotify,
+            activeColor: accentGreen(context),
+            onChanged: (v) => prefs.setMotorNotify(v),
+          ),
+        ],
       ),
     );
   }
@@ -1647,7 +1674,7 @@ class _SectionCard extends StatelessWidget {
       color: cardBg(context), border: Border.all(color: cardBd(context)),
       borderRadius: BorderRadius.circular(12),
     ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
       Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Expanded(child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

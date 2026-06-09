@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Dashboard concept identifiers — order matches the mockup.
+/// Dashboard concept identifiers.
 enum DashboardConcept {
-  waterFill,   // A — Water fill gauges
-  arcGauge,    // B — Arc gauges + LoRa lost
-  compact,     // C — Compact horizontal cards
-  grid,        // D — 2×3 grid layout
-  pill,        // E — Pill cards
+  grid,        // D — 2×3 grid layout (Aqua Grid)
   hybrid,      // F — Arc gauges + grid motors  (default)
   pro,         // G — Pro unified cards
 }
@@ -21,22 +17,25 @@ const _kAppThemeMode     = 'app_theme_mode';
 const _kUgMotorName      = 'ug_motor_name';
 const _kOhMotorName      = 'oh_motor_name';
 const _kPrefsVersion     = 'prefs_version';
+const _kMotorNotify      = 'motor_notifications';
 
 /// Current prefs schema version.
 /// Bump this when adding new keys — the migration guard ensures smooth
 /// upgrades without crashing existing installs.
-const _currentPrefsVersion = 1;
+const _currentPrefsVersion = 2;
 
 class AppPreferences extends ChangeNotifier {
   DashboardConcept _concept = DashboardConcept.hybrid;
   AppThemeMode     _themeMode = AppThemeMode.dark;
   String _ugMotorName = 'UG Motor';
   String _ohMotorName = 'OH Motor';
+  bool   _motorNotify = false;
 
   DashboardConcept get concept   => _concept;
   AppThemeMode     get themeMode => _themeMode;
   String get ugMotorName => _ugMotorName;
   String get ohMotorName => _ohMotorName;
+  bool   get motorNotify => _motorNotify;
 
   /// Load saved preferences with migration guard.
   Future<void> load() async {
@@ -53,6 +52,9 @@ class AppPreferences extends ChangeNotifier {
       }
       if (!prefs.containsKey(_kAppThemeMode)) {
         await prefs.setString(_kAppThemeMode, AppThemeMode.dark.name);
+      }
+      if (!prefs.containsKey(_kMotorNotify)) {
+        await prefs.setBool(_kMotorNotify, false);
       }
       await prefs.setInt(_kPrefsVersion, _currentPrefsVersion);
     }
@@ -71,6 +73,7 @@ class AppPreferences extends ChangeNotifier {
     );
     _ugMotorName = prefs.getString(_kUgMotorName) ?? 'UG Motor';
     _ohMotorName = prefs.getString(_kOhMotorName) ?? 'OH Motor';
+    _motorNotify = prefs.getBool(_kMotorNotify) ?? false;
 
     notifyListeners();
   }
@@ -101,6 +104,14 @@ class AppPreferences extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       motor == 'UG' ? _kUgMotorName : _kOhMotorName, name);
+  }
+
+  Future<void> setMotorNotify(bool v) async {
+    if (_motorNotify == v) return;
+    _motorNotify = v;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kMotorNotify, v);
   }
 
   /// Resolve effective ThemeMode for MaterialApp.

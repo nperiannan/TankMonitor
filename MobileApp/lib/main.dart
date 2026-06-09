@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'app_preferences.dart';
+import 'notification_service.dart';
 import 'theme_data.dart';
 import 'login_screen.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   runApp(
     MultiProvider(
       providers: [
@@ -61,6 +64,10 @@ class _StartupState extends State<_Startup> {
     final svc = context.read<TankService>();
     final prefs = context.read<AppPreferences>();
     await Future.wait([svc.loadToken(), prefs.load()]);
+    svc.motorNotifyEnabled = prefs.motorNotify;
+    prefs.addListener(() {
+      svc.motorNotifyEnabled = prefs.motorNotify;
+    });
     if (svc.authToken == null) {
       setState(() { _home = const LoginScreen(); _ready = true; });
       return;
