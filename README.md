@@ -16,6 +16,7 @@ TankMonitor/
 | Component | Latest |
 | --- | --- |
 | Controller Firmware | v2.1.0 |
+| Transmitter Firmware | v2.0.0 |
 | Web App | v2.1.0 |
 | Mobile App | v2.0.0 |
 
@@ -231,12 +232,8 @@ flutter build apk --release
 
 Create a GitHub release with the APK attached:
 
-```bash
-gh release create vX.Y.Z \
-  --repo nperiannan/TankMonitor \
-  --title "vX.Y.Z - <description>" \
-  --notes "Release notes" \
-  app-release.apk
+```powershell
+.\release.ps1 -Component MobileApp -Version X.Y.Z -Asset .\build\app\outputs\flutter-apk\app-release.apk -Notes "Description of changes"
 ```
 
 ---
@@ -277,6 +274,17 @@ cd MobileApp && flutter build apk ...    # release APK
 git add -A
 git commit -m "component: description"
 git push origin master
+```
+
+### Create a release
+
+Use the `release.ps1` script — it enforces one release per component, annotated tags, and required assets:
+
+```powershell
+.\release.ps1 -Component web -Version 2.1.0 -Notes "Fixed X; Added Y"
+.\release.ps1 -Component controller_firmware -Version 2.1.0 -Asset .\build\firmware.bin -Notes "Fixed Z"
+.\release.ps1 -Component MobileApp -Version 2.0.1 -Asset .\build\app-release.apk -Notes "Bug fix"
+.\release.ps1 -Component transmitter_firmware -Version 2.0.1 -Asset .\build\firmware.hex -Notes "Cal fix"
 ```
 
 ### Sync a subfolder from its old repo (one-off)
