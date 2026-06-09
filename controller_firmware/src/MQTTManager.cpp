@@ -517,13 +517,22 @@ void publishMQTTStatus() {
     String macStr = WiFi.macAddress();
     String ipStr  = WiFi.localIP().toString();
 
-    char payload[1600];
+    // Compute lastLoraReceived string
+    char loraLastStr[32];
+    if (lastLoraReceivedTime > 0) {
+        snprintf(loraLastStr, sizeof(loraLastStr), "%lus ago", (millis() - lastLoraReceivedTime) / 1000UL);
+    } else {
+        strcpy(loraLastStr, "Never");
+    }
+
+    char payload[1700];
     snprintf(payload, sizeof(payload),
         "{\"mac\":\"%s\",\"ip\":\"%s\",\"device_type\":\"tank_monitor\","
         "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_last_known\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
         "\"lora_ok\":%s,\"tx_lost\":%s,\"wifi_rssi\":%d,"
+        "\"loraRSSI\":%.1f,\"loraSNR\":%.1f,\"lastLoraReceived\":\"%s\","
         "\"uptime_s\":%lu,\"fw\":\"%s\","
         "\"time\":\"%s\","
         "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
@@ -545,6 +554,7 @@ void publishMQTTStatus() {
         loraOperational ? "true" : "false",
         isTransmitterLost() ? "true" : "false",
         wifiRSSI,
+        getLoraRSSI(), getLoraSNR(), loraLastStr,
         millis() / 1000UL,
         FW_VERSION,
         timeStr,
