@@ -184,14 +184,15 @@ pio run -e nebulas3_serial -t upload   # COM7 on Windows
 
 ### OTA via build script (recommended)
 
-From the repo root on Windows:
+From the `controller_firmware/` directory on Windows:
 
 ```powershell
-# Build + upload + trigger OTA in one step
-.\build_controller.ps1 -Upload -Mac 'AA:BB:CC:DD:EE:FF'
+cd controller_firmware
+.\build.ps1 -Upload
 ```
 
-The script builds with PlatformIO (`nebulas3` env) and uploads `firmware.bin` to the NAS,
+The script builds with PlatformIO (`nebulas3` env), prompts for the device MAC address,
+authenticates with the NAS server, and uploads `firmware.bin` to the NAS,
 staging it at `/Volume1/docker/tankmonitor-data/ota/{MAC}.bin`.
 
 > **How the ESP32 picks it up:** The firmware polls `GET /api/ota/check/{mac}` on the web app

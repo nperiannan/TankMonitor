@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.2.0] — 2026-06-10
+
+### Fixed
+- **MQTT status payload missing RF fields** — Added `loraRSSI`, `loraSNR`, and `lastLoraReceived` to the MQTT status JSON payload. Previously these fields were only available via the HTTP API, causing the mobile app (which uses WebSocket/MQTT) to show 0 for all RF signal data.
+
+---
+
 ## [1.3.6] — 2026-04-24
 
 ### Added
