@@ -32,13 +32,21 @@
 - `README.md` versions table must also be updated on every bump
 
 ## GitHub Releases — IMPORTANT
-- **Exactly one release per component** on the releases page at all times
+- **Exactly one release per component** on the releases page at all times (4 total: controller, transmitter, web, mobile)
 - When creating a new release for a component, **always delete the previous release first**:
   ```bash
-  gh release delete web/vX.Y.Z --yes   # delete old
-  gh release create web/vX.Y.Z ...     # create new
+  gh release delete controller_firmware/vX.Y.Z --cleanup-tag --yes
+  gh release create controller_firmware/vX.Y.Z firmware.bin --title "Controller Firmware vX.Y.Z" --notes "..."
   ```
-- Release titles: `Controller Firmware vX.Y.Z`, `Web App vX.Y.Z`, `Mobile App vX.Y.Z`
+- Release titles: `Controller Firmware vX.Y.Z`, `Transmitter Firmware vX.Y.Z`, `Web App vX.Y.Z`, `Mobile App vX.Y.Z`
+- **Required assets per release** (critical for OTA and auto-update to work):
+  - `controller_firmware/vX.Y.Z` → must include `firmware.bin`
+  - `transmitter_firmware/vX.Y.Z` → must include `firmware.hex`
+  - `MobileApp/vX.Y.Z` → must include `app-release.apk`
+  - `web/vX.Y.Z` → source code only (deployed via Docker)
+- **Tag prefixes are load-bearing** — the mobile app auto-update scans for `MobileApp/` prefix
+  - Do NOT use `app/` — old prefix, no longer detected by the app
+  - Controller OTA uses the web app API (`/api/ota/check/{mac}`), not GitHub releases
 
 ## NAS Deployment (TNAS @ 192.168.0.102)
 - Repo cloned at `/Volume1/docker/TankMonitor` with sparse-checkout (`web/` only)
