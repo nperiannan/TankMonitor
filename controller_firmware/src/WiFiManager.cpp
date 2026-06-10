@@ -18,6 +18,7 @@
 #include <WiFiUDP.h>
 #include <TimeLib.h>
 #include <ArduinoOTA.h>
+#include <ESPmDNS.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
@@ -171,6 +172,25 @@ static void setupOTA() {
 }
 
 // ---------------------------------------------------------------------------
+//  mDNS — advertise tankmonitor.local + HTTP service
+// ---------------------------------------------------------------------------
+static bool mdnsStarted = false;
+
+static void setupMDNS() {
+    if (mdnsStarted) {
+        MDNS.end();   // restart on reconnect to pick up new IP
+    }
+    if (MDNS.begin("tankmonitor")) {
+        MDNS.addService("http", "tcp", 80);
+        MDNS.addServiceTxt("http", "tcp", "fw", FW_VERSION);
+        mdnsStarted = true;
+        Log(INFO, "[mDNS] tankmonitor.local → " + WiFi.localIP().toString());
+    } else {
+        Log(WARN, "[mDNS] Failed to start");
+    }
+}
+
+// ---------------------------------------------------------------------------
 //  Command handlers (called from WiFi task only)
 // ---------------------------------------------------------------------------
 
@@ -306,6 +326,7 @@ static void wifiTask(void* /*param*/) {
             xSemaphoreGive(wifiMutex);
             Log(INFO, "[WiFi] STA connected. IP=" + WiFi.localIP().toString());
             setupOTA();
+            setupMDNS();
             doSynchronizeTime();
         }
 

@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <WiFi.h>
 #include <Preferences.h>
+#include <esp_ota_ops.h>
 
 #include "Config.h"
 #include "Globals.h"
@@ -108,6 +109,15 @@ void setup() {
 
     // MQTT remote monitoring
     initMQTT();
+
+    // ── OTA safety guard ──────────────────────────────────────────────────
+    // If we reached this point, all subsystems initialised successfully.
+    // Mark this firmware image as valid so the bootloader does NOT roll back
+    // to the previous partition on the next reboot.  Without this call, a
+    // new OTA image stays in "pending verification" state — if it crashes
+    // before reaching here, the bootloader automatically reverts.
+    esp_ota_mark_app_valid_cancel_rollback();
+    Log(INFO, "[OTA] Firmware marked valid — rollback cancelled");
 
     Log(INFO, "=== System Ready ===");
 }
