@@ -26,6 +26,9 @@ var allowedCmds = map[string]bool{
 	"set_lcd_mode": true, "set_log_level": true, "get_logs": true,
 	"set_mqtt_creds": true,
 	"ota_start":      true, "ota_rollback": true,
+	"wifi_list": true, "wifi_scan": true,
+	"wifi_add": true, "wifi_delete": true, "wifi_set_priority": true,
+	"history_list": true, "history_clear": true,
 }
 
 func startMQTT() {
@@ -48,6 +51,7 @@ func startMQTT() {
 			subs := map[string]byte{
 				"tm/+/status":          1,
 				"tm/+/logs":            0,
+				"tm/+/wifi":            0,
 				"tankmonitor/+/status": 1,
 				"tankmonitor/+/logs":   0,
 			}
@@ -78,6 +82,8 @@ func onMessage(_ mqtt.Client, msg mqtt.Message) {
 		onStatusMsg(topic, raw)
 	} else if strings.HasSuffix(topic, "/logs") {
 		onLogsMsg(topic, raw)
+	} else if strings.HasSuffix(topic, "/wifi") {
+		onWifiMsg(topic, raw)
 	}
 }
 

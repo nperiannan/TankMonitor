@@ -7,16 +7,19 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'models.dart';
 import 'notification_service.dart';
+import 'direct_device_service.dart';
 
 const _kWifiUrl   = 'wifi_url';
 const _kMobileUrl = 'mobile_url';
 const _kServerKey = 'server_url'; // legacy fallback
 const _kAuthToken = 'auth_token';
+const _kDirectMode = 'direct_mode';
+const _kDirectIp   = 'direct_ip';
 
 const defaultWifiUrl   = 'http://192.168.0.102:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.4.0';
+const mobileAppVersion = '2.5.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -36,6 +39,12 @@ class TankService extends ChangeNotifier {
   String wifiUrl   = defaultWifiUrl;
   String mobileUrl = defaultMobileUrl;
   String _activeUrl = '';
+
+  // ── Direct mode (ESP32 HTTP API) ─────────────────────────────────────────
+  bool directMode = false;
+  String directIp = '';
+  DirectDeviceService? _directService;
+  Timer? _pollTimer;
 
   Status? status;
   bool connected = false;
@@ -69,6 +78,8 @@ class TankService extends ChangeNotifier {
               ?? prefs.getString(_kServerKey)  // legacy single-URL migration
               ?? defaultWifiUrl;
     mobileUrl = prefs.getString(_kMobileUrl) ?? defaultMobileUrl;
+    directMode = prefs.getBool(_kDirectMode) ?? false;
+    directIp   = prefs.getString(_kDirectIp) ?? '';
   }
 
   // Legacy compat used by old startup path
@@ -83,6 +94,14 @@ class TankService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kWifiUrl,   wifiUrl);
     await prefs.setString(_kMobileUrl, mobileUrl);
+  }
+
+  Future<void> saveDirectMode(bool enabled, String ip) async {
+    directMode = enabled;
+    directIp   = ip.trimRight().replaceAll(RegExp(r'/$'), '');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kDirectMode, directMode);
+    await prefs.setString(_kDirectIp, directIp);
   }
 
   // ── Auth persistence ─────────────────────────────────────────────────────
@@ -160,6 +179,12 @@ class TankService extends ChangeNotifier {
   // ── Auto-connect (always picks URL based on current network) ─────────────
 
   Future<void> connectAuto() async {
+    // In direct mode, use polling instead of WebSocket
+    if (directMode && directIp.isNotEmpty) {
+      connectDirect(directIp);
+      return;
+    }
+
     final url = await _pickUrl();
     connect(url);
 
@@ -172,6 +197,54 @@ class TankService extends ChangeNotifier {
         connect(newUrl); // switch and reconnect with correct URL
       }
     });
+  }
+
+  // ── Direct mode (ESP32 HTTP polling) ─────────────────────────────────────
+
+  void connectDirect(String ip) {
+    disconnect();
+    final base = ip.startsWith('http') ? ip : 'http://$ip';
+    _activeUrl = base;
+    _directService = DirectDeviceService(base);
+    _startPolling();
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollOnce(); // immediate first poll
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) => _pollOnce());
+  }
+
+  Future<void> _pollOnce() async {
+    if (_disposed || _directService == null) return;
+    try {
+      final s = await _directService!.fetchStatus();
+      if (_disposed) return;
+      if (s != null) {
+        status = s;
+        _checkMotorStateChange();
+        if (!connected) connected = true;
+        error = null;
+      } else {
+        connected = false;
+      }
+    } catch (_) {
+      connected = false;
+    }
+    notifyListeners();
+  }
+
+  /// Expose a direct service for screens that need controller HTTP APIs
+  /// (WiFi management, history, MQTT config, factory reset).
+  /// In direct mode, returns the active service.
+  /// In cloud mode, creates one on-the-fly from the device's IP if available.
+  DirectDeviceService? get directService {
+    if (_directService != null) return _directService;
+    final ip = status?.mgmtIp;
+    if (ip != null && ip.isNotEmpty) {
+      return DirectDeviceService('http://$ip');
+    }
+    return null;
   }
 
   // ── WebSocket ────────────────────────────────────────────────────────────
@@ -267,6 +340,9 @@ class TankService extends ChangeNotifier {
     _reconnecting = false;
     _netSub?.cancel();
     _netSub = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _directService = null;
     _closeChannel();
     connected = false;
     status = null;
@@ -684,6 +760,16 @@ class TankService extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>?> fetchLogs() async {
+    // ── Direct mode: fetch logs from ESP32 HTTP ──────────────────────────
+    if (directMode && _directService != null) {
+      try {
+        final logs = await _directService!.fetchLogs();
+        return {'logs': logs};
+      } catch (_) {}
+      return null;
+    }
+
+    // ── Cloud mode ──────────────────────────────────────────────────────
     try {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
@@ -722,7 +808,156 @@ class TankService extends ChangeNotifier {
     return [];
   }
 
-  Future<void> sendControl(Map<String, dynamic> cmd) async {    try {
+  // ── WiFi management (cloud + direct) ─────────────────────────────────────
+
+  Future<Map<String, dynamic>> fetchWifiList() async {
+    // Direct mode: HTTP to ESP32
+    if (directMode && _directService != null) {
+      return _directService!.fetchWifiList();
+    }
+    // Cloud mode: send wifi_list command, then poll for response
+    await sendControl({'cmd': 'wifi_list'});
+    await Future.delayed(const Duration(seconds: 2));
+    final resp = await _fetchWifiResponse();
+    return resp ?? {};
+  }
+
+  Future<List<Map<String, dynamic>>> scanWifi() async {
+    if (directMode && _directService != null) {
+      return _directService!.scanWifi();
+    }
+    await sendControl({'cmd': 'wifi_scan'});
+    // Scan takes longer on ESP32
+    await Future.delayed(const Duration(seconds: 6));
+    final resp = await _fetchWifiResponse();
+    if (resp != null && resp['type'] == 'wifi_scan') {
+      return (resp['data'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    }
+    return [];
+  }
+
+  Future<bool> addWifi(String ssid, String password) async {
+    if (directMode && _directService != null) {
+      return _directService!.addWifi(ssid, password);
+    }
+    await sendControl({'cmd': 'wifi_add', 'ssid': ssid, 'pass': password});
+    return true;
+  }
+
+  Future<bool> deleteWifi(String ssid) async {
+    if (directMode && _directService != null) {
+      return _directService!.deleteWifi(ssid);
+    }
+    await sendControl({'cmd': 'wifi_delete', 'ssid': ssid});
+    return true;
+  }
+
+  Future<bool> setWifiPriority(String ssid, int priority) async {
+    if (directMode && _directService != null) {
+      return _directService!.setWifiPriority(ssid, priority);
+    }
+    await sendControl({'cmd': 'wifi_set_priority', 'ssid': ssid, 'priority': priority});
+    return true;
+  }
+
+  // ── Event history (cloud + direct) ───────────────────────────────────────
+
+  Future<Map<String, dynamic>> fetchHistory() async {
+    if (directMode && _directService != null) {
+      return _directService!.fetchHistory();
+    }
+    // Cloud mode: send history_list command, then poll for response
+    await sendControl({'cmd': 'history_list'});
+    await Future.delayed(const Duration(seconds: 2));
+    final resp = await _fetchWifiResponse();
+    if (resp != null && resp['type'] == 'history_list') {
+      return resp['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
+    }
+    return {'count': 0, 'records': []};
+  }
+
+  Future<bool> clearHistory() async {
+    if (directMode && _directService != null) {
+      return _directService!.clearHistory();
+    }
+    await sendControl({'cmd': 'history_clear'});
+    return true;
+  }
+
+  /// Fetches the latest WiFi response from the backend cache.
+  Future<Map<String, dynamic>?> _fetchWifiResponse() async {
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl${_devicePath('/api/wifi', 'wifi')}'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> sendControl(Map<String, dynamic> cmd) async {
+    // ── Direct mode: translate commands to controller HTTP endpoints ──────
+    if (directMode && _directService != null) {
+      try {
+        final c = cmd['cmd'] as String? ?? '';
+        bool ok = false;
+        switch (c) {
+          case 'oh_on':  ok = await _directService!.motorOH(true); break;
+          case 'oh_off': ok = await _directService!.motorOH(false); break;
+          case 'ug_on':  ok = await _directService!.motorUG(true); break;
+          case 'ug_off': ok = await _directService!.motorUG(false); break;
+          case 'set_setting':
+            final key = cmd['key'] as String? ?? '';
+            final value = cmd['value'];
+            ok = await _directService!.setConfig(
+              ohDispOnly: key == 'oh_disp_only' ? value as bool : null,
+              ugDispOnly: key == 'ug_disp_only' ? value as bool : null,
+              ugIgnore: key == 'ug_ignore' ? value as bool : null,
+              buzzerDelay: key == 'buzzer_delay' ? value as bool : null,
+              ohStartLevel: key == 'oh_start_level' ? value as int : null,
+              ohStopLevel: key == 'oh_stop_level' ? value as int : null,
+              ohMaxRun: key == 'oh_max_run_min' ? value as int : null,
+            );
+            break;
+          case 'set_lcd_mode':
+            ok = await _directService!.setLcdMode(cmd['mode'] as String? ?? 'auto');
+            break;
+          case 'set_log_level':
+            ok = await _directService!.setLogLevel(cmd['level'] as String? ?? 'info');
+            break;
+          case 'set_mqtt_creds':
+            ok = await _directService!.setMqttPass(cmd['pass'] as String? ?? '');
+            break;
+          case 'sync_ntp':  ok = await _directService!.syncNtp(); break;
+          case 'reboot':   ok = await _directService!.reboot(); break;
+          case 'sched_clear': ok = await _directService!.clearSchedules(); break;
+          case 'get_logs': break; // logs fetched separately in direct mode
+          default:
+            // sched_add / sched_remove not easily mapped to bulk API;
+            // handled separately by WiFi/History screens.
+            break;
+        }
+        if (!ok && c != 'get_logs') {
+          error = 'Command failed';
+          notifyListeners();
+          Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+        }
+        _pollOnce(); // refresh status immediately after a command
+      } catch (e) {
+        error = e.toString();
+        notifyListeners();
+        Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+      }
+      return;
+    }
+
+    // ── Cloud mode: send via web backend ──────────────────────────────────
+    try {
       final headers = <String, String>{'Content-Type': 'application/json'};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.post(

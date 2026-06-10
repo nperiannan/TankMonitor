@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
+import 'dashboard_screen.dart';
 import 'register_screen.dart';
 import 'theme_data.dart';
 
@@ -61,6 +62,58 @@ class _LoginScreenState extends State<LoginScreen> {
         _error = svc.error ?? 'Invalid username or password';
       });
     }
+  }
+
+  void _connectDirect() {
+    final ipCtrl = TextEditingController(text: 'http://192.168.4.1');
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cardBg(ctx),
+        title: Text('Direct IP Connection',
+            style: TextStyle(color: textColor(ctx), fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Connect directly to the ESP32 controller.\nNo login required — works on LAN or AP hotspot.',
+                style: TextStyle(color: labelColor(ctx), fontSize: 12)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ipCtrl,
+              style: TextStyle(color: textColor(ctx)),
+              decoration: InputDecoration(
+                labelText: 'Device IP',
+                labelStyle: TextStyle(color: labelColor(ctx)),
+                hintText: 'http://192.168.4.1',
+                hintStyle: TextStyle(color: labelColor(ctx).withOpacity(0.5)),
+                filled: true,
+                fillColor: cardBg(ctx),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final svc = context.read<TankService>();
+              final ip = ipCtrl.text.trim();
+              await svc.saveDirectMode(true, ip);
+              svc.connectDirect(ip);
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const DashboardScreen()),
+                );
+              }
+            },
+            child: Text('Connect', style: TextStyle(color: accentBlue(ctx))),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -177,6 +230,38 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontWeight: FontWeight.w600)),
                     ),
                   ],
+                ),
+                const SizedBox(height: 24),
+
+                // ── Server Settings ──
+                GestureDetector(
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SetupScreen()),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.settings, color: labelColor(context), size: 14),
+                      const SizedBox(width: 4),
+                      Text('Server Settings',
+                          style: TextStyle(color: labelColor(context), fontSize: 12)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // ── Direct IP (no login) ──
+                GestureDetector(
+                  onTap: () => _connectDirect(),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.router, color: accentOrange(context), size: 14),
+                      const SizedBox(width: 4),
+                      Text('Connect directly via IP (no login)',
+                          style: TextStyle(color: accentOrange(context), fontSize: 12)),
+                    ],
+                  ),
                 ),
               ],
             ),

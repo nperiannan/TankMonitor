@@ -7,6 +7,7 @@ import 'theme_data.dart';
 import 'login_screen.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
+import 'dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -63,16 +64,23 @@ class _StartupState extends State<_Startup> {
   Future<void> _init() async {
     final svc = context.read<TankService>();
     final prefs = context.read<AppPreferences>();
-    await Future.wait([svc.loadToken(), prefs.load()]);
+    await Future.wait([svc.loadToken(), svc.loadSavedUrls(), prefs.load()]);
     svc.motorNotifyEnabled = prefs.motorNotify;
     prefs.addListener(() {
       svc.motorNotifyEnabled = prefs.motorNotify;
     });
+
+    // Direct mode: skip login/device list, go straight to dashboard
+    if (svc.directMode && svc.directIp.isNotEmpty) {
+      svc.connectDirect(svc.directIp);
+      setState(() { _home = const DashboardScreen(); _ready = true; });
+      return;
+    }
+
     if (svc.authToken == null) {
       setState(() { _home = const LoginScreen(); _ready = true; });
       return;
     }
-    await svc.loadSavedUrls();
     if (svc.wifiUrl.isNotEmpty || svc.mobileUrl.isNotEmpty) {
       setState(() { _home = const DeviceListScreen(); _ready = true; });
     } else {

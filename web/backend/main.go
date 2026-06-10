@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.1.0"
+const webVersion = "2.2.0"
 
 func main() {
 	// Init subsystems in order
@@ -136,6 +136,8 @@ func deviceRouter(w http.ResponseWriter, r *http.Request) {
 		handleDeviceControl(w, r)
 	case sub == "logs":
 		handleDeviceLogs(w, r)
+	case sub == "wifi":
+		handleDeviceWifi(w, r)
 	case sub == "ota/status":
 		handleOtaStatus(w, r)
 	case sub == "ota/upload":

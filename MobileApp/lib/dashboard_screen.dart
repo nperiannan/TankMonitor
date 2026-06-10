@@ -17,6 +17,8 @@ import 'device_list_screen.dart';
 import 'app_preferences.dart';
 import 'dashboard_themes.dart';
 import 'theme_data.dart';
+import 'wifi_management_screen.dart';
+import 'event_history_screen.dart';
 
 // ─── Colours (resolved from theme for backward-compat helpers) ──────────────
 const _blue    = kBlue;
@@ -303,6 +305,18 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  void _switchToCloud() async {
+    final svc = context.read<TankService>();
+    svc.disconnect();
+    await svc.saveDirectMode(false, '');
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (_) => false,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<TankService>();
@@ -365,13 +379,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                 style: TextStyle(color: labelColor(context), fontSize: 12)),
             ]),
           ),
-          IconButton(
-            icon: Icon(Icons.devices, color: labelColor(context), size: 20),
-            tooltip: 'Switch device',
-            onPressed: () => Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
+          if (!svc.directMode)
+            IconButton(
+              icon: Icon(Icons.devices, color: labelColor(context), size: 20),
+              tooltip: 'Switch device',
+              onPressed: () => Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
+              ),
             ),
-          ),
           IconButton(
             icon: Icon(Icons.settings_ethernet, color: labelColor(context), size: 20),
             tooltip: 'Change server',
@@ -380,9 +395,10 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
           IconButton(
-            icon: Icon(Icons.logout, color: labelColor(context), size: 20),
-            tooltip: 'Sign out',
-            onPressed: _logout,
+            icon: Icon(svc.directMode ? Icons.cloud : Icons.logout,
+                color: labelColor(context), size: 20),
+            tooltip: svc.directMode ? 'Switch to Cloud' : 'Sign out',
+            onPressed: svc.directMode ? _switchToCloud : _logout,
           ),
         ],
       ),
@@ -691,6 +707,57 @@ class _DashboardScreenState extends State<DashboardScreen>
                             enabled: s != null,
                             onTap: () => _confirmReboot(context, svc),
                           ),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── Device Management (WiFi, History, Factory Reset) ──
+                    _SectionCard(
+                      title: 'DEVICE MANAGEMENT',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(children: [
+                          Row(children: [
+                            _ActionButton(
+                              label: 'WiFi',
+                              icon: Icons.wifi,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const WifiManagementScreen()),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _ActionButton(
+                              label: 'History',
+                              icon: Icons.history,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => const EventHistoryScreen()),
+                              ),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            _ActionButton(
+                              label: 'Factory Reset',
+                              icon: Icons.restore,
+                              danger: true,
+                              enabled: svc.directService != null,
+                              onTap: () => _confirmFactoryReset(context, svc),
+                            ),
+                          ]),
+                          if (!svc.directMode && svc.directService != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text('Using device IP: ${s?.mgmtIp ?? "—"}',
+                                  style: TextStyle(color: labelColor(context), fontSize: 10)),
+                            ),
+                          if (svc.directService == null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text('Waiting for device IP…',
+                                  style: TextStyle(color: labelColor(context), fontSize: 10)),
+                            ),
                         ]),
                       ),
                     ),
@@ -1182,6 +1249,26 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(
           onPressed: () { Navigator.pop(ctx); svc.sendControl({'cmd': 'reboot'}); },
           child: const Text('Reboot', style: TextStyle(color: _red)),
+        ),
+      ],
+    ));
+  }
+
+  void _confirmFactoryReset(BuildContext ctx, TankService svc) {
+    showDialog(context: ctx, builder: (_) => AlertDialog(
+      backgroundColor: cardBg(ctx),
+      title: Text('Factory Reset?', style: TextStyle(color: textColor(ctx))),
+      content: Text('This will erase all settings (WiFi, schedules, motor config) and reboot the device.',
+          style: TextStyle(color: labelColor(ctx), fontSize: 13)),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () async {
+            Navigator.pop(ctx);
+            final ds = svc.directService;
+            if (ds != null) await ds.factoryReset();
+          },
+          child: const Text('Reset', style: TextStyle(color: _red)),
         ),
       ],
     ));

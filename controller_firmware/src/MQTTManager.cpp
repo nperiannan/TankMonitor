@@ -16,6 +16,7 @@
 #include "RTCManager.h"
 #include "Buzzer.h"
 #include "WiFiManager.h"
+#include "History.h"
 #include "Display.h"
 #include <ArduinoJson.h>
 
@@ -32,6 +33,7 @@ static char s_pass[64];
 static char s_topicStatus[64];
 static char s_topicControl[64];
 static char s_topicLogs[64];
+static char s_topicWifi[64];
 static char s_clientId[32];
 
 static unsigned long s_lastPublishMs    = 0;
@@ -98,6 +100,7 @@ static void buildTopicsFromMAC() {
     snprintf(s_topicStatus,  sizeof(s_topicStatus),  "tm/%s/status",  macStr.c_str());
     snprintf(s_topicControl, sizeof(s_topicControl), "tm/%s/control", macStr.c_str());
     snprintf(s_topicLogs,    sizeof(s_topicLogs),    "tm/%s/logs",    macStr.c_str());
+    snprintf(s_topicWifi,    sizeof(s_topicWifi),    "tm/%s/wifi",    macStr.c_str());
     // Use last 6 hex chars of MAC as a short unique suffix
     snprintf(s_clientId,     sizeof(s_clientId),     "esp32_%s",      macNoDash.substring(6).c_str());
 }
@@ -308,6 +311,77 @@ static void processPendingMQTT() {
         publishMQTTStatus();
         delay(300);
         esp_restart();
+    }
+    // ── WiFi management commands ──────────────────────────────────────────
+    else if (strcmp(cmd, "wifi_list") == 0) {
+        String json = getStoredNetworksJson();
+        s_mqtt.publish(s_topicWifi, ("{\"type\":\"wifi_list\",\"data\":" + json + "}").c_str(), false);
+        Log(INFO, "[MQTT] wifi_list published");
+    }
+    else if (strcmp(cmd, "wifi_scan") == 0) {
+        int found = WiFi.scanNetworks(false, true);
+        String json = "[";
+        for (int i = 0; i < found; i++) {
+            if (i > 0) json += ",";
+            String s = WiFi.SSID(i);
+            s.replace("\\", "\\\\"); s.replace("\"", "\\\"");
+            bool open = (WiFi.encryptionType(i) == WIFI_AUTH_OPEN);
+            json += "{\"ssid\":\"" + s + "\","
+                    "\"rssi\":"    + String(WiFi.RSSI(i)) + ","
+                    "\"ch\":"      + String(WiFi.channel(i)) + ","
+                    "\"open\":"    + (open ? "true" : "false") + "}";
+        }
+        json += "]";
+        WiFi.scanDelete();
+        s_mqtt.publish(s_topicWifi, ("{\"type\":\"wifi_scan\",\"data\":" + json + "}").c_str(), false);
+        Log(INFO, "[MQTT] wifi_scan published (" + String(found) + " networks)");
+    }
+    else if (strcmp(cmd, "wifi_add") == 0) {
+        const char* ssid = doc["ssid"] | "";
+        const char* pass = doc["pass"] | "";
+        if (strlen(ssid) == 0) {
+            Log(WARN, "[MQTT] wifi_add: empty SSID");
+        } else {
+            addWifiNetwork(String(ssid), String(pass));
+            Log(INFO, "[MQTT] wifi_add: " + String(ssid));
+            // Publish updated list
+            String json = getStoredNetworksJson();
+            s_mqtt.publish(s_topicWifi, ("{\"type\":\"wifi_list\",\"data\":" + json + "}").c_str(), false);
+        }
+    }
+    else if (strcmp(cmd, "wifi_delete") == 0) {
+        const char* ssid = doc["ssid"] | "";
+        if (strlen(ssid) == 0) {
+            Log(WARN, "[MQTT] wifi_delete: empty SSID");
+        } else {
+            removeWifiNetwork(String(ssid));
+            Log(INFO, "[MQTT] wifi_delete: " + String(ssid));
+            String json = getStoredNetworksJson();
+            s_mqtt.publish(s_topicWifi, ("{\"type\":\"wifi_list\",\"data\":" + json + "}").c_str(), false);
+        }
+    }
+    else if (strcmp(cmd, "wifi_set_priority") == 0) {
+        const char* ssid = doc["ssid"] | "";
+        int pri = doc["priority"] | 0;
+        if (strlen(ssid) == 0 || pri < 1) {
+            Log(WARN, "[MQTT] wifi_set_priority: bad args");
+        } else {
+            setWifiPriority(String(ssid), pri);
+            Log(INFO, "[MQTT] wifi_set_priority: " + String(ssid) + " → " + String(pri));
+            String json = getStoredNetworksJson();
+            s_mqtt.publish(s_topicWifi, ("{\"type\":\"wifi_list\",\"data\":" + json + "}").c_str(), false);
+        }
+    }
+    // ── Event history commands ─────────────────────────────────────────────
+    else if (strcmp(cmd, "history_list") == 0) {
+        String json = getHistoryJson(100);
+        s_mqtt.publish(s_topicWifi, ("{\"type\":\"history_list\",\"data\":" + json + "}").c_str(), false);
+        Log(INFO, "[MQTT] history_list published");
+    }
+    else if (strcmp(cmd, "history_clear") == 0) {
+        clearHistory();
+        s_mqtt.publish(s_topicWifi, "{\"type\":\"history_list\",\"data\":{\"count\":0,\"records\":[]}}", false);
+        Log(INFO, "[MQTT] history_clear done");
     }
     else {
         Log(WARN, "[MQTT] Unknown cmd: " + String(cmd));

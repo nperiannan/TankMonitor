@@ -14,8 +14,10 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen> {
   final _wifiCtrl   = TextEditingController();
   final _mobileCtrl = TextEditingController();
+  final _directIpCtrl = TextEditingController();
   final _form       = GlobalKey<FormState>();
   bool  _connecting = false;
+  bool  _directMode = false;
 
   @override
   void initState() {
@@ -23,12 +25,17 @@ class _SetupScreenState extends State<SetupScreen> {
     final svc = context.read<TankService>();
     _wifiCtrl.text   = svc.wifiUrl.isNotEmpty   ? svc.wifiUrl   : defaultWifiUrl;
     _mobileCtrl.text = svc.mobileUrl.isNotEmpty ? svc.mobileUrl : defaultMobileUrl;
+    _directMode      = svc.directMode;
+    _directIpCtrl.text = svc.directIp.isNotEmpty
+        ? svc.directIp
+        : 'http://192.168.4.1';
   }
 
   @override
   void dispose() {
     _wifiCtrl.dispose();
     _mobileCtrl.dispose();
+    _directIpCtrl.dispose();
     super.dispose();
   }
 
@@ -37,6 +44,23 @@ class _SetupScreenState extends State<SetupScreen> {
     setState(() => _connecting = true);
 
     final svc = context.read<TankService>();
+
+    if (_directMode) {
+      // Direct IP mode — no auth, poll ESP32 HTTP directly
+      final ip = _directIpCtrl.text.trim();
+      await svc.saveDirectMode(true, ip);
+      svc.connectDirect(ip);
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      setState(() => _connecting = false);
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+      return;
+    }
+
+    // Cloud mode
+    await svc.saveDirectMode(false, '');
     await svc.saveUrls(
       wifi:   _wifiCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
@@ -85,45 +109,40 @@ class _SetupScreenState extends State<SetupScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Configure server addresses.\nThe app auto-selects based on your current network.',
+                'Choose how to connect to your device.',
                 style: TextStyle(color: labelColor(context), fontSize: 13),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 24),
 
-              // ── WiFi URL ─────────────────────────────────────────────────
-              _FieldLabel(icon: Icons.wifi, color: accentBlue(context),
-                text: 'WiFi / Home Network URL'),
-              const SizedBox(height: 6),
+              // ── Connection mode toggle ───────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: _ModeButton(
+                      icon: Icons.cloud,
+                      label: 'Cloud',
+                      subtitle: 'Via web backend',
+                      selected: !_directMode,
+                      onTap: () => setState(() => _directMode = false),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ModeButton(
+                      icon: Icons.router,
+                      label: 'Direct IP',
+                      subtitle: 'ESP32 on LAN',
+                      selected: _directMode,
+                      onTap: () => setState(() => _directMode = true),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
               Form(
                 key: _form,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  _UrlField(
-                    controller: _wifiCtrl,
-                    hint: 'http://192.168.0.102:1880',
-                    label: 'WiFi URL',
-                  ),
-                  const SizedBox(height: 6),
-                  _DefaultChip(
-                    label: 'Use default  192.168.0.102:1880',
-                    onTap: () => setState(() => _wifiCtrl.text = defaultWifiUrl),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // ── Mobile URL ──────────────────────────────────────────
-                  _FieldLabel(icon: Icons.signal_cellular_alt,
-                    color: accentOrange(context), text: 'Mobile Data / Internet URL'),
-                  const SizedBox(height: 6),
-                  _UrlField(
-                    controller: _mobileCtrl,
-                    hint: 'http://nperiannan-nas.freemyip.com:1880',
-                    label: 'Mobile URL',
-                  ),
-                  const SizedBox(height: 6),
-                  _DefaultChip(
-                    label: 'Use default  nperiannan-nas.freemyip.com:1880',
-                    onTap: () => setState(() => _mobileCtrl.text = defaultMobileUrl),
-                  ),
-                ]),
+                child: _directMode ? _buildDirectFields() : _buildCloudFields(),
               ),
 
               const SizedBox(height: 20),
@@ -138,9 +157,13 @@ class _SetupScreenState extends State<SetupScreen> {
                   Icon(Icons.info_outline, color: accentBlue(context), size: 16),
                   const SizedBox(width: 8),
                   Expanded(child: Text(
-                    'On WiFi → uses WiFi URL automatically.\n'
-                    'On mobile data → uses Mobile URL automatically.\n'
-                    'Switches instantly if you change networks.',
+                    _directMode
+                        ? 'Connects directly to the ESP32 controller.\n'
+                          'Works without internet. Use 192.168.4.1 when\n'
+                          'connected to the TankMonitor AP hotspot.'
+                        : 'On WiFi → uses WiFi URL automatically.\n'
+                          'On mobile data → uses Mobile URL automatically.\n'
+                          'Switches instantly if you change networks.',
                     style: TextStyle(color: labelColor(context), fontSize: 12),
                   )),
                 ]),
@@ -171,6 +194,48 @@ class _SetupScreenState extends State<SetupScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildCloudFields() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _FieldLabel(icon: Icons.wifi, color: accentBlue(context),
+        text: 'WiFi / Home Network URL'),
+      const SizedBox(height: 6),
+      _UrlField(controller: _wifiCtrl, hint: 'http://192.168.0.102:1880', label: 'WiFi URL'),
+      const SizedBox(height: 6),
+      _DefaultChip(
+        label: 'Use default  192.168.0.102:1880',
+        onTap: () => setState(() => _wifiCtrl.text = defaultWifiUrl),
+      ),
+      const SizedBox(height: 24),
+      _FieldLabel(icon: Icons.signal_cellular_alt,
+        color: accentOrange(context), text: 'Mobile Data / Internet URL'),
+      const SizedBox(height: 6),
+      _UrlField(controller: _mobileCtrl, hint: 'http://nperiannan-nas.freemyip.com:1880', label: 'Mobile URL'),
+      const SizedBox(height: 6),
+      _DefaultChip(
+        label: 'Use default  nperiannan-nas.freemyip.com:1880',
+        onTap: () => setState(() => _mobileCtrl.text = defaultMobileUrl),
+      ),
+    ]);
+  }
+
+  Widget _buildDirectFields() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      _FieldLabel(icon: Icons.router, color: accentOrange(context),
+        text: 'Device IP Address'),
+      const SizedBox(height: 6),
+      _UrlField(
+        controller: _directIpCtrl,
+        hint: 'http://192.168.4.1',
+        label: 'ESP32 IP',
+      ),
+      const SizedBox(height: 6),
+      _DefaultChip(
+        label: 'AP hotspot default  192.168.4.1',
+        onTap: () => setState(() => _directIpCtrl.text = 'http://192.168.4.1'),
+      ),
+    ]);
   }
 }
 
@@ -247,4 +312,43 @@ class _DefaultChip extends StatelessWidget {
   );
 }
 
+class _ModeButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final bool selected;
+  final VoidCallback onTap;
+  const _ModeButton({
+    required this.icon, required this.label, required this.subtitle,
+    required this.selected, required this.onTap,
+  });
 
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: selected
+            ? accentBlue(context).withOpacity(0.12)
+            : cardBg(context),
+        border: Border.all(
+          color: selected ? accentBlue(context) : cardBd(context),
+          width: selected ? 2 : 1,
+        ),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: selected ? accentBlue(context) : labelColor(context), size: 28),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(
+            color: selected ? accentBlue(context) : textColor(context),
+            fontSize: 14, fontWeight: FontWeight.w600)),
+          Text(subtitle, style: TextStyle(
+            color: labelColor(context), fontSize: 11)),
+        ],
+      ),
+    ),
+  );
+}
