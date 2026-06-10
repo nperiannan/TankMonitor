@@ -2,7 +2,7 @@
 
 ## Repository
 
-- Monorepo: `controller_firmware/`, `web/`, `MobileApp/`
+- Monorepo: `controller_firmware/`, `transmitter_firmware/`, `web/`, `MobileApp/`
 - Remote: <https://github.com/nperiannan/TankMonitor.git>
 - Branch: `master`
 
@@ -24,11 +24,12 @@
 
 ## Versioning & Tags
 
-- Tag format: `controller_firmware/vX.Y.Z`, `web/vX.Y.Z`, `MobileApp/vX.Y.Z`
+- Tag format: `controller_firmware/vX.Y.Z`, `transmitter_firmware/vX.Y.Z`, `web/vX.Y.Z`, `MobileApp/vX.Y.Z`
 - **One release per component** — no combined multi-component releases
 - Tags must be **annotated** (not lightweight): `git tag -a web/vX.Y.Z -m "..."`
 - Version strings live in:
-  - Firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
+  - Controller firmware: `controller_firmware/include/Config.h` → `#define FW_VERSION`
+  - Transmitter firmware: `transmitter_firmware/include/Config.h` → `#define FW_VERSION`
   - Web backend: `web/backend/main.go` → `const webVersion`
   - Web frontend: `web/frontend/src/App.tsx` → `const WEB_APP_VERSION` ← must ALSO be bumped (hardcoded, not fetched from server)
   - App: Flutter `MobileApp/pubspec.yaml` → `version:` AND `MobileApp/lib/tank_service.dart` → `const mobileAppVersion` (both must be updated together)
