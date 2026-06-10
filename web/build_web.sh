@@ -14,7 +14,7 @@ cd /Volume1/docker/TankMonitor/web
 $GIT -C .. pull origin master
 
 # Derive the version from the Go source so the image tag always matches the binary.
-VERSION=$(grep 'const webVersion' backend/main.go | grep -oP '"\K[^"]+')
+VERSION=$(sed -n 's/.*webVersion = "\([^"]*\)".*/\1/p' backend/main.go)
 echo "==> Building tankmonitor-web:${VERSION}"
 
 $DOCKER build --no-cache -t tankmonitor-web:${VERSION} .
