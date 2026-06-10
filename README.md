@@ -17,7 +17,7 @@ TankMonitor/
 | --- | --- |
 | Controller Firmware | v2.3.3 |
 | Transmitter Firmware | v2.0.0 |
-| Web App | v2.2.0 |
+| Web App | v2.2.1 |
 | Mobile App | v2.5.1 |
 
 ---

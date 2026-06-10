@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -50,6 +51,29 @@ func (h *wsDeviceHub) broadcast(mac string, msg []byte) {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+// wsRequireAuth is an auth middleware tailored for WebSocket routes.
+// Unlike requireAuth, it upgrades the connection first and sends a close
+// frame with code 4001 on auth failure so the browser can distinguish
+// a bad/expired session from a network error and redirect to login.
+func wsRequireAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := tokenVerify(extractToken(r))
+		if !ok {
+			conn, err := upgrader.Upgrade(w, r, nil)
+			if err != nil {
+				// Upgrade failed (client sent non-WS request); 400 already written.
+				return
+			}
+			conn.WriteMessage(websocket.CloseMessage, //nolint:errcheck
+				websocket.FormatCloseMessage(4001, "session expired"))
+			conn.Close()
+			return
+		}
+		r.Header.Set("X-User-ID", strconv.FormatInt(userID, 10))
+		next(w, r)
+	}
 }
 
 // handleWS serves /ws/{mac}?token=...

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.2.0"
+const webVersion = "2.2.1"
 
 func main() {
 	// Init subsystems in order
@@ -66,8 +66,8 @@ func main() {
 	// WebSocket — per-device: /ws/{mac}?token=...
 	// Legacy single-device:   /ws?token=...  (auto-picks first claimed device)
 	// ---------------------------------------------------------------------------
-	mux.HandleFunc("/ws/", requireAuth(handleWS))
-	mux.HandleFunc("/ws", requireAuth(handleLegacyWS))
+	mux.HandleFunc("/ws/", wsRequireAuth(handleWS))
+	mux.HandleFunc("/ws", wsRequireAuth(handleLegacyWS))
 
 	// ---------------------------------------------------------------------------
 	// Legacy single-device routes — for old React web frontend (v1.x)

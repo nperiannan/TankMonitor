@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.2.0'
+const WEB_APP_VERSION = '2.2.1'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -335,7 +335,7 @@ export default function App() {
           .then(d => { if (d?.web_version) setBackendVersion(d.web_version as string) })
           .catch(() => {})
       }
-      ws.onclose   = () => { setConnected(false); setTimeout(connect, 3000) }
+      ws.onclose   = (e) => { setConnected(false); if (e.code === 4001) { handleLogout(); return } setTimeout(connect, 3000) }
       ws.onerror   = () => ws.close()
       ws.onmessage = ({ data }) => {
         try {
