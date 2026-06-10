@@ -152,15 +152,15 @@
 #define LCD_BL_ALWAYS_OFF 2   // Always off
 
 // =============================================================================
-//                              EEPROM (24C64 / AT24C64) - I2C
+//                              EEPROM (AT24C512 / 24T512) - I2C
 // =============================================================================
 #define EEPROM_I2C_ADDR    0x50      // Default I2C address (A2..A0 = GND → 0x50-0x57)
-#define EEPROM_PAGE_SIZE   32        // Bytes per page for 24C64
-#define EEPROM_SIZE_BYTES  8192      // 64 kbit = 8 KB
+#define EEPROM_PAGE_SIZE   128       // Bytes per page for AT24C512
+#define EEPROM_SIZE_BYTES  65536     // 512 kbit = 64 KB
 
 // History circular buffer layout inside EEPROM:
 //   Addr 0-7  : Header  (magic[2] + head[2] + count[2] + rsvd[2])
-//   Addr 8+   : Records (8 bytes each, 1023 records max)
+//   Addr 8+   : Records (8 bytes each, 8191 records max)
 #define HIST_HEADER_ADDR   0
 #define HIST_DATA_ADDR     8
 // HIST_MAX_RECORDS is computed in History.cpp to avoid sizeof in header macros

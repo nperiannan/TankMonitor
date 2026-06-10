@@ -55,7 +55,7 @@ static bool eepromWriteBytes(uint16_t addr, const uint8_t* data, uint8_t len) {
     Wire.write((uint8_t)(addr & 0xFF));
     Wire.write(data, len);
     if (Wire.endTransmission() != 0) return false;
-    delay(10);  // AT24C64 write-cycle time (max 10 ms)
+    delay(10);  // AT24C512 write-cycle time (max 10 ms)
     return true;
 }
 

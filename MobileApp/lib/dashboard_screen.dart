@@ -504,35 +504,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       );
                     }),
                     const SizedBox(height: 12),
-                    // ── Event History preview card ──
-                    _SectionCard(
-                      title: 'Event History',
-                      titleMixed: true,
-                      trailing: _SmallButton(
-                        label: 'Expand',
-                        onTap: () => showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: cardBg(context),
-                          shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                          builder: (_) => const _FullScreenModal(
-                            title: 'Event History',
-                            child: EventHistoryScreen(),
-                          ),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(children: [
-                          Icon(Icons.history, color: accentBlue(context), size: 18),
-                          const SizedBox(width: 8),
-                          Text('Motor run history stored on device.',
-                              style: TextStyle(color: labelColor(context), fontSize: 12)),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     // ── WiFi status preview card ──
                     _SectionCard(
                       title: 'WiFi / AP',
