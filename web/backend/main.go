@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.2.1"
+const webVersion = "2.2.2"
 
 func main() {
 	// Init subsystems in order
@@ -16,6 +16,7 @@ func main() {
 	initAuth()
 	otaLoadFromDisk() // restore any firmware staged before this run
 	go startMQTT()
+	go startGitHubPoller() // auto-pull controller_firmware releases from GitHub
 
 	port := env("PORT", "8080")
 	staticDir := env("STATIC_DIR", "/app/static")

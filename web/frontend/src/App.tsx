@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.2.1'
+const WEB_APP_VERSION = '2.2.2'
 
 // ---------------------------------------------------------------------------
 // Login page
