@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	wifiMu      sync.RWMutex
-	wifiCache   = make(map[string]wifiEntry) // mac → latest wifi_list / wifi_scan
+	wifiMu       sync.RWMutex
+	wifiCache    = make(map[string]wifiEntry) // mac → latest wifi_list / wifi_scan
 	historyCache = make(map[string]wifiEntry) // mac → latest history_list
 )
 
