@@ -138,6 +138,8 @@ func deviceRouter(w http.ResponseWriter, r *http.Request) {
 		handleDeviceLogs(w, r)
 	case sub == "wifi":
 		handleDeviceWifi(w, r)
+	case sub == "history":
+		handleDeviceHistory(w, r)
 	case sub == "ota/status":
 		handleOtaStatus(w, r)
 	case sub == "ota/upload":

@@ -71,9 +71,6 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Bottom nav tab
   int _tabIndex = 0;
 
-  // Scheduler expand/collapse
-  bool _schedExpanded = false;
-
   @override
   void initState() {
     super.initState();
@@ -450,83 +447,134 @@ class _DashboardScreenState extends State<DashboardScreen>
                       }
                     }),
                     const SizedBox(height: 12),
-                    // ── Schedules ──
+                    // ── Schedules (compact — Open modal for full management) ──
                     Builder(builder: (ctx) {
-                      // Compute default 2 entries: next OH + next UG
                       final allScheds = s?.schedules ?? [];
                       final ohScheds = allScheds.where((sc) => sc.m == 'OH').toList();
                       final ugScheds = allScheds.where((sc) => sc.m == 'UG').toList();
-                      Schedule? nextOHSched = ohScheds.isEmpty ? null
+                      final Schedule? nextOHSched = ohScheds.isEmpty ? null
                           : (nextOHIdx != null ? ohScheds.firstWhere((sc) => sc.i == nextOHIdx, orElse: () => ohScheds.first) : ohScheds.first);
-                      Schedule? nextUGSched = ugScheds.isEmpty ? null
+                      final Schedule? nextUGSched = ugScheds.isEmpty ? null
                           : (nextUGIdx != null ? ugScheds.firstWhere((sc) => sc.i == nextUGIdx, orElse: () => ugScheds.first) : ugScheds.first);
-                      final defaultEntries = [
+                      final previewEntries = [
                         if (nextOHSched != null) nextOHSched,
                         if (nextUGSched != null) nextUGSched,
                       ];
-                      final showEntries = _schedExpanded ? allScheds : defaultEntries;
-                      final hasMore = allScheds.length > defaultEntries.length;
-
+                      void openScheduler() => showModalBottomSheet(
+                        context: ctx,
+                        isScrollControlled: true,
+                        backgroundColor: cardBg(ctx),
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                        builder: (_) => _SchedulerModal(
+                          svc: svc, s: s,
+                          nextOHIdx: nextOHIdx, nextUGIdx: nextUGIdx,
+                        ),
+                      );
                       return _SectionCard(
                         title: 'Scheduler',
                         subtitle: s?.time != null ? 'Time: ${_to12hr(s!.time)}' : null,
                         titleMixed: true,
-                        trailing: Row(children: [
-                          _SmallButton(
-                            label: '+ Add',
-                            onTap: () => showModalBottomSheet(
-                              context: ctx, isScrollControlled: true,
-                              backgroundColor: cardBg(context),
-                              builder: (_) => ScheduleSheet(svc: svc),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          _SmallButton(
-                            label: 'Clear All', danger: true,
-                            onTap: () => _confirmClear(ctx, svc),
-                          ),
-                        ]),
+                        trailing: _SmallButton(label: 'Expand', onTap: openScheduler),
                         child: Column(
                           children: [
                             if (s == null || allScheds.isEmpty)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                child: Center(child: Text('No schedules yet',
-                                  style: TextStyle(color: labelColor(context), fontSize: 13))),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Center(child: Text(
+                                  'No schedules — tap Open to add',
+                                  style: TextStyle(color: labelColor(context), fontSize: 12),
+                                )),
                               )
-                            else
-                              ...showEntries.map((sch) => _ScheduleRow(
+                            else ...
+                              previewEntries.map((sch) => _SchedulePreviewRow(
                                 sch: sch,
-                                svc: svc,
                                 isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
                               )),
-                            if (allScheds.isNotEmpty && hasMore)
-                              GestureDetector(
-                                onTap: () => setState(() => _schedExpanded = !_schedExpanded),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(
-                                        _schedExpanded
-                                            ? 'Show less'
-                                            : 'Show all ${allScheds.length} schedules',
-                                        style: TextStyle(color: accentBlue(context), fontSize: 12),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Icon(
-                                        _schedExpanded ? Icons.expand_less : Icons.expand_more,
-                                        color: accentBlue(context), size: 16,
-                                      ),
-                                    ],
-                                  ),
+                            if (allScheds.length > previewEntries.length)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  '+${allScheds.length - previewEntries.length} more — tap Open',
+                                  style: TextStyle(color: accentBlue(context), fontSize: 11),
                                 ),
                               ),
                           ],
                         ),
                       );
                     }),
+                    const SizedBox(height: 12),
+                    // ── Event History preview card ──
+                    _SectionCard(
+                      title: 'Event History',
+                      titleMixed: true,
+                      trailing: _SmallButton(
+                        label: 'Expand',
+                        onTap: () => showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: cardBg(context),
+                          shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                          builder: (_) => const _FullScreenModal(
+                            title: 'Event History',
+                            child: EventHistoryScreen(),
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(children: [
+                          Icon(Icons.history, color: accentBlue(context), size: 18),
+                          const SizedBox(width: 8),
+                          Text('Motor run history stored on device.',
+                              style: TextStyle(color: labelColor(context), fontSize: 12)),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // ── WiFi status preview card ──
+                    _SectionCard(
+                      title: 'WiFi / AP',
+                      titleMixed: true,
+                      trailing: _SmallButton(
+                        label: 'Expand',
+                        onTap: () => showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: cardBg(context),
+                          shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+                          builder: (_) => const _FullScreenModal(
+                            title: 'WiFi Management',
+                            child: WifiManagementScreen(),
+                          ),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(children: [
+                          Icon(
+                            s != null && s.wifiRssi > -70
+                                ? Icons.wifi
+                                : s != null && s.wifiRssi > -85
+                                    ? Icons.wifi_2_bar
+                                    : Icons.wifi_1_bar,
+                            color: s != null && s.wifiRssi > -70
+                                ? accentGreen(context)
+                                : s != null
+                                    ? accentOrange(context)
+                                    : labelColor(context),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            s != null ? '${s.wifiRssi} dBm  ·  Tap Expand to manage networks & AP' : 'No data yet',
+                            style: TextStyle(color: labelColor(context), fontSize: 12),
+                          ),
+                        ]),
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -1841,6 +1889,181 @@ class _ActionButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+// ─── Compact read-only schedule preview row (no edit/delete) ─────────────────
+class _SchedulePreviewRow extends StatelessWidget {
+  final Schedule sch;
+  final bool isNext;
+  const _SchedulePreviewRow({required this.sch, this.isNext = false});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.symmetric(vertical: 3),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    decoration: BoxDecoration(
+      color: isNext ? accentGreen(context).withOpacity(0.08) : subtleBg(context),
+      border: isNext ? Border(left: BorderSide(color: accentGreen(context), width: 3)) : null,
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: sch.m == 'OH' ? accentGreen(context).withOpacity(0.1) : const Color(0xFF7c4dff).withOpacity(0.1),
+          border: Border.all(color: sch.m == 'OH' ? accentGreen(context) : const Color(0xFF7c4dff)),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(sch.m, style: TextStyle(
+          color: sch.m == 'OH' ? accentGreen(context) : const Color(0xFF7c4dff),
+          fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+      ),
+      const SizedBox(width: 10),
+      Text(_to12hr(sch.t), style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(width: 8),
+      Text('${sch.d} min', style: TextStyle(color: labelColor(context), fontSize: 11)),
+      if (isNext) ...[        
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: accentGreen(context).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text('NEXT', style: TextStyle(
+            color: accentGreen(context), fontSize: 9, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+        ),
+      ],
+    ]),
+  );
+}
+
+// ─── Full scheduler modal bottom sheet ────────────────────────────────────────
+class _SchedulerModal extends StatelessWidget {
+  final TankService svc;
+  final dynamic s; // DeviceStatus?
+  final int? nextOHIdx;
+  final int? nextUGIdx;
+  const _SchedulerModal({required this.svc, required this.s, this.nextOHIdx, this.nextUGIdx});
+
+  void _confirmClear(BuildContext ctx) {
+    showDialog(context: ctx, builder: (_) => AlertDialog(
+      backgroundColor: cardBg(ctx),
+      title: Text('Clear all schedules?', style: TextStyle(color: textColor(ctx))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () { Navigator.pop(ctx); svc.sendControl({'cmd': 'sched_clear'}); },
+          child: const Text('Clear', style: TextStyle(color: kRed)),
+        ),
+      ],
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allScheds = (s?.schedules as List<dynamic>?)?.cast<Schedule>() ?? <Schedule>[];
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (ctx, scrollCtrl) => Column(
+        children: [
+          // Handle bar
+          Center(
+            child: Container(
+              margin: const EdgeInsets.only(top: 10, bottom: 6),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: cardBd(context), borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          // Header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+            child: Row(
+              children: [
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Scheduler', style: TextStyle(
+                      color: textColor(context), fontSize: 16, fontWeight: FontWeight.w700)),
+                    if (s?.time != null)
+                      Text('Device time: ${_to12hr(s.time)}',
+                          style: TextStyle(color: labelColor(context), fontSize: 11)),
+                  ],
+                )),
+                _SmallButton(
+                  label: '+ Add',
+                  onTap: () => showModalBottomSheet(
+                    context: ctx, isScrollControlled: true,
+                    backgroundColor: cardBg(ctx),
+                    builder: (_) => ScheduleSheet(svc: svc),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _SmallButton(
+                  label: 'Clear All', danger: true,
+                  onTap: () => _confirmClear(ctx),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: Icon(Icons.close, color: labelColor(context), size: 20),
+                  tooltip: 'Close',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => Navigator.pop(ctx),
+                ),
+                const SizedBox(width: 4),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: cardBd(context)),
+          // Schedule list
+          Expanded(
+            child: allScheds.isEmpty
+                ? Center(child: Text('No schedules yet',
+                    style: TextStyle(color: labelColor(context), fontSize: 14)))
+                : ListView.builder(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: allScheds.length,
+                    itemBuilder: (_, i) {
+                      final sch = allScheds[i];
+                      return _ScheduleRow(
+                        sch: sch, svc: svc,
+                        isNext: sch.i == nextOHIdx || sch.i == nextUGIdx,
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Generic full-screen modal wrapper for bottom sheet ───────────────────────
+// Renders the child screen (which has its own Scaffold/AppBar) in a bottom sheet.
+// The child Scaffold's leading BackButton will close the modal.
+class _FullScreenModal extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _FullScreenModal({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    // Use SizedBox to fill most of screen height; child is a full Scaffold.
+    final screenH = MediaQuery.of(context).size.height;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      child: SizedBox(
+        height: screenH * 0.92,
+        child: child,
+      ),
+    );
+  }
 }
 
 class _ScheduleRow extends StatelessWidget {

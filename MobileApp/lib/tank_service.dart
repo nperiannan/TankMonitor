@@ -869,10 +869,20 @@ class TankService extends ChangeNotifier {
     // Cloud mode: send history_list command, then poll for response
     await sendControl({'cmd': 'history_list'});
     await Future.delayed(const Duration(seconds: 2));
-    final resp = await _fetchWifiResponse();
-    if (resp != null && resp['type'] == 'history_list') {
-      return resp['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
-    }
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 5));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        if (body['type'] == 'history_list') {
+          return body['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
+        }
+      }
+    } catch (_) {}
     return {'count': 0, 'records': []};
   }
 
