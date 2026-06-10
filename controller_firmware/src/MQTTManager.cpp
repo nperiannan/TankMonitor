@@ -599,13 +599,13 @@ void publishMQTTStatus() {
         strcpy(loraLastStr, "Never");
     }
 
-    char payload[1700];
+    char payload[1750];
     snprintf(payload, sizeof(payload),
         "{\"mac\":\"%s\",\"ip\":\"%s\",\"device_type\":\"tank_monitor\","
         "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
         "\"oh_last_known\":\"%s\","
         "\"oh_motor\":%s,\"ug_motor\":%s,"
-        "\"lora_ok\":%s,\"tx_lost\":%s,\"wifi_rssi\":%d,"
+        "\"lora_ok\":%s,\"tx_lost\":%s,\"wifi_rssi\":%d,\"wifi_ssid\":\"%s\","
         "\"loraRSSI\":%.1f,\"loraSNR\":%.1f,\"lastLoraReceived\":\"%s\","
         "\"uptime_s\":%lu,\"fw\":\"%s\","
         "\"time\":\"%s\","
@@ -628,6 +628,7 @@ void publishMQTTStatus() {
         loraOperational ? "true" : "false",
         isTransmitterLost() ? "true" : "false",
         wifiRSSI,
+        wifiSSID.c_str(),
         getLoraRSSI(), getLoraSNR(), loraLastStr,
         millis() / 1000UL,
         FW_VERSION,

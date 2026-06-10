@@ -47,6 +47,7 @@ class Status {
   final bool ugBuzzer;    // buzzer countdown running for UG motor
   final String txFw;      // transmitter firmware version
   final String mgmtIp;    // ESP32 management IP (WiFi STA IP)
+  final String wifiSsid;  // connected SSID, empty when in AP mode
   final String ohLastKnown; // last valid OH state before UNKNOWN
   final bool txLost;      // transmitter declared lost
   final int  ohStartLevel; // motor start threshold (TankState enum)
@@ -78,6 +79,7 @@ class Status {
     required this.ugBuzzer,
     required this.txFw,
     required this.mgmtIp,
+    required this.wifiSsid,
     required this.ohLastKnown,
     required this.txLost,
     required this.ohStartLevel,
@@ -112,6 +114,7 @@ class Status {
         ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
         txFw:       j['tx_fw']        as String? ?? '',
         mgmtIp:     j['ip']           as String? ?? '',
+        wifiSsid:   j['wifi_ssid']    as String? ?? '',
         ohLastKnown: j['oh_last_known'] as String? ?? '',
         txLost:     j['tx_lost']      as bool?   ?? false,
         ohStartLevel: j['oh_start_level'] as int? ?? 1,

@@ -539,9 +539,30 @@ class _DashboardScreenState extends State<DashboardScreen>
                             size: 18,
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            s != null ? '${s.wifiRssi} dBm  ·  Tap Expand to manage networks & AP' : 'No data yet',
-                            style: TextStyle(color: labelColor(context), fontSize: 12),
+                          Expanded(
+                            child: s != null
+                                ? Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        s.wifiSsid.isNotEmpty
+                                            ? '${s.wifiRssi} dBm  ·  ${s.wifiSsid}'
+                                            : 'AP mode',
+                                        style: TextStyle(color: labelColor(context), fontSize: 12),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        s.wifiSsid.isNotEmpty
+                                            ? s.mgmtIp
+                                            : '192.168.4.1',
+                                        style: TextStyle(color: labelColor(context), fontSize: 12),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
+                                    'No data yet',
+                                    style: TextStyle(color: labelColor(context), fontSize: 12),
+                                  ),
                           ),
                         ]),
                       ),

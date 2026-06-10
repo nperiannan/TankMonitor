@@ -68,6 +68,7 @@ class DirectDeviceService {
       'loraSNR': s['loraSNR'] ?? 0,
       'lastLoraReceived': s['lastLoraReceived'] as String? ?? '',
       'wifi_rssi': 0, // not available from controller /status
+      'wifi_ssid': s['wifiSSID'] as String? ?? '',
       'uptime_s': si['uptime'] as int? ?? 0,
       'fw': s['fwVersion'] as String? ?? '',
       'time': s['time'] as String? ?? '',
