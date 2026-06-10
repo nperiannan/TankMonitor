@@ -2,6 +2,127 @@
 
 Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and Flutter mobile app.
 
+---
+
+## Architecture — High-Level Overview
+
+```mermaid
+flowchart TD
+    subgraph Field["Field Hardware"]
+        TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.0.0"]
+        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.3.3"]
+        TX -- "LoRa 865 MHz\nlevel packets" --> CTRL
+    end
+
+    subgraph Server["TNAS Server · 192.168.0.102"]
+        MQ["Mosquitto\nMQTT Broker · :1883"]
+        WEB["Web App\nGo Backend + React UI\n:1880"]
+        MQ <--> WEB
+    end
+
+    CTRL -- "MQTT publish status\nTCP :1883" --> MQ
+    MQ -- "MQTT control commands" --> CTRL
+    CTRL -. "HTTP OTA poll\nevery 5 min" .-> WEB
+
+    BROWSER["Web Browser"]
+    APP["Mobile App\nFlutter Android · v2.5.1"]
+
+    BROWSER <-- "HTTP + WebSocket · :1880" --> WEB
+    APP <-- "HTTP + WebSocket · :1880" --> WEB
+    APP -. "BLE · initial setup only" .-> CTRL
+```
+
+---
+
+## Architecture — Detailed
+
+```mermaid
+flowchart LR
+    subgraph OH_Node["OH Tank Node"]
+        F_OH["Float Switches\nFULL / HALF / LOW"]
+        TXmcu["ATmega328P\nFW v2.0.0"]
+        TXlora["LoRa RFM95\n865 MHz"]
+        F_OH --> TXmcu --> TXlora
+    end
+
+    subgraph ESP32["Controller · ESP32-S3 Nebula S3"]
+        RXlora["LoRa RFM95\nHSPI CS=10 IRQ=14 RST=21"]
+        F_UG["UG Float Switch\nGPIO 42"]
+        TOUCH["Touch Switches\nGPIO 40 / 41"]
+        MCU["ESP32-S3\nFW v2.3.3"]
+        R_OH["OH Relay\nGPIO 1"]
+        R_UG["UG Relay\nGPIO 2"]
+        BUZ["Buzzer\nGPIO 3"]
+        LCD["LCD 16x2\nI2C 0x27\nSDA=18 SCL=17"]
+        RTC["RTC DS3231\nAT24C512 EEPROM"]
+
+        RXlora --> MCU
+        F_UG --> MCU
+        TOUCH --> MCU
+        RTC --> MCU
+        MCU --> R_OH
+        MCU --> R_UG
+        MCU --> BUZ
+        MCU --> LCD
+    end
+
+    subgraph Actuators["Actuators"]
+        OH_M["Overhead Tank\nMotor / Pump"]
+        UG_M["Underground Tank\nMotor / Pump"]
+    end
+
+    subgraph TNAS["TNAS Server · 192.168.0.102"]
+        MQ["Mosquitto\nMQTT Broker\n:1883"]
+        GO["Go Backend\n:8080\nweb v2.2.1"]
+        STATIC["React Frontend\nserved as static"]
+        DB[("SQLite\n/data/tankmonitor.db")]
+        GO --- MQ
+        GO --- DB
+        GO --- STATIC
+    end
+
+    subgraph Router["ER605 Router"]
+        PF[":1880 forward\n:1883 forward"]
+    end
+
+    subgraph Clients["Client Devices"]
+        BROWSER["Web Browser"]
+        PHONE["Mobile App\nFlutter · v2.5.1"]
+    end
+
+    TXlora -- "LoRa 865 MHz\nFloatPacket 4 bytes" --> RXlora
+    R_OH --> OH_M
+    R_UG --> UG_M
+
+    MCU -- "MQTT pub\ntm/mac/status\njson payload" --> MQ
+    MQ -- "MQTT sub\ntm/mac/control\njson cmd" --> MCU
+    MCU -. "HTTP GET\n/api/ota/check/mac\nevery 5 min" .-> GO
+    GO -- "firmware.bin\nHTTP download" .-> MCU
+
+    BROWSER -- "HTTP REST\nWebSocket\n:1880" --> GO
+    GO -- "status push\nWebSocket" --> BROWSER
+    PHONE -- "HTTP REST\nWebSocket\n:1880" --> GO
+    GO -- "status push\nWebSocket" --> PHONE
+    PHONE -. "BLE\nsetup only" .-> MCU
+
+    PF -. "Internet\naccess" .-> GO
+    PF -. "Internet\naccess" .-> MQ
+```
+
+### Protocol Summary
+
+| Link | Protocol | Port / Medium | Direction |
+| --- | --- | --- | --- |
+| Transmitter → Controller | LoRa 865 MHz | RF (FloatPacket 4B) | One-way |
+| Controller ↔ MQTT Broker | MQTT over TCP | 1883 | Bidirectional |
+| Controller → Web App | HTTP | 1880 (OTA poll every 5 min) | Outbound |
+| Web App → Controller | HTTP | via MQTT ota_start cmd | Triggered |
+| Browser / App ↔ Web App | HTTP REST + WebSocket | 1880 | Bidirectional |
+| Mobile App → Controller | BLE | RF | Setup only |
+| Internet → NAS | TCP port forward | 1880 / 1883 | Inbound |
+
+---
+
 ## Repository Structure
 
 ```text
