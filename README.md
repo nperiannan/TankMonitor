@@ -11,7 +11,7 @@ flowchart TD
     subgraph Field["Field Hardware"]
         TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.0.0"]
         CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.3.3"]
-        TX -- "LoRa 865 MHz\nlevel packets" --> CTRL
+        TX -- "LoRa 865 MHz · level packets" --> CTRL
     end
 
     subgraph Server["TNAS Server · 192.168.0.102"]
@@ -20,9 +20,9 @@ flowchart TD
         MQ <--> WEB
     end
 
-    CTRL -- "MQTT publish status\nTCP :1883" --> MQ
+    CTRL -- "MQTT publish status · TCP :1883" --> MQ
     MQ -- "MQTT control commands" --> CTRL
-    CTRL -. "HTTP OTA poll\nevery 5 min" .-> WEB
+    CTRL -. "HTTP OTA poll · every 5 min" .-> WEB
 
     BROWSER["Web Browser"]
     APP["Mobile App\nFlutter Android · v2.5.1"]
@@ -90,23 +90,23 @@ flowchart LR
         PHONE["Mobile App\nFlutter · v2.5.1"]
     end
 
-    TXlora -- "LoRa 865 MHz\nFloatPacket 4 bytes" --> RXlora
+    TXlora -- "LoRa 865 MHz / FloatPacket 4B" --> RXlora
     R_OH --> OH_M
     R_UG --> UG_M
 
-    MCU -- "MQTT pub\ntm/mac/status\njson payload" --> MQ
-    MQ -- "MQTT sub\ntm/mac/control\njson cmd" --> MCU
-    MCU -. "HTTP GET\n/api/ota/check/mac\nevery 5 min" .-> GO
-    GO -- "firmware.bin\nHTTP download" .-> MCU
+    MCU -- "MQTT pub · tm/mac/status" --> MQ
+    MQ -- "MQTT sub · tm/mac/control" --> MCU
+    MCU -. "HTTP GET /api/ota/check · 5 min" .-> GO
+    GO -- "firmware.bin HTTP" .-> MCU
 
-    BROWSER -- "HTTP REST\nWebSocket\n:1880" --> GO
-    GO -- "status push\nWebSocket" --> BROWSER
-    PHONE -- "HTTP REST\nWebSocket\n:1880" --> GO
-    GO -- "status push\nWebSocket" --> PHONE
-    PHONE -. "BLE\nsetup only" .-> MCU
+    BROWSER -- "HTTP REST + WebSocket :1880" --> GO
+    GO -- "status push WebSocket" --> BROWSER
+    PHONE -- "HTTP REST + WebSocket :1880" --> GO
+    GO -- "status push WebSocket" --> PHONE
+    PHONE -. "BLE · setup only" .-> MCU
 
-    PF -. "Internet\naccess" .-> GO
-    PF -. "Internet\naccess" .-> MQ
+    PF -. "Internet access" .-> GO
+    PF -. "Internet access" .-> MQ
 ```
 
 ### Protocol Summary
