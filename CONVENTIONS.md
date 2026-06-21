@@ -65,31 +65,41 @@
 - docker binary: `/Volume1/@apps/DockerEngine/dockerd/bin/docker`
 - Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
 
-## OrangePi — Primary Host (MR200 4G LTE network, co-located with ESP32)
+## OrangePi — Primary Host (home network, replaces TNAS)
 
 - Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l), Docker 29
 - Repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
-- Static LAN IP `192.168.1.50` (via `/etc/systemd/network/99-end0-static.network`)
+- Static IP `192.168.0.50` on home network (`/etc/systemd/network/99-end0-static.network`), gateway `192.168.0.1`
 - Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
 - `OTA_BASE_URL` auto-detected by deploy script (`ip route get 8.8.8.8`)
 - Native `mosquitto` service stopped and disabled — only the Docker container runs
-- Deploy/update: `ssh root@192.168.1.50 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
+- Deploy/update: `ssh root@192.168.0.50 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
 - Both containers have `--restart always`
 
-### Remote Access — Tailscale
+### Remote Access — Tailscale + DDNS
 
-- Tailscale installed; device name `orangepipcplus` in `hainatraj` tailnet
-- Tailscale IP: `100.122.14.61` (stable — does not change while device stays in tailnet)
-- `nperiannan-nas.freemyip.com` A record → `100.122.14.61`
-- DDNS auto-update cron: `/etc/cron.d/tankmonitor-ddns` runs every 10 min, updates freemyip.com with current Tailscale IP
-- freemyip.com token stored in `/usr/local/bin/update-ddns.sh` on the OrangePi (NOT in git)
+- Tailscale installed; device `orangepipcplus` in `hainatraj` tailnet, IP `100.122.14.61`
+- Use Tailscale to SSH into the OrangePi from anywhere: `ssh root@100.122.14.61`
+- `nperiannan-nas.freemyip.com` → home WAN IP (updated by DDNS cron, NOT Tailscale IP)
+- DDNS cron: `/etc/cron.d/tankmonitor-ddns` runs every 10 min; script at `/usr/local/bin/update-ddns.sh` uses `api.ipify.org` to get WAN IP
+- freemyip.com token stored in `/usr/local/bin/update-ddns.sh` on OrangePi (NOT in git)
 
-### ESP32 MQTT — Local DNS Override
+### Port Forwarding on ER605 (required)
 
-- `dnsmasq` installed and running on OrangePi
-- Config: `/etc/dnsmasq.d/tankmonitor.conf` — resolves `nperiannan-nas.freemyip.com` → `192.168.1.50` for LAN clients
-- MR200 router DHCP must set primary DNS to `192.168.1.50` so the ESP32 uses OrangePi's dnsmasq
-- Result: ESP32 connects to MQTT broker locally (never leaves the LAN), phone uses Tailscale tunnel
+Update the existing TNAS port forwards to point to OrangePi instead:
+- External `1880` → `192.168.0.50:1880` (web app)
+- External `1883` → `192.168.0.50:1883` (MQTT)
+
+### dnsmasq — Local DNS Override
+
+- dnsmasq running on OrangePi; config: `/etc/dnsmasq.d/tankmonitor.conf`
+- Resolves `nperiannan-nas.freemyip.com` → `192.168.0.50` for LAN clients (avoids ER605 hairpin NAT issue)
+- Optional: point ER605 DHCP primary DNS to `192.168.0.50` so all LAN clients use this override
+
+### Mobile App — One-Time Settings Update
+
+- WiFi URL: change from `http://192.168.0.102:1880` → `http://192.168.0.50:1880` in app settings
+- Mobile URL: `http://nperiannan-nas.freemyip.com:1880` — unchanged, works via port forward
 
 ## OTA Flash Flow
 
