@@ -65,15 +65,16 @@
 - docker binary: `/Volume1/@apps/DockerEngine/dockerd/bin/docker`
 - Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
 
-## OrangePi Backup Host (@ 192.168.0.105) — Standby
+## OrangePi Backup Host (MR200 network @ 192.168.1.50) — Standby
 
 - Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l)
 - Docker 29 pre-installed; repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
+- On the **MR200 4G LTE network** (192.168.1.x) — static IP `192.168.1.50` in `/etc/systemd/network/99-end0-static.network`
 - Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
-- Web app accessible at `http://192.168.0.105:1880`; MQTT broker at `192.168.0.105:1883`
-- `OTA_BASE_URL=http://192.168.0.105:1880` (LAN address of this host)
+- Web app accessible at `http://192.168.1.50:1880`; MQTT broker at `192.168.1.50:1883`
+- `OTA_BASE_URL` is **auto-detected** by the deploy script (`ip route get 8.8.8.8`) — no hardcoded IP
 - Native `mosquitto` service has been **stopped and disabled** — only the Docker container runs
-- Deploy/update: `ssh root@192.168.0.105 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
+- Deploy/update: `ssh root@192.168.1.50 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
 - Both containers have `--restart always` — they come back up automatically on reboot
 
 ## OTA Flash Flow

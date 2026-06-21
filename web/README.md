@@ -111,5 +111,5 @@ cd backend && go run main.go
 | | URL |
 | --- | --- |
 | TNAS (primary) | <http://192.168.0.102:1880> |
-| OrangePi (backup) | <http://192.168.0.105:1880> |
+| OrangePi (backup, MR200 network) | <http://192.168.1.50:1880> |
 | Public | <http://nperiannan-nas.freemyip.com:1880> |

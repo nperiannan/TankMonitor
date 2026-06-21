@@ -56,7 +56,11 @@ docker run -d \
   -v "$MOSQ_DIR/log:/mosquitto/log" \
   eclipse-mosquitto:2
 
-# Start web app — OTA_BASE_URL uses the LAN IP of this OrangePi host
+# Detect this machine's LAN IP so OTA URLs are always correct regardless of network
+LOCAL_IP=$(ip route get 8.8.8.8 2>/dev/null | grep -oP 'src \K\S+' || hostname -I | awk '{print $1}')
+echo "==> OTA_BASE_URL will be http://${LOCAL_IP}:1880"
+
+# Start web app — OTA_BASE_URL uses the auto-detected LAN IP of this OrangePi host
 docker run -d \
   --name tankmonitor-web \
   --network $NETWORK \
@@ -70,7 +74,7 @@ docker run -d \
   -e AUTH_USER=admin \
   -e AUTH_PASS='Tank32!' \
   -e AUTH_SECRET='1ee5cd0b3032e3d2d3613d23aa6b33d08890337cd7df504a9393dfa4f3e42a45' \
-  -e OTA_BASE_URL=http://192.168.0.105:1880 \
+  -e OTA_BASE_URL="http://${LOCAL_IP}:1880" \
   tankmonitor-web:${VERSION}
 
 echo "--- Mosquitto logs ---"
