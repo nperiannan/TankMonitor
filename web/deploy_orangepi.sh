@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# deploy_orangepi.sh — rebuild and redeploy the tankmonitor-web stack on the OrangePi backup host.
+# Run from anywhere; the script resolves its own location.
+set -e
+
+REPO_DIR=/opt/TankMonitor
+DATA_DIR=/opt/tankmonitor/data
+MOSQ_DIR=/opt/tankmonitor/mosquitto
+NETWORK=tankmonitor
+
+cd "$REPO_DIR/web"
+git -C "$REPO_DIR" pull origin master
+
+# Derive the version from the Go source so the image tag always matches the binary.
+VERSION=$(sed -n 's/.*webVersion = "\([^"]*\)".*/\1/p' backend/main.go)
+echo "==> Building tankmonitor-web:${VERSION}"
+
+# Ensure persistent data directories exist
+mkdir -p "$DATA_DIR"
+mkdir -p "$MOSQ_DIR/config" "$MOSQ_DIR/data" "$MOSQ_DIR/log"
+
+# Refresh mosquitto config from repo
+cp mosquitto/mosquitto.conf "$MOSQ_DIR/config/mosquitto.conf"
+
+# Generate mosquitto password file
+docker run --rm eclipse-mosquitto:2 \
+  sh -c "mosquitto_passwd -b -c /tmp/passwd tankmonitor 'Tank32!' && cat /tmp/passwd" \
+  > "$MOSQ_DIR/config/passwd"
+chmod 600 "$MOSQ_DIR/config/passwd"
+
+# Create isolated Docker network if it doesn't exist
+docker network create $NETWORK 2>/dev/null || true
+
+# Build web image (no cache to pick up any code changes)
+docker build --no-cache -t tankmonitor-web:${VERSION} .
+
+# Stop and remove existing containers
+docker stop tankmonitor-mosquitto 2>/dev/null || true
+docker rm   tankmonitor-mosquitto 2>/dev/null || true
+docker stop tankmonitor-web 2>/dev/null || true
+docker rm   tankmonitor-web 2>/dev/null || true
+
+# Start Mosquitto broker
+docker run -d \
+  --name tankmonitor-mosquitto \
+  --network $NETWORK \
+  --restart always \
+  -p 1883:1883 \
+  -v "$MOSQ_DIR/config:/mosquitto/config:ro" \
+  -v "$MOSQ_DIR/data:/mosquitto/data" \
+  -v "$MOSQ_DIR/log:/mosquitto/log" \
+  eclipse-mosquitto:2
+
+# Start web app — OTA_BASE_URL uses the LAN IP of this OrangePi host
+docker run -d \
+  --name tankmonitor-web \
+  --network $NETWORK \
+  --restart always \
+  -p 1880:8080 \
+  -v "$DATA_DIR:/data" \
+  -e MQTT_BROKER=tankmonitor-mosquitto \
+  -e MQTT_PORT=1883 \
+  -e MQTT_USER=tankmonitor \
+  -e MQTT_PASS='Tank32!' \
+  -e AUTH_USER=admin \
+  -e AUTH_PASS='Tank32!' \
+  -e AUTH_SECRET='1ee5cd0b3032e3d2d3613d23aa6b33d08890337cd7df504a9393dfa4f3e42a45' \
+  -e OTA_BASE_URL=http://192.168.0.105:1880 \
+  tankmonitor-web:${VERSION}
+
+echo "--- Mosquitto logs ---"
+docker logs tankmonitor-mosquitto --tail 5
+echo "--- Web app logs ---"
+docker logs tankmonitor-web --tail 10
