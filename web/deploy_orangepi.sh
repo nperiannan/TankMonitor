@@ -9,24 +9,29 @@ MOSQ_DIR=/opt/tankmonitor/mosquitto
 NETWORK=tankmonitor
 
 cd "$REPO_DIR/web"
+git -C "$REPO_DIR" sparse-checkout reapply 2>/dev/null || true
 git -C "$REPO_DIR" pull origin master
 
 # Derive the version from the Go source so the image tag always matches the binary.
 VERSION=$(sed -n 's/.*webVersion = "\([^"]*\)".*/\1/p' backend/main.go)
 echo "==> Building tankmonitor-web:${VERSION}"
 
-# Ensure persistent data directories exist
+# Ensure persistent data directories exist and are owned by the mosquitto container user (UID 1883)
 mkdir -p "$DATA_DIR"
 mkdir -p "$MOSQ_DIR/config" "$MOSQ_DIR/data" "$MOSQ_DIR/log"
+chown -R 1883:1883 "$MOSQ_DIR/"
 
 # Refresh mosquitto config from repo
 cp mosquitto/mosquitto.conf "$MOSQ_DIR/config/mosquitto.conf"
+chown 1883:1883 "$MOSQ_DIR/config/mosquitto.conf"
 
-# Generate mosquitto password file
-docker run --rm eclipse-mosquitto:2 \
-  sh -c "mosquitto_passwd -b -c /tmp/passwd tankmonitor 'Tank32!' && cat /tmp/passwd" \
-  > "$MOSQ_DIR/config/passwd"
-chmod 600 "$MOSQ_DIR/config/passwd"
+# Generate mosquitto password file (remove any stale copy first so -c can always create fresh)
+rm -f "$MOSQ_DIR/config/passwd"
+docker run --rm \
+  -v "$MOSQ_DIR/config:/mosquitto/config" \
+  eclipse-mosquitto:2 \
+  sh -c "mosquitto_passwd -b -c /mosquitto/config/passwd tankmonitor 'Tank32!'"
+chmod 640 "$MOSQ_DIR/config/passwd"
 
 # Create isolated Docker network if it doesn't exist
 docker network create $NETWORK 2>/dev/null || true

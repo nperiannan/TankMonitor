@@ -65,14 +65,25 @@ web/
 
 ## Build & Deploy
 
-### On TNAS (via SSH)
+### On TNAS (primary, via SSH)
 
 ```bash
 cd /Volume1/docker/TankMonitor/web
 bash build_web.sh
 ```
 
-The script pulls latest code, builds the Docker image (`tankmonitor-web:2.1.0`), stops the old container, and starts a new one with all required environment variables.
+The script pulls latest code, builds the Docker image, stops the old container, and starts a new one with all required environment variables.
+
+### On OrangePi (backup host @ 192.168.0.105, via SSH)
+
+```bash
+ssh root@192.168.0.105
+bash /opt/TankMonitor/web/deploy_orangepi.sh
+```
+
+The script pulls latest code, builds the image, sets up Mosquitto (with password auth) and the web app on a `tankmonitor` Docker network. Both containers restart automatically on boot.
+
+> **Note:** The OrangePi runs its own independent Mosquitto broker on port 1883. ESP32 devices must point to `192.168.0.105:1883` to use the backup stack.
 
 ### Local development
 
@@ -99,5 +110,6 @@ cd backend && go run main.go
 
 | | URL |
 | --- | --- |
-| LAN | <http://192.168.0.102:1880> |
+| TNAS (primary) | <http://192.168.0.102:1880> |
+| OrangePi (backup) | <http://192.168.0.105:1880> |
 | Public | <http://nperiannan-nas.freemyip.com:1880> |

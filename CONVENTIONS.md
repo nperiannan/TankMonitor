@@ -55,7 +55,7 @@
   - Do NOT use `app/` — old prefix, no longer detected by the app
   - Controller OTA uses the web app API (`/api/ota/check/{mac}`), not GitHub releases
 
-## NAS Deployment (TNAS @ 192.168.0.102)
+## NAS Deployment (TNAS @ 192.168.0.102) — Primary
 
 - Repo cloned at `/Volume1/docker/TankMonitor` with sparse-checkout (`web/` only)
 - Docker build: `docker build -t tankmonitor-web web/` (run from monorepo root)
@@ -64,6 +64,17 @@
 - git binary: `/home/nperiannan/miniconda3/bin/git`
 - docker binary: `/Volume1/@apps/DockerEngine/dockerd/bin/docker`
 - Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
+
+## OrangePi Backup Host (@ 192.168.0.105) — Standby
+
+- Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l)
+- Docker 29 pre-installed; repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
+- Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
+- Web app accessible at `http://192.168.0.105:1880`; MQTT broker at `192.168.0.105:1883`
+- `OTA_BASE_URL=http://192.168.0.105:1880` (LAN address of this host)
+- Native `mosquitto` service has been **stopped and disabled** — only the Docker container runs
+- Deploy/update: `ssh root@192.168.0.105 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
+- Both containers have `--restart always` — they come back up automatically on reboot
 
 ## OTA Flash Flow
 
