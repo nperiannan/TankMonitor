@@ -69,11 +69,11 @@
 
 - Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l), Docker 29
 - Repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
-- Static IP `192.168.0.50` on home network (`/etc/systemd/network/99-end0-static.network`), gateway `192.168.0.1`
+- Static IP `192.168.0.105` — assigned via ER605 DHCP reservation for this device's MAC (no static config on the device itself)
 - Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
 - `OTA_BASE_URL` auto-detected by deploy script (`ip route get 8.8.8.8`)
 - Native `mosquitto` service stopped and disabled — only the Docker container runs
-- Deploy/update: `ssh root@192.168.0.50 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
+- Deploy/update: `ssh root@192.168.0.105 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
 - Both containers have `--restart always`
 
 ### Remote Access — Tailscale + DDNS
@@ -87,18 +87,18 @@
 ### Port Forwarding on ER605 (required)
 
 Update the existing TNAS port forwards to point to OrangePi instead:
-- External `1880` → `192.168.0.50:1880` (web app)
-- External `1883` → `192.168.0.50:1883` (MQTT)
+- External `1880` → `192.168.0.105:1880` (web app)
+- External `1883` → `192.168.0.105:1883` (MQTT)
 
 ### dnsmasq — Local DNS Override
 
 - dnsmasq running on OrangePi; config: `/etc/dnsmasq.d/tankmonitor.conf`
-- Resolves `nperiannan-nas.freemyip.com` → `192.168.0.50` for LAN clients (avoids ER605 hairpin NAT issue)
+- Resolves `nperiannan-nas.freemyip.com` → `192.168.0.105` for LAN clients (avoids ER605 hairpin NAT issue)
 - Optional: point ER605 DHCP primary DNS to `192.168.0.50` so all LAN clients use this override
 
 ### Mobile App — One-Time Settings Update
 
-- WiFi URL: change from `http://192.168.0.102:1880` → `http://192.168.0.50:1880` in app settings
+- WiFi URL: change from `http://192.168.0.102:1880` → `http://192.168.0.105:1880` in app settings
 - Mobile URL: `http://nperiannan-nas.freemyip.com:1880` — unchanged, works via port forward
 
 ## OTA Flash Flow
