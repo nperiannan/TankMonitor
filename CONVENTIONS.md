@@ -65,17 +65,31 @@
 - docker binary: `/Volume1/@apps/DockerEngine/dockerd/bin/docker`
 - Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
 
-## OrangePi Backup Host (MR200 network @ 192.168.1.50) — Standby
+## OrangePi — Primary Host (MR200 4G LTE network, co-located with ESP32)
 
-- Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l)
-- Docker 29 pre-installed; repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
-- On the **MR200 4G LTE network** (192.168.1.x) — static IP `192.168.1.50` in `/etc/systemd/network/99-end0-static.network`
+- Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l), Docker 29
+- Repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
+- Static LAN IP `192.168.1.50` (via `/etc/systemd/network/99-end0-static.network`)
 - Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
-- Web app accessible at `http://192.168.1.50:1880`; MQTT broker at `192.168.1.50:1883`
-- `OTA_BASE_URL` is **auto-detected** by the deploy script (`ip route get 8.8.8.8`) — no hardcoded IP
-- Native `mosquitto` service has been **stopped and disabled** — only the Docker container runs
+- `OTA_BASE_URL` auto-detected by deploy script (`ip route get 8.8.8.8`)
+- Native `mosquitto` service stopped and disabled — only the Docker container runs
 - Deploy/update: `ssh root@192.168.1.50 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
-- Both containers have `--restart always` — they come back up automatically on reboot
+- Both containers have `--restart always`
+
+### Remote Access — Tailscale
+
+- Tailscale installed; device name `orangepipcplus` in `hainatraj` tailnet
+- Tailscale IP: `100.122.14.61` (stable — does not change while device stays in tailnet)
+- `nperiannan-nas.freemyip.com` A record → `100.122.14.61`
+- DDNS auto-update cron: `/etc/cron.d/tankmonitor-ddns` runs every 10 min, updates freemyip.com with current Tailscale IP
+- freemyip.com token stored in `/usr/local/bin/update-ddns.sh` on the OrangePi (NOT in git)
+
+### ESP32 MQTT — Local DNS Override
+
+- `dnsmasq` installed and running on OrangePi
+- Config: `/etc/dnsmasq.d/tankmonitor.conf` — resolves `nperiannan-nas.freemyip.com` → `192.168.1.50` for LAN clients
+- MR200 router DHCP must set primary DNS to `192.168.1.50` so the ESP32 uses OrangePi's dnsmasq
+- Result: ESP32 connects to MQTT broker locally (never leaves the LAN), phone uses Tailscale tunnel
 
 ## OTA Flash Flow
 
