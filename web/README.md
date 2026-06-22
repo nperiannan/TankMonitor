@@ -1,10 +1,10 @@
 # Tank Monitor — Web App
 
-Go backend + React/Ant Design frontend, deployed as a Docker container on TerraMaster NAS.
+Go backend + React/Ant Design frontend, deployed as a Docker container on Oracle Cloud VM.
 
-- **Backend version**: 2.1.0
-- **Frontend version**: 2.1.0
-- **Docker image**: `tankmonitor-web:2.1.0`
+- **Backend version**: 2.2.2
+- **Frontend version**: 2.2.2
+- **Docker image**: `tankmonitor-web:2.2.2`
 
 ## Features
 
@@ -65,25 +65,26 @@ web/
 
 ## Build & Deploy
 
-### On TNAS (primary, via SSH)
+### On Oracle Cloud VM (primary)
 
 ```bash
-cd /Volume1/docker/TankMonitor/web
-bash build_web.sh
+ssh -i "~/.ssh/Oracle VMs/rocky/ssh-key-2026-06-06.key" hainatraj@150.230.129.215
+cd /opt/TankMonitor/web
+git pull origin master
+VERSION=$(sed -n 's/.*webVersion = "\([^"]*\)".*/\1/p' backend/main.go)
+sudo docker build --no-cache -t tankmonitor-web:${VERSION} .
+sudo docker stop tankmonitor-web && sudo docker rm tankmonitor-web
+sudo docker run -d --name tankmonitor-web --network tankmonitor --restart always \
+  -p 1880:8080 -v /opt/tankmonitor/data:/data \
+  -e MQTT_BROKER=tankmonitor-mosquitto -e MQTT_PORT=1883 \
+  -e MQTT_USER=tankmonitor -e MQTT_PASS='<secret>' \
+  -e AUTH_USER=admin -e AUTH_PASS='<secret>' \
+  -e AUTH_SECRET='<secret>' \
+  -e OTA_BASE_URL=http://150.230.129.215:1880 \
+  tankmonitor-web:${VERSION}
 ```
 
-The script pulls latest code, builds the Docker image, stops the old container, and starts a new one with all required environment variables.
-
-### On OrangePi (backup host @ 192.168.0.105, via SSH)
-
-```bash
-ssh root@192.168.0.105
-bash /opt/TankMonitor/web/deploy_orangepi.sh
-```
-
-The script pulls latest code, builds the image, sets up Mosquitto (with password auth) and the web app on a `tankmonitor` Docker network. Both containers restart automatically on boot.
-
-> **Note:** The OrangePi runs its own independent Mosquitto broker on port 1883. ESP32 devices must point to `192.168.0.105:1883` to use the backup stack.
+> **Note:** Oracle Cloud VM IP is static (150.230.129.215). DNS `nperiannan-nas.freemyip.com` points to it. No DDNS cron needed.
 
 ### Local development
 
@@ -99,17 +100,17 @@ cd backend && go run main.go
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `MQTT_BROKER` | Mosquitto broker address | `192.168.0.102` |
+| `MQTT_BROKER` | Mosquitto broker address | `mosquitto` |
 | `MQTT_PORT` | Broker port | `1883` |
 | `MQTT_USER` | MQTT username | `tankmonitor` |
 | `MQTT_PASS` | MQTT password | — |
-| `JWT_SECRET` | JWT signing key | — |
+| `AUTH_SECRET` | JWT signing key | — |
+| `OTA_BASE_URL` | Base URL for OTA firmware downloads | — |
 | `PORT` | HTTP server port | `8080` |
 
 ## Access
 
 | | URL |
 | --- | --- |
-| TNAS (primary) | <http://192.168.0.102:1880> |
-| OrangePi (backup, MR200 network) | <http://192.168.1.50:1880> |
-| Public | <http://nperiannan-nas.freemyip.com:1880> |
+| Oracle Cloud (primary) | <http://150.230.129.215:1880> |
+| Public (DNS) | <http://nperiannan-nas.freemyip.com:1880> |
