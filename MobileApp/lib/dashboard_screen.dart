@@ -325,8 +325,8 @@ class _DashboardScreenState extends State<DashboardScreen>
         enabledScheds.where((sc) => sc.m == 'OH').toList(), s?.time ?? '');
     final nextUGIdx = _nextScheduleIdx(
         enabledScheds.where((sc) => sc.m == 'UG').toList(), s?.time ?? '');
-    // Navigate to login if token was invalidated
-    if (svc.unauthorized) {
+    // Navigate to login if token was invalidated (skip in direct mode — no auth needed)
+    if (svc.unauthorized && !svc.directMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const LoginScreen()),
