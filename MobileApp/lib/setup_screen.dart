@@ -12,7 +12,6 @@ class SetupScreen extends StatefulWidget {
 }
 
 class _SetupScreenState extends State<SetupScreen> {
-  final _wifiCtrl   = TextEditingController();
   final _mobileCtrl = TextEditingController();
   final _directIpCtrl = TextEditingController();
   final _form       = GlobalKey<FormState>();
@@ -23,7 +22,6 @@ class _SetupScreenState extends State<SetupScreen> {
   void initState() {
     super.initState();
     final svc = context.read<TankService>();
-    _wifiCtrl.text   = svc.wifiUrl.isNotEmpty   ? svc.wifiUrl   : defaultWifiUrl;
     _mobileCtrl.text = svc.mobileUrl.isNotEmpty ? svc.mobileUrl : defaultMobileUrl;
     _directMode      = svc.directMode;
     _directIpCtrl.text = svc.directIp.isNotEmpty
@@ -33,7 +31,6 @@ class _SetupScreenState extends State<SetupScreen> {
 
   @override
   void dispose() {
-    _wifiCtrl.dispose();
     _mobileCtrl.dispose();
     _directIpCtrl.dispose();
     super.dispose();
@@ -62,7 +59,7 @@ class _SetupScreenState extends State<SetupScreen> {
     // Cloud mode
     await svc.saveDirectMode(false, '');
     await svc.saveUrls(
-      wifi:   _wifiCtrl.text.trim(),
+      wifi:   _mobileCtrl.text.trim(),
       mobile: _mobileCtrl.text.trim(),
     );
     await svc.connectAuto(); // auto-picks based on current network
@@ -161,9 +158,8 @@ class _SetupScreenState extends State<SetupScreen> {
                         ? 'Connects directly to the ESP32 controller.\n'
                           'Works without internet. Use 192.168.4.1 when\n'
                           'connected to the TankMonitor AP hotspot.'
-                        : 'On WiFi → uses WiFi URL automatically.\n'
-                          'On mobile data → uses Mobile URL automatically.\n'
-                          'Switches instantly if you change networks.',
+                        : 'Uses this URL for all connections (WiFi and mobile data).\n'
+                          'Server is in the cloud — accessible from anywhere.',
                     style: TextStyle(color: labelColor(context), fontSize: 12),
                   )),
                 ]),
@@ -198,24 +194,19 @@ class _SetupScreenState extends State<SetupScreen> {
 
   Widget _buildCloudFields() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _FieldLabel(icon: Icons.wifi, color: accentBlue(context),
-        text: 'WiFi / Home Network URL'),
+      _FieldLabel(icon: Icons.cloud, color: accentBlue(context),
+        text: 'Server URL'),
       const SizedBox(height: 6),
-      _UrlField(controller: _wifiCtrl, hint: 'http://192.168.0.102:1880', label: 'WiFi URL'),
-      const SizedBox(height: 6),
-      _DefaultChip(
-        label: 'Use default  192.168.0.102:1880',
-        onTap: () => setState(() => _wifiCtrl.text = defaultWifiUrl),
-      ),
-      const SizedBox(height: 24),
-      _FieldLabel(icon: Icons.signal_cellular_alt,
-        color: accentOrange(context), text: 'Mobile Data / Internet URL'),
-      const SizedBox(height: 6),
-      _UrlField(controller: _mobileCtrl, hint: 'http://nperiannan-nas.freemyip.com:1880', label: 'Mobile URL'),
+      _UrlField(controller: _mobileCtrl, hint: 'http://nperiannan-nas.freemyip.com:1880', label: 'Server URL'),
       const SizedBox(height: 6),
       _DefaultChip(
         label: 'Use default  nperiannan-nas.freemyip.com:1880',
         onTap: () => setState(() => _mobileCtrl.text = defaultMobileUrl),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'ℹ️ Resolves to 150.230.129.215 (Oracle Cloud — static IP)',
+        style: TextStyle(color: labelColor(context), fontSize: 11),
       ),
     ]);
   }

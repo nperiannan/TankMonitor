@@ -506,7 +506,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                     const SizedBox(height: 12),
                     // ── WiFi status preview card ──
                     _SectionCard(
-                      title: 'WiFi / AP',
+                      title: s != null && s.wifiSsid.isNotEmpty ? 'WiFi Connected' : 'AP Hotspot',
                       titleMixed: true,
                       trailing: _SmallButton(
                         label: 'Expand',
@@ -524,47 +524,71 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(children: [
-                          Icon(
-                            s != null && s.wifiRssi > -70
-                                ? Icons.wifi
-                                : s != null && s.wifiRssi > -85
-                                    ? Icons.wifi_2_bar
-                                    : Icons.wifi_1_bar,
-                            color: s != null && s.wifiRssi > -70
-                                ? accentGreen(context)
-                                : s != null
-                                    ? accentOrange(context)
-                                    : labelColor(context),
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: s != null
-                                ? Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        s.wifiSsid.isNotEmpty
-                                            ? '${s.wifiRssi} dBm  ·  ${s.wifiSsid}'
-                                            : 'AP mode',
-                                        style: TextStyle(color: labelColor(context), fontSize: 12),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        s.wifiSsid.isNotEmpty
-                                            ? s.mgmtIp
-                                            : '192.168.4.1',
-                                        style: TextStyle(color: labelColor(context), fontSize: 12),
-                                      ),
-                                    ],
-                                  )
-                                : Text(
-                                    'No data yet',
-                                    style: TextStyle(color: labelColor(context), fontSize: 12),
+                        child: s != null
+                            ? Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          s.wifiSsid.isNotEmpty ? s.wifiSsid : 'TankMonitor',
+                                          style: TextStyle(
+                                            color: textColor(context),
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          s.wifiSsid.isNotEmpty ? s.mgmtIp : '192.168.4.1',
+                                          style: TextStyle(color: labelColor(context), fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                          ),
-                        ]),
+                                  Column(
+                                    children: [
+                                      Icon(
+                                        s.wifiSsid.isNotEmpty
+                                            ? (s.wifiRssi > -60
+                                                ? Icons.wifi
+                                                : s.wifiRssi > -75
+                                                    ? Icons.wifi_2_bar
+                                                    : Icons.wifi_1_bar)
+                                            : Icons.router,
+                                        color: s.wifiSsid.isNotEmpty
+                                            ? (s.wifiRssi > -60
+                                                ? accentGreen(context)
+                                                : s.wifiRssi > -75
+                                                    ? accentOrange(context)
+                                                    : Colors.redAccent)
+                                            : accentOrange(context),
+                                        size: 24,
+                                      ),
+                                      if (s.wifiSsid.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          '${s.wifiRssi} dBm',
+                                          style: TextStyle(
+                                            color: s.wifiRssi > -60
+                                                ? accentGreen(context)
+                                                : s.wifiRssi > -75
+                                                    ? accentOrange(context)
+                                                    : Colors.redAccent,
+                                            fontSize: 10,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                'No data yet',
+                                style: TextStyle(color: labelColor(context), fontSize: 12),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 20),
