@@ -1,11 +1,11 @@
-# build_controller.ps1 — Build controller firmware and deploy OTA via NAS server
+# build_controller.ps1 — Build controller firmware and deploy OTA via Oracle Cloud VM
 # Usage:
 #   .\build_controller.ps1                     # build only
-#   .\build_controller.ps1 -Upload             # build + upload firmware.bin to NAS + trigger OTA
+#   .\build_controller.ps1 -Upload             # build + SCP firmware.bin to VM + trigger OTA
 #   .\build_controller.ps1 -Upload -Mac AA:BB:CC:DD:EE:FF  # specify device MAC
 #   .\build_controller.ps1 -DirectOta          # build + upload directly via espota (must be on LAN)
 param(
-    [switch]$Upload,     # Upload firmware.bin to NAS server and trigger OTA via app
+    [switch]$Upload,     # Upload firmware.bin to VM via SCP and trigger OTA
     [switch]$DirectOta,  # Upload directly via espota to tankmonitor.local (LAN only)
     [string]$Mac  = '',  # Device MAC address (required for -Upload)
     [switch]$Monitor     # Open serial monitor after direct OTA
@@ -16,9 +16,12 @@ $FwDir    = "$PSScriptRoot"
 $pio      = "$env:USERPROFILE\.platformio\penv\Scripts\pio.exe"
 if (-not (Test-Path $pio)) { $pio = 'pio' }  # fallback if in PATH
 
-# NAS server config — firmware is uploaded here, then ESP32 pulls it via OTA
-$NasUrl   = 'http://192.168.0.102:1880'
-$ApiToken = $env:TANKMONITOR_TOKEN   # set in your shell profile, or pass via env
+# Oracle Cloud VM config
+$VmUser   = 'hainatraj'
+$VmHost   = '150.230.129.215'
+$SshKey   = "$env:USERPROFILE\.ssh\Oracle VMs\rocky\ssh-key-2026-06-06.key"
+$OtaDir   = '/opt/tankmonitor/data/ota'  # Docker volume mount → /data/ota inside container
+$ServerUrl = 'http://nperiannan-nas.freemyip.com:1880'
 
 Write-Host "==> Building controller firmware (env: nebulas3)..." -ForegroundColor Cyan
 Push-Location $FwDir
@@ -47,26 +50,46 @@ try {
         }
         $Mac = $Mac.Trim().ToUpper()
 
-        # Step 3: Get auth token if not set
+        # Step 3: Upload firmware.bin — try SCP first, fall back to HTTP API
+        $remoteFile = "$OtaDir/$Mac.bin"
+        $uploaded = $false
+
+        if (Test-Path "$SshKey") {
+            Write-Host "==> Uploading firmware.bin via SCP to VM ($VmHost`:$remoteFile)..." -ForegroundColor Cyan
+            scp -i "$SshKey" "$fwPath" "${VmUser}@${VmHost}:${remoteFile}" 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "==> Firmware uploaded via SCP." -ForegroundColor Green
+                $uploaded = $true
+            } else {
+                Write-Host "    SCP failed — falling back to HTTP API upload." -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "    SSH key not found — using HTTP API upload." -ForegroundColor Yellow
+        }
+
+        # Get auth token (needed for HTTP upload fallback or OTA trigger)
+        $ApiToken = $env:TANKMONITOR_TOKEN
         if (-not $ApiToken) {
             $cred = Get-Credential -Message "TankMonitor server login" -UserName "admin"
             $loginBody = @{ username = $cred.UserName; password = $cred.GetNetworkCredential().Password } | ConvertTo-Json
-            $loginRes = Invoke-RestMethod -Uri "$NasUrl/api/login" -Method Post -Body $loginBody -ContentType 'application/json'
+            $loginRes = Invoke-RestMethod -Uri "$ServerUrl/api/login" -Method Post -Body $loginBody -ContentType 'application/json'
             $ApiToken = $loginRes.token
         }
-
-        # Step 4: Upload firmware.bin to NAS
-        Write-Host "==> Uploading firmware.bin to NAS ($NasUrl)..." -ForegroundColor Cyan
         $headers = @{ Authorization = "Bearer $ApiToken" }
-        $form = @{ firmware = Get-Item $fwPath }
-        Invoke-RestMethod -Uri "$NasUrl/api/devices/$Mac/ota/upload" `
-            -Method Post -Headers $headers -Form $form | Out-Null
-        Write-Host "==> Firmware uploaded to NAS." -ForegroundColor Green
 
-        # Step 5: Trigger OTA on device
+        # Fallback: upload via HTTP API if SCP was unavailable/failed
+        if (-not $uploaded) {
+            Write-Host "==> Uploading firmware.bin via HTTP API ($ServerUrl)..." -ForegroundColor Cyan
+            $form = @{ firmware = Get-Item $fwPath }
+            Invoke-RestMethod -Uri "$ServerUrl/api/devices/$Mac/ota/upload" `
+                -Method Post -Headers $headers -Form $form | Out-Null
+            Write-Host "==> Firmware uploaded via HTTP API." -ForegroundColor Green
+        }
+
+        # Step 4: Trigger OTA on device
         Write-Host "==> Triggering OTA on device $Mac..." -ForegroundColor Cyan
         $triggerBody = @{ mac = $Mac } | ConvertTo-Json
-        $result = Invoke-RestMethod -Uri "$NasUrl/api/devices/$Mac/ota/trigger" `
+        $result = Invoke-RestMethod -Uri "$ServerUrl/api/devices/$Mac/ota/trigger" `
             -Method Post -Headers $headers -Body $triggerBody -ContentType 'application/json'
         Write-Host "==> OTA triggered. Device will reboot after flashing." -ForegroundColor Green
         Write-Host "    Response: $($result | ConvertTo-Json -Compress)" -ForegroundColor DarkGray

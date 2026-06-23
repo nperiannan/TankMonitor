@@ -929,6 +929,7 @@ class TankService extends ChangeNotifier {
               ugDispOnly: key == 'ug_disp_only' ? value as bool : null,
               ugIgnore: key == 'ug_ignore' ? value as bool : null,
               buzzerDelay: key == 'buzzer_delay' ? value as bool : null,
+              manualAutoStop: key == 'manual_auto_stop' ? value as bool : null,
               ohStartLevel: key == 'oh_start_level' ? value as int : null,
               ohStopLevel: key == 'oh_stop_level' ? value as int : null,
               ohMaxRun: key == 'oh_max_run_min' ? value as int : null,

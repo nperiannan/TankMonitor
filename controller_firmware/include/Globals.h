@@ -72,6 +72,7 @@ extern bool    ohDisplayOnly;       // True → do NOT drive OH relay; monitor o
 extern bool    ugDisplayOnly;       // True → do NOT drive UG relay; monitor only
 extern bool    ugIgnoreForOH;       // True → start OH motor even if UG tank is LOW
 extern bool    buzzerDelayEnabled;  // True → buzz before motor starts
+extern bool    manualAutoStop;      // True → stop manually-started motors when tank is full
 extern uint8_t lcdBacklightMode;    // LCD_BL_AUTO / LCD_BL_ALWAYS_ON / LCD_BL_ALWAYS_OFF
 
 // Configurable OH motor start/stop thresholds (loaded from NVS)

@@ -785,7 +785,7 @@ function setMqttPreset(type){
     document.getElementById('mqtt_broker').value='nperiannan-nas.freemyip.com';
     document.getElementById('mqtt_port').value='1883';
   }else{
-    document.getElementById('mqtt_broker').value='192.168.0.102';
+    document.getElementById('mqtt_broker').value='150.230.129.215';
     document.getElementById('mqtt_port').value='1883';
   }
 }
@@ -826,6 +826,7 @@ static void handleStatus() {
     doc["ugDisplayOnly"]     = ugDisplayOnly;
     doc["ugIgnore"]          = ugIgnoreForOH;
     doc["buzzerDelay"]       = buzzerDelayEnabled;
+    doc["manualAutoStop"]    = manualAutoStop;
     doc["ohStartLevel"]      = (int)ohStartLevel;
     doc["ohStopLevel"]       = (int)ohStopLevel;
     doc["ohMaxRunMin"]       = (int)ohMaxRunMin;
@@ -958,6 +959,7 @@ static void handleSetConfig() {
     ugDisplayOnly    = server.hasArg("ug_disp_only");
     ugIgnoreForOH    = server.hasArg("ug_ignore");
     buzzerDelayEnabled = server.hasArg("buzzer_delay");
+    manualAutoStop     = server.hasArg("manual_auto_stop");
     if (server.hasArg("oh_start_level")) {
         uint8_t v = (uint8_t)server.arg("oh_start_level").toInt();
         if (v >= TANK_STATE_EMPTY && v <= TANK_STATE_HALF) ohStartLevel = (TankState)v;

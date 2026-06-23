@@ -77,6 +77,7 @@ class DirectDeviceService {
       'ug_disp_only': s['ugDisplayOnly'] as bool? ?? false,
       'ug_ignore': s['ugIgnore'] as bool? ?? false,
       'buzzer_delay': s['buzzerDelay'] as bool? ?? false,
+      'manual_auto_stop': s['manualAutoStop'] as bool? ?? true,
       'lcd_bl_mode': s['lcdBlMode'] as int? ?? 0,
       'log_level': s['logLevel'] as String? ?? 'info',
       'buzzer_active': s['buzzerActive'] as bool? ?? false,
@@ -107,6 +108,7 @@ class DirectDeviceService {
     bool? ugDispOnly,
     bool? ugIgnore,
     bool? buzzerDelay,
+    bool? manualAutoStop,
     int? ohStartLevel,
     int? ohStopLevel,
     int? ohMaxRun,
@@ -116,6 +118,7 @@ class DirectDeviceService {
     if (ugDispOnly == true) body['ug_disp_only'] = '1';
     if (ugIgnore == true) body['ug_ignore'] = '1';
     if (buzzerDelay == true) body['buzzer_delay'] = '1';
+    if (manualAutoStop == true) body['manual_auto_stop'] = '1';
     if (ohStartLevel != null) body['oh_start_level'] = '$ohStartLevel';
     if (ohStopLevel != null) body['oh_stop_level'] = '$ohStopLevel';
     if (ohMaxRun != null) body['oh_max_run'] = '$ohMaxRun';

@@ -44,6 +44,7 @@ void loadMotorConfig() {
     ugDisplayOnly      = preferences.getBool (NVS_KEY_UG_DISP_ONLY, false);
     ugIgnoreForOH      = preferences.getBool (NVS_KEY_UG_IGNORE,    false);
     buzzerDelayEnabled = preferences.getBool (NVS_KEY_BUZZER_DELAY, true);
+    manualAutoStop     = preferences.getBool (NVS_KEY_MANUAL_ASTOP, true);
     lcdBacklightMode   = preferences.getUChar(NVS_KEY_LCD_BL_MODE,  LCD_BL_AUTO);
     ohStartLevel       = (TankState)preferences.getUChar(NVS_KEY_OH_START_LVL, TANK_STATE_EMPTY);
     ohStopLevel        = (TankState)preferences.getUChar(NVS_KEY_OH_STOP_LVL,  TANK_STATE_FULL);
@@ -55,6 +56,7 @@ void loadMotorConfig() {
               + " ugDisp=" + String(ugDisplayOnly)
               + " ugIgnore=" + String(ugIgnoreForOH)
               + " buzzerDelay=" + String(buzzerDelayEnabled)
+              + " manualAutoStop=" + String(manualAutoStop)
               + " lcdBl=" + String(lcdBacklightMode)
               + " ohStart=" + tankStateStr(ohStartLevel)
               + " ohStop=" + tankStateStr(ohStopLevel)
@@ -67,6 +69,7 @@ void saveMotorConfig() {
     preferences.putBool (NVS_KEY_UG_DISP_ONLY, ugDisplayOnly);
     preferences.putBool (NVS_KEY_UG_IGNORE,    ugIgnoreForOH);
     preferences.putBool (NVS_KEY_BUZZER_DELAY, buzzerDelayEnabled);
+    preferences.putBool (NVS_KEY_MANUAL_ASTOP, manualAutoStop);
     preferences.putUChar(NVS_KEY_LCD_BL_MODE,  lcdBacklightMode);
     preferences.putUChar(NVS_KEY_OH_START_LVL, (uint8_t)ohStartLevel);
     preferences.putUChar(NVS_KEY_OH_STOP_LVL,  (uint8_t)ohStopLevel);
@@ -154,8 +157,10 @@ void autoControlOHMotor() {
     if (ohMotorSource == MOTOR_SRC_SCHEDULED) return;
 
     // --- Stop motor when tank reaches stop threshold ---
-    if (ohTankState >= ohStopLevel && ohMotorRunning && ohMotorSource != MOTOR_SRC_MANUAL) {
-        Log(INFO, "[Motor] OH AUTO OFF – tank reached " + String(tankStateStr(ohTankState)));
+    if (ohTankState >= ohStopLevel && ohMotorRunning
+        && (ohMotorSource != MOTOR_SRC_MANUAL || manualAutoStop)) {
+        Log(INFO, "[Motor] OH " + String(ohMotorSource == MOTOR_SRC_MANUAL ? "MANUAL" : "AUTO")
+                  + " OFF – tank reached " + String(tankStateStr(ohTankState)));
         ohMotorStartPending = false;
         stopBuzzer();
         energiseOHRelay(false);
@@ -230,8 +235,10 @@ void autoControlUGMotor() {
     // Scheduler-started motors are immune to auto-start/stop logic below
     if (ugMotorSource == MOTOR_SRC_SCHEDULED) return;
 
-    if (ugTankState == TANK_STATE_FULL && ugMotorRunning && ugMotorSource != MOTOR_SRC_MANUAL) {
-        Log(INFO, "[Motor] UG AUTO OFF – tank full");
+    if (ugTankState == TANK_STATE_FULL && ugMotorRunning
+        && (ugMotorSource != MOTOR_SRC_MANUAL || manualAutoStop)) {
+        Log(INFO, "[Motor] UG " + String(ugMotorSource == MOTOR_SRC_MANUAL ? "MANUAL" : "AUTO")
+                  + " OFF – tank full");
         ugMotorStartPending = false;
         energiseUGRelay(false);
         ugMotorSource = MOTOR_SRC_NONE;

@@ -55,51 +55,30 @@
   - Do NOT use `app/` — old prefix, no longer detected by the app
   - Controller OTA uses the web app API (`/api/ota/check/{mac}`), not GitHub releases
 
-## NAS Deployment (TNAS @ 192.168.0.102) — Primary
+## NAS Deployment (TNAS @ 192.168.0.102) — Decommissioned
 
-- Repo cloned at `/Volume1/docker/TankMonitor` with sparse-checkout (`web/` only)
-- Docker build: `docker build -t tankmonitor-web web/` (run from monorepo root)
-- Container **must** have `-e OTA_BASE_URL=http://192.168.0.102:1880`
-  The ER605 router has no hairpin NAT — without this the ESP32 (on LAN) cannot reach the public domain to download the firmware binary
+> **Superseded by Oracle Cloud VM** (see below). Kept for historical reference only.
+
+- Was at `/Volume1/docker/TankMonitor` with sparse-checkout (`web/` only)
 - git binary: `/home/nperiannan/miniconda3/bin/git`
 - docker binary: `/Volume1/@apps/DockerEngine/dockerd/bin/docker`
-- Update one-liner (from Windows via plink): see `README.md` → *One-liner from Windows*
 
-## OrangePi — Primary Host (home network, replaces TNAS)
+## OrangePi (192.168.0.105) — Decommissioned
 
-- Armbian 25.11 (Debian trixie) on OrangePi PC Plus (armv7l), Docker 29
-- Repo cloned at `/opt/TankMonitor` (sparse, `web/` only)
-- Static IP `192.168.0.105` — assigned via ER605 DHCP reservation for this device's MAC (no static config on the device itself)
-- Runs the full stack: `tankmonitor-mosquitto` + `tankmonitor-web` on a `tankmonitor` Docker network
-- `OTA_BASE_URL` auto-detected by deploy script (`ip route get 8.8.8.8`)
-- Native `mosquitto` service stopped and disabled — only the Docker container runs
-- Deploy/update: `ssh root@192.168.0.105 "bash /opt/TankMonitor/web/deploy_orangepi.sh"`
-- Both containers have `--restart always`
+> **Superseded by Oracle Cloud VM**. Tailscale still active for other uses.
 
-### Remote Access — Tailscale + DDNS
+## Oracle Cloud VM — Primary Host (since 2026-06-22)
 
-- Tailscale installed; device `orangepipcplus` in `hainatraj` tailnet, IP `100.122.14.61`
-- Use Tailscale to SSH into the OrangePi from anywhere: `ssh root@100.122.14.61`
-- `nperiannan-nas.freemyip.com` → home WAN IP (updated by DDNS cron, NOT Tailscale IP)
-- DDNS cron: `/etc/cron.d/tankmonitor-ddns` runs every 10 min; script at `/usr/local/bin/update-ddns.sh` uses `api.ipify.org` to get WAN IP
-- freemyip.com token stored in `/usr/local/bin/update-ddns.sh` on OrangePi (NOT in git)
-
-### Port Forwarding on ER605 (required)
-
-Update the existing TNAS port forwards to point to OrangePi instead:
-- External `1880` → `192.168.0.105:1880` (web app)
-- External `1883` → `192.168.0.105:1883` (MQTT)
-
-### dnsmasq — Local DNS Override
-
-- dnsmasq running on OrangePi; config: `/etc/dnsmasq.d/tankmonitor.conf`
-- Resolves `nperiannan-nas.freemyip.com` → `192.168.0.105` for LAN clients (avoids ER605 hairpin NAT issue)
-- Optional: point ER605 DHCP primary DNS to `192.168.0.50` so all LAN clients use this override
-
-### Mobile App — One-Time Settings Update
-
-- WiFi URL: change from `http://192.168.0.102:1880` → `http://192.168.0.105:1880` in app settings
-- Mobile URL: `http://nperiannan-nas.freemyip.com:1880` — unchanged, works via port forward
+- IP: `150.230.129.215` (static, Oracle Always Free tier)
+- OS: Rocky Linux 9.8, x86_64, 764 MB RAM + 5 GB swap
+- SSH: `ssh -i "~/.ssh/Oracle VMs/rocky/ssh-key-2026-06-06.key" hainatraj@150.230.129.215`
+- Docker: `tankmonitor-web` + `eclipse-mosquitto:2` on `tankmonitor` network
+- Data: `/opt/tankmonitor/data` (SQLite), `/opt/tankmonitor/mosquitto` (config/data/log)
+- Repo: `/opt/TankMonitor` (sparse checkout, `web/` only)
+- DNS: `nperiannan-nas.freemyip.com` → `150.230.129.215` (static A record, no DDNS needed)
+- VCN Security List: ports 22, 1880, 1883 open (0.0.0.0/0)
+- `OTA_BASE_URL=http://150.230.129.215:1880`
+- **Reason for move**: BSNL ISP blocks ALL inbound ports; Oracle Cloud has public static IP
 
 ## OTA Flash Flow
 

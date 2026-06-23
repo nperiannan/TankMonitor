@@ -620,6 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _SettingRow('UG Display Only',         s?.ugDispOnly,  (v) => svc.sendSettingControl('ug_disp_only', v)),
                         _SettingRow('Ignore UG for OH Motor',  s?.ugIgnore,    (v) => svc.sendSettingControl('ug_ignore',    v)),
                         _SettingRow('Buzzer Delay Before Start',s?.buzzerDelay,(v) => svc.sendSettingControl('buzzer_delay', v)),
+                        _SettingRow('Stop Manual Motor on Full',s?.manualAutoStop,(v) => svc.sendSettingControl('manual_auto_stop', v)),
                         Divider(color: cardBd(context), height: 16),
                         // Motor Start Level
                         Padding(

@@ -46,6 +46,7 @@ bool           ohDisplayOnly         = false;
 bool           ugDisplayOnly         = false;
 bool           ugIgnoreForOH         = false;
 bool           buzzerDelayEnabled    = true;
+bool           manualAutoStop        = true;
 uint8_t        lcdBacklightMode      = LCD_BL_AUTO;
 
 TankState      ohStartLevel          = TANK_STATE_EMPTY;

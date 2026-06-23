@@ -45,7 +45,7 @@ web/
 │   ├── package.json
 │   └── vite.config.ts
 ├── Dockerfile             # Multi-stage: Node build → Go build → scratch
-├── build_web.sh           # Build + deploy script for TNAS
+├── build_web.sh           # Build + deploy script for Oracle Cloud VM
 ├── build.ps1              # Windows build script
 └── .dockerignore
 ```

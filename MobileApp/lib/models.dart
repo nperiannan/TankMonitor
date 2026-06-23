@@ -40,6 +40,7 @@ class Status {
   final bool ugDispOnly;
   final bool ugIgnore;
   final bool buzzerDelay;
+  final bool manualAutoStop;
   final int  lcdBlMode;   // 0=auto, 1=always_on, 2=always_off
   final String logLevel;  // 'info' | 'debug'
   final bool buzzerActive;
@@ -72,6 +73,7 @@ class Status {
     required this.ugDispOnly,
     required this.ugIgnore,
     required this.buzzerDelay,
+    required this.manualAutoStop,
     required this.lcdBlMode,
     required this.logLevel,
     required this.buzzerActive,
@@ -107,6 +109,7 @@ class Status {
         ugDispOnly: j['ug_disp_only'] as bool? ?? false,
         ugIgnore:   j['ug_ignore']    as bool? ?? false,
         buzzerDelay:j['buzzer_delay'] as bool? ?? false,
+        manualAutoStop:j['manual_auto_stop'] as bool? ?? true,
         lcdBlMode:  j['lcd_bl_mode']  as int?  ?? 0,
         logLevel:   j['log_level']    as String? ?? 'info',
         buzzerActive: j['buzzer_active'] as bool? ?? false,

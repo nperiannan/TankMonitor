@@ -165,7 +165,7 @@ String BLEManager::buildStatusJson() {
         "\"loraOk\":%s,\"loraRSSI\":%.1f,\"loraSNR\":%.1f,"
         "\"wifiConnected\":%s,\"wifiSSID\":\"%s\",\"wifiIP\":\"%s\","
         "\"ohDisplayOnly\":%s,\"ugDisplayOnly\":%s,\"ugIgnore\":%s,"
-        "\"buzzerDelay\":%s,\"time\":\"%s\""
+        "\"buzzerDelay\":%s,\"manualAutoStop\":%s,\"time\":\"%s\""
         "}",
         tankStateStr(ugTankState), tankStateStr(ohTankState),
         ugLevel, ohLevel,
@@ -182,6 +182,7 @@ String BLEManager::buildStatusJson() {
         ugDisplayOnly    ? "true" : "false",
         ugIgnoreForOH    ? "true" : "false",
         buzzerDelayEnabled ? "true" : "false",
+        manualAutoStop     ? "true" : "false",
         getFormattedTime().c_str()
     );
     return String(buf);
@@ -276,6 +277,7 @@ void BLEManager::processCommand(const String& cmd) {
                 if (doc.containsKey("ugDisplayOnly")) ugDisplayOnly = doc["ugDisplayOnly"];
                 if (doc.containsKey("ugIgnore"))      ugIgnoreForOH = doc["ugIgnore"];
                 if (doc.containsKey("buzzerDelay"))   buzzerDelayEnabled = doc["buzzerDelay"];
+                if (doc.containsKey("manualAutoStop")) manualAutoStop = doc["manualAutoStop"];
                 saveMotorConfig();
             }
         }

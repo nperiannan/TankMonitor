@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.2.2'
+const WEB_APP_VERSION = '2.2.3'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -662,6 +662,7 @@ export default function App() {
             ['UG Display Only',          'ug_disp_only',  s?.ug_disp_only],
             ['Ignore UG for OH Motor',   'ug_ignore',     s?.ug_ignore],
             ['Buzzer Delay Before Start','buzzer_delay',  s?.buzzer_delay],
+            ['Stop Manual Motor on Full','manual_auto_stop', s?.manual_auto_stop],
           ] as [string, string, boolean | undefined][]).map(([label, key, val]) => (
             <div key={key} style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',

@@ -138,6 +138,7 @@
 #define NVS_KEY_UG_DISP_ONLY   "ug_disp_only"
 #define NVS_KEY_UG_IGNORE      "ug_ignore"       // Ignore UG state when deciding OH motor
 #define NVS_KEY_BUZZER_DELAY   "buzzer_delay"    // Buzz before motor start
+#define NVS_KEY_MANUAL_ASTOP   "man_auto_stop"   // Stop manual motors when tank full
 #define NVS_KEY_BLE_ENABLED    "ble_enabled"
 #define NVS_KEY_LCD_BL_MODE    "lcd_bl_mode"
 #define NVS_KEY_OH_START_LVL   "oh_start_lvl"   // TankState for motor start threshold

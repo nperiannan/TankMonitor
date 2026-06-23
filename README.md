@@ -14,7 +14,7 @@ flowchart TD
         TX -- "LoRa 865 MHz · level packets" --> CTRL
     end
 
-    subgraph Server["TNAS Server · 192.168.0.102"]
+    subgraph Server["Oracle Cloud VM · 150.230.129.215"]
         MQ["Mosquitto\nMQTT Broker · :1883"]
         WEB["Web App\nGo Backend + React UI\n:1880"]
         MQ <--> WEB
@@ -71,7 +71,7 @@ flowchart LR
         UG_M["Underground Tank\nMotor / Pump"]
     end
 
-    subgraph TNAS["TNAS Server · 192.168.0.102"]
+    subgraph OCI["Oracle Cloud VM · 150.230.129.215"]
         MQ["Mosquitto\nMQTT Broker\n:1883"]
         GO["Go Backend\n:8080\nweb v2.2.1"]
         STATIC["React Frontend\nserved as static"]
@@ -81,8 +81,8 @@ flowchart LR
         GO --- STATIC
     end
 
-    subgraph Router["ER605 Router"]
-        PF[":1880 forward\n:1883 forward"]
+    subgraph Cloud["Oracle Cloud VCN"]
+        PF["Security List\n:1880 + :1883 open"]
     end
 
     subgraph Clients["Client Devices"]
@@ -105,8 +105,8 @@ flowchart LR
     GO -- "status push WebSocket" --> PHONE
     PHONE -. "BLE · setup only" .-> MCU
 
-    PF -. "Internet access" .-> GO
-    PF -. "Internet access" .-> MQ
+    PF -. "Public Internet" .-> GO
+    PF -. "Public Internet" .-> MQ
 ```
 
 ### Protocol Summary
@@ -119,7 +119,7 @@ flowchart LR
 | Web App → Controller | HTTP | via MQTT ota_start cmd | Triggered |
 | Browser / App ↔ Web App | HTTP REST + WebSocket | 1880 | Bidirectional |
 | Mobile App → Controller | BLE | RF | Setup only |
-| Internet → NAS | TCP port forward | 1880 / 1883 | Inbound |
+| Internet → VM | Oracle Cloud VCN Security List | 1880 / 1883 | Inbound |
 
 ---
 
@@ -128,7 +128,7 @@ flowchart LR
 ```text
 TankMonitor/
 ├── controller_firmware/   ESP32-S3 firmware (PlatformIO + Arduino framework)
-├── web/                   Go backend + React/Ant Design frontend (Docker-deployed on TNAS)
+├── web/                   Go backend + React/Ant Design frontend (Docker-deployed on Oracle Cloud VM)
 └── MobileApp/             Flutter Android mobile app
 ```
 
@@ -138,7 +138,7 @@ TankMonitor/
 | --- | --- |
 | Controller Firmware | v2.3.3 |
 | Transmitter Firmware | v2.0.0 |
-| Web App | v2.2.2 |
+| Web App | v2.2.3 |
 | Mobile App | v2.5.2 |
 
 ---
@@ -182,11 +182,11 @@ broadcasts its own AP for initial setup.
 
 ---
 
-### MQTT Broker (Mosquitto on TNAS)
+### MQTT Broker (Mosquitto on Oracle Cloud VM)
 
 | Parameter | Value |
 | --- | --- |
-| LAN host | `192.168.0.102` |
+| VM IP | `150.230.129.215` |
 | Public domain | `nperiannan-nas.freemyip.com` |
 | Port | `1883` (plain) |
 | Username | `tankmonitor` |
@@ -201,8 +201,7 @@ broadcasts its own AP for initial setup.
 
 | Parameter | Value |
 | --- | --- |
-| LAN URL | <http://192.168.0.102:1880> |
-| Public URL | <http://nperiannan-nas.freemyip.com:1880> |
+| URL | <http://nperiannan-nas.freemyip.com:1880> |
 | Username | `admin` |
 | Password | *(see private config)* |
 
@@ -220,71 +219,64 @@ On first launch:
 
 ---
 
-## Deployment — TNAS (TerraMaster NAS)
+## Deployment — Oracle Cloud VM
 
 ### Where it runs
 
 | Service | Host | Container name |
 | --- | --- | --- |
-| Web App | `192.168.0.102:1880` → container port 8080 | `tankmonitor-web` |
-| MQTT Broker | `192.168.0.102:1883` | `mosquitto` |
+| Web App | `150.230.129.215:1880` → container port 8080 | `tankmonitor-web` |
+| MQTT Broker | `150.230.129.215:1883` | `mosquitto` |
 
-SSH access: `nperiannan@192.168.0.102` (password: see private config)
+- **OS**: Rocky Linux 9.8 (x86_64, Oracle Always Free tier)
+- **DNS**: `nperiannan-nas.freemyip.com` → `150.230.129.215` (static A record)
+- **SSH**: `ssh -i ~/.ssh/"Oracle VMs"/rocky/ssh-key-2026-06-06.key hainatraj@150.230.129.215`
 
-### Port Forwarding (Router)
+### VCN Security List (Oracle Cloud)
 
-Configure these rules on your home router (ER605 or similar):
+The following ingress ports are open in the VCN security list:
 
-| External Port | Internal IP | Internal Port | Protocol | Service |
-| --- | --- | --- | --- | --- |
-| 1880 | 192.168.0.102 | 1880 | TCP | Web App |
-| 1883 | 192.168.0.102 | 1883 | TCP | MQTT |
+| Port | Protocol | Service |
+| --- | --- | --- |
+| 22 | TCP | SSH |
+| 1880 | TCP | Web App |
+| 1883 | TCP | MQTT |
 
-> **Note**: Hairpin NAT is not supported on ER605. On the local network always
-> use `192.168.0.102` directly, not the public domain name.
+### First-time VM setup (sparse checkout — `web/` only)
 
-### First-time NAS git setup (sparse checkout — `web/` only)
-
-Run once on the NAS (via SSH or TNAS terminal) to clone only the `web/` folder:
+Run once on the VM via SSH:
 
 ```bash
-GIT=/home/nperiannan/miniconda3/bin/git
-
-# Remove old manually-copied directory if it exists
-rm -rf /Volume1/docker/TankMonitor
-
 # Sparse clone — fetches objects only for web/
-$GIT clone --no-checkout --filter=blob:none \
+git clone --no-checkout --filter=blob:none \
   https://github.com/nperiannan/TankMonitor.git \
-  /Volume1/docker/TankMonitor
+  /opt/TankMonitor
 
-cd /Volume1/docker/TankMonitor
-$GIT sparse-checkout init --cone
-$GIT sparse-checkout set web
-$GIT checkout master
+cd /opt/TankMonitor
+git sparse-checkout init --cone
+git sparse-checkout set web
+git checkout master
 ```
 
-After this the layout is `/Volume1/docker/TankMonitor/web/{Dockerfile,backend/,frontend/,build_web.sh}`.
+After this the layout is `/opt/TankMonitor/web/{Dockerfile,backend/,frontend/,build_web.sh}`.
 Future updates via `git pull` will download only `web/` changes.
 
 ---
 
 ### Deploy / Update the Web App
 
-A build script is included at `web/build_web.sh`. Copy it to the NAS once,
-then run it for every update:
+SSH into the VM and run:
 
 ```bash
-cd /Volume1/docker/TankMonitor/web
+cd /opt/TankMonitor/web
 bash build_web.sh
 ```
 
 The script:
 
-1. `source ~/.bashrc` + `conda activate base` (sets up environment)
-2. `git -C .. pull origin master` (pulls latest `web/` changes)
-3. `docker build -t tankmonitor-web:2.1.0 .`
-4. Stops/removes old container and starts a fresh one with all required env vars
+1. `git -C .. pull origin master` (pulls latest `web/` changes)
+2. `docker build -t tankmonitor-web:<version> .`
+3. Stops/removes old container and starts a fresh one with all required env vars
 
 ### Check container logs
 
@@ -313,8 +305,7 @@ cd controller_firmware
 ```
 
 The script builds with PlatformIO (`nebulas3` env), prompts for the device MAC address,
-authenticates with the NAS server, and uploads `firmware.bin` to the NAS,
-staging it at `/Volume1/docker/tankmonitor-data/ota/{MAC}.bin`.
+copies `firmware.bin` to the VM via SCP (using your SSH key), and triggers OTA via the web app API.
 
 > **How the ESP32 picks it up:** The firmware polls `GET /api/ota/check/{mac}` on the web app
 > (port 1880) every **5 minutes via HTTP** — completely independent of MQTT.  
@@ -334,12 +325,12 @@ staging it at `/Volume1/docker/tankmonitor-data/ota/{MAC}.bin`.
 
 ### OTA via Web App
 
-1. Open <http://192.168.0.102:1880>, log in.
+1. Open <http://nperiannan-nas.freemyip.com:1880>, log in.
 2. Go to **Firmware Update (OTA)** → click **Upload firmware.bin** → select the `.bin` file.
 3. Click **Flash to ESP32** → confirm.
 4. A 150-second progress bar tracks the update phases until `success`.
 
-> The binary is staged on the NAS; the ESP32 fetches it on its next 5-minute HTTP poll
+> The binary is staged on the server; the ESP32 fetches it on its next 5-minute HTTP poll
 > (`/api/ota/check/{mac}`). No MQTT connection is required for the update to proceed.
 
 ---

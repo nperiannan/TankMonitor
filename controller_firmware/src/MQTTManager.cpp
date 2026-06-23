@@ -187,6 +187,7 @@ static void processPendingMQTT() {
         else if (strcmp(key, "ug_disp_only") == 0) ugDisplayOnly      = doc["value"] | false;
         else if (strcmp(key, "ug_ignore")    == 0) ugIgnoreForOH      = doc["value"] | false;
         else if (strcmp(key, "buzzer_delay") == 0) buzzerDelayEnabled = doc["value"] | false;
+        else if (strcmp(key, "manual_auto_stop") == 0) manualAutoStop = doc["value"] | true;
         else if (strcmp(key, "oh_start_level") == 0) {
             uint8_t v = doc["value"] | 1;
             if (v >= TANK_STATE_EMPTY && v <= TANK_STATE_HALF) ohStartLevel = (TankState)v;
@@ -610,7 +611,7 @@ void publishMQTTStatus() {
         "\"uptime_s\":%lu,\"fw\":\"%s\","
         "\"time\":\"%s\","
         "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
-        "\"ug_ignore\":%s,\"buzzer_delay\":%s,"
+        "\"ug_ignore\":%s,\"buzzer_delay\":%s,\"manual_auto_stop\":%s,"
         "\"lcd_bl_mode\":%u,"
         "\"oh_start_level\":%u,\"oh_stop_level\":%u,\"oh_max_run_min\":%u,"
         "\"log_level\":\"%s\","
@@ -637,6 +638,7 @@ void publishMQTTStatus() {
         ugDisplayOnly      ? "true" : "false",
         ugIgnoreForOH      ? "true" : "false",
         buzzerDelayEnabled ? "true" : "false",
+        manualAutoStop     ? "true" : "false",
         (unsigned)lcdBacklightMode,
         (unsigned)ohStartLevel,
         (unsigned)ohStopLevel,

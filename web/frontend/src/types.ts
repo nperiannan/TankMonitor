@@ -29,6 +29,7 @@ export interface Status {
   ug_disp_only:  boolean
   ug_ignore:     boolean
   buzzer_delay:  boolean
+  manual_auto_stop: boolean
   lcd_bl_mode:   number   // 0=auto, 1=always_on, 2=always_off
   log_level:     string   // 'info' | 'debug'
 }

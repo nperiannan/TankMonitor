@@ -108,7 +108,6 @@ controller_firmware/
 
 ## Related
 
-- **Web App**: Go backend + React/Ant Design frontend, Docker on TerraMaster NAS
-  - Local: `http://192.168.0.102:1880`
-  - External: `http://nperiannan-nas.freemyip.com:1880`
-- **MQTT broker**: Mosquitto on NAS port 1883, externally reachable via same domain
+- **Web App**: Go backend + React/Ant Design frontend, Docker on Oracle Cloud VM
+  - URL: `http://nperiannan-nas.freemyip.com:1880` (IP: `150.230.129.215`)
+- **MQTT broker**: Mosquitto on Oracle Cloud VM port 1883, externally reachable via same domain
