@@ -99,10 +99,10 @@ flowchart LR
     MCU -. "HTTP GET /api/ota/check · 5 min" .-> GO
     GO -- "firmware.bin HTTP" .-> MCU
 
-    BROWSER -- "HTTP + WS :1880" --> GO
-    GO -- "status push WS" --> BROWSER
-    PHONE -- "HTTP + WS :1880" --> GO
-    GO -- "status push WS" --> PHONE
+    BROWSER -- "HTTP/WS :1880" --> GO
+    GO -- "WS status push" --> BROWSER
+    PHONE -- "HTTP/WS :1880" --> GO
+    GO -- "WS status push" --> PHONE
     PHONE -. "BLE · setup only" .-> MCU
 
     PF -. "Public Internet" .-> GO
