@@ -31,7 +31,7 @@ docker run -d --name tankmonitor-web --restart always \
   --network tankmonitor \
   -p 1880:8080 \
   -v /opt/tankmonitor/data:/data \
-  -e MQTT_BROKER=mosquitto \
+  -e MQTT_BROKER=tankmonitor-mosquitto \\
   -e MQTT_PORT=1883 \
   -e MQTT_USER=tankmonitor \
   -e MQTT_PASS='Tank32!' \
