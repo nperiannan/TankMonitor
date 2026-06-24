@@ -9,8 +9,8 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 ```mermaid
 flowchart TD
     subgraph Field["Field Hardware"]
-        TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.0.0"]
-        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.3.3"]
+        TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.1.0"]
+        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.3.4"]
         TX -- "LoRa 865 MHz · level packets" --> CTRL
     end
 
@@ -25,7 +25,7 @@ flowchart TD
     CTRL -. "HTTP OTA poll · every 5 min" .-> WEB
 
     BROWSER["Web Browser"]
-    APP["Mobile App\nFlutter Android · v2.5.1"]
+    APP["Mobile App\nFlutter Android · v2.5.3"]
 
     BROWSER <-- "HTTP + WebSocket · :1880" --> WEB
     APP <-- "HTTP + WebSocket · :1880" --> WEB
@@ -40,7 +40,7 @@ flowchart TD
 flowchart LR
     subgraph OH_Node["OH Tank Node"]
         F_OH["Float Switches\nFULL / HALF / LOW"]
-        TXmcu["ATmega328P\nFW v2.0.0"]
+        TXmcu["ATmega328P\nFW v2.1.0"]
         TXlora["LoRa RFM95\n865 MHz"]
         F_OH --> TXmcu --> TXlora
     end
@@ -49,7 +49,7 @@ flowchart LR
         RXlora["LoRa RFM95\nHSPI CS=10 IRQ=14 RST=21"]
         F_UG["UG Float Switch\nGPIO 42"]
         TOUCH["Touch Switches\nGPIO 40 / 41"]
-        MCU["ESP32-S3\nFW v2.3.3"]
+        MCU["ESP32-S3\nFW v2.3.4"]
         R_OH["OH Relay\nGPIO 1"]
         R_UG["UG Relay\nGPIO 2"]
         BUZ["Buzzer\nGPIO 3"]
@@ -73,7 +73,7 @@ flowchart LR
 
     subgraph OCI["Oracle Cloud VM · 150.230.129.215"]
         MQ["Mosquitto\nMQTT Broker\n:1883"]
-        GO["Go Backend\n:8080\nweb v2.2.1"]
+        GO["Go Backend\n:8080\nweb v2.2.3"]
         STATIC["React Frontend\nserved as static"]
         DB[("SQLite\n/data/tankmonitor.db")]
         GO --- MQ
@@ -87,7 +87,7 @@ flowchart LR
 
     subgraph Clients["Client Devices"]
         BROWSER["Web Browser"]
-        PHONE["Mobile App\nFlutter · v2.5.1"]
+        PHONE["Mobile App\nFlutter · v2.5.3"]
     end
 
     TXlora -- "LoRa 865 MHz / FloatPacket 4B" --> RXlora
@@ -99,10 +99,10 @@ flowchart LR
     MCU -. "HTTP GET /api/ota/check · 5 min" .-> GO
     GO -- "firmware.bin HTTP" .-> MCU
 
-    BROWSER -- "HTTP REST + WebSocket :1880" --> GO
-    GO -- "status push WebSocket" --> BROWSER
-    PHONE -- "HTTP REST + WebSocket :1880" --> GO
-    GO -- "status push WebSocket" --> PHONE
+    BROWSER -- "HTTP + WS :1880" --> GO
+    GO -- "status push WS" --> BROWSER
+    PHONE -- "HTTP + WS :1880" --> GO
+    GO -- "status push WS" --> PHONE
     PHONE -. "BLE · setup only" .-> MCU
 
     PF -. "Public Internet" .-> GO
