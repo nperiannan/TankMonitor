@@ -90,23 +90,23 @@ flowchart LR
         PHONE["Mobile App\nFlutter · v2.5.3"]
     end
 
-    TXlora -- "LoRa 865 MHz / FloatPacket 4B" --> RXlora
+    TXlora -->|"LoRa 865 MHz / FloatPacket 4B"| RXlora
     R_OH --> OH_M
     R_UG --> UG_M
 
-    MCU -- "MQTT pub · tm/mac/status" --> MQ
-    MQ -- "MQTT sub · tm/mac/control" --> MCU
-    MCU -. "HTTP GET /api/ota/check · 5 min" .-> GO
-    GO -- "firmware.bin HTTP" .-> MCU
+    MCU -->|"MQTT pub"| MQ
+    MQ -->|"MQTT sub"| MCU
+    MCU -.->|"HTTP OTA poll 5 min"| GO
+    GO -.->|"firmware.bin"| MCU
 
-    BROWSER -- "HTTP/WS :1880" --> GO
-    GO -- "WS status push" --> BROWSER
-    PHONE -- "HTTP/WS :1880" --> GO
-    GO -- "WS status push" --> PHONE
-    PHONE -. "BLE · setup only" .-> MCU
+    BROWSER -->|"HTTP/WS :1880"| GO
+    GO -->|"WS push"| BROWSER
+    PHONE -->|"HTTP/WS :1880"| GO
+    GO -->|"WS push"| PHONE
+    PHONE -.->|"BLE setup"| MCU
 
-    PF -. "Public Internet" .-> GO
-    PF -. "Public Internet" .-> MQ
+    PF -.->|"Public Internet"| GO
+    PF -.->|"Public Internet"| MQ
 ```
 
 ### Protocol Summary
