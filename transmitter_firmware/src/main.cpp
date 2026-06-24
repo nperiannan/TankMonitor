@@ -13,8 +13,14 @@
 #define DEBUG_LED 9         // LED to indicate transmission
 
 // ** Transmission Interval **
-unsigned long interval = 30000;  // 30 seconds
+#define TX_INTERVAL_MS      30000UL  // Regular heartbeat every 30 seconds
+#define DEBOUNCE_STABLE_MS   3000UL  // State must be stable for 3s before immediate send
+#define POLL_INTERVAL_MS     1000UL  // Check switches every 1 second during sleep
+
 static uint8_t txFailCount = 0;  // consecutive transmit failures
+static uint8_t lastSentFull = 0xFF;  // last sent switch states (0xFF = none sent yet)
+static uint8_t lastSentHalf = 0xFF;
+static uint8_t lastSentLow  = 0xFF;
 
 SX1276 radio = new Module(NSS, DIO0, RESET);
 
@@ -83,21 +89,21 @@ void setup() {
     wdt_enable(WDTO_8S);
 }
 
-void loop() {
-    // ** Read float switches **
-    // Switches are NO, INPUT_PULLUP: LOW = water present, HIGH = no water
-    uint8_t lo   = (digitalRead(FLOAT_LOW_PIN)  == LOW) ? 1 : 0;
-    uint8_t half = (digitalRead(FLOAT_HALF_PIN) == LOW) ? 1 : 0;
-    uint8_t full = (digitalRead(FLOAT_FULL_PIN) == LOW) ? 1 : 0;
+// ** Helper: read current float switch state **
+static void readSwitches(uint8_t &lo, uint8_t &half, uint8_t &full) {
+    lo   = (digitalRead(FLOAT_LOW_PIN)  == LOW) ? 1 : 0;
+    half = (digitalRead(FLOAT_HALF_PIN) == LOW) ? 1 : 0;
+    full = (digitalRead(FLOAT_FULL_PIN) == LOW) ? 1 : 0;
+}
 
-    // ** Pack Data into Struct **
+// ** Helper: transmit current state via LoRa **
+static void transmitState(uint8_t lo, uint8_t half, uint8_t full) {
     FloatPacket pkt;
     pkt.type    = 0x02;
     pkt.sw_full = full;
     pkt.sw_half = half;
     pkt.sw_low  = lo;
 
-    // ** Transmit Data Over LoRa **
     wdt_reset();
     Serial.println(F("LoRa Transmitting Data ..."));
     Serial.print(F("LOW=")); Serial.print(lo);
@@ -110,11 +116,13 @@ void loop() {
         Serial.println(F("Success!"));
         blink_led();
         txFailCount = 0;
+        lastSentFull = full;
+        lastSentHalf = half;
+        lastSentLow  = lo;
     } else {
         Serial.print(F("Transmission Failed, code: "));
         Serial.println(state);
         txFailCount++;
-        // After 3 consecutive failures, reinit the radio
         if (txFailCount >= 3) {
             Serial.println(F("Reinitializing radio..."));
             radio.begin(865.0, 125.0, 9, 7, 0x34, 20, 8, 0);
@@ -122,12 +130,53 @@ void loop() {
             txFailCount = 0;
         }
     }
+}
 
-    // ** Delay with WDT petting **
-    // delay(30000) exceeds 8s WDT, so pet in chunks
-    for (uint8_t i = 0; i < 6; i++) {
+void loop() {
+    // ** Read and transmit current state (regular heartbeat) **
+    uint8_t lo, half, full;
+    readSwitches(lo, half, full);
+    transmitState(lo, half, full);
+
+    // ** Sleep with state-change detection **
+    // Instead of sleeping 30s blindly, poll switches every 1s.
+    // If state changes and stays stable for DEBOUNCE_STABLE_MS, send immediately.
+    unsigned long sleepStart = millis();
+    unsigned long changeDetectedAt = 0;
+    bool changeDetected = false;
+    uint8_t candidateLo = lo, candidateHalf = half, candidateFull = full;
+
+    while (millis() - sleepStart < TX_INTERVAL_MS) {
         wdt_reset();
-        delay(5000);
+        delay(POLL_INTERVAL_MS);
+
+        uint8_t curLo, curHalf, curFull;
+        readSwitches(curLo, curHalf, curFull);
+
+        bool stateChanged = (curLo != lastSentLow || curHalf != lastSentHalf || curFull != lastSentFull);
+
+        if (stateChanged) {
+            // Check if this is a new change or the same candidate
+            if (!changeDetected || curLo != candidateLo || curHalf != candidateHalf || curFull != candidateFull) {
+                // New candidate — restart debounce timer
+                changeDetectedAt = millis();
+                candidateLo   = curLo;
+                candidateHalf = curHalf;
+                candidateFull = curFull;
+                changeDetected = true;
+            }
+
+            // If candidate has been stable for DEBOUNCE_STABLE_MS, send immediately
+            if (changeDetected && (millis() - changeDetectedAt >= DEBOUNCE_STABLE_MS)) {
+                Serial.println(F("State change detected — immediate send"));
+                transmitState(candidateLo, candidateHalf, candidateFull);
+                changeDetected = false;
+                sleepStart = millis();  // Reset heartbeat timer after immediate send
+            }
+        } else {
+            // State matches last sent — cancel any pending change detection
+            changeDetected = false;
+        }
     }
 }
 
