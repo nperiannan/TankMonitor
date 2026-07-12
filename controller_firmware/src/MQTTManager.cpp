@@ -142,10 +142,10 @@ static void processPendingMQTT() {
     }
     const char* cmd = doc["cmd"] | "";
 
-    if      (strcmp(cmd, "oh_on")  == 0) { turnOnOHMotor();  }
-    else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(); }
-    else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor();  }
-    else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(); }
+    if      (strcmp(cmd, "oh_on")  == 0) { turnOnOHMotor(REASON_MANUAL_APP);  }
+    else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(REASON_MANUAL_APP); }
+    else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor(REASON_MANUAL_APP);  }
+    else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(REASON_MANUAL_APP); }
     else if (strcmp(cmd, "sched_add") == 0) {
         int slot = -1;
         for (int i = 0; i < MAX_SCHEDULES; i++) {

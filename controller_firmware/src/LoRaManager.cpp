@@ -18,6 +18,14 @@ static uint8_t       missedPackets    = 0;          // counts consecutive missed
 static unsigned long lastExpectedMs   = 0;          // millis() at which next packet is expected
 static bool          transmitterLost  = false;      // true after LORA_MAX_MISSED_PACKETS misses
 
+// Interrupt-driven receive: DIO0 fires when a packet arrives.  The ISR only
+// sets a flag so pollLoRa() can read the packet without blocking the main loop.
+static volatile bool packetReceived = false;
+
+static void IRAM_ATTR onLoraPacket() {
+    packetReceived = true;
+}
+
 // ---------------------------------------------------------------------------
 //  Public API
 // ---------------------------------------------------------------------------
@@ -37,6 +45,8 @@ bool initLoRa() {
     if (state == RADIOLIB_ERR_NONE) {
         loraReady  = true;
         retryCount = 0;
+        packetReceived = false;
+        radio.setPacketReceivedAction(onLoraPacket);
         radio.startReceive();
         Log(INFO, "[LoRa] Initialised successfully");
         loraOperational = true;
@@ -81,10 +91,19 @@ void pollLoRa() {
         }
     }
 
-    // --- Poll radio (non-blocking) ---
-    // Read the first byte to determine packet type
+    // --- Interrupt-driven receive (non-blocking) ---
+    // radio.startReceive() runs continuously; the DIO0 ISR sets packetReceived.
+    // If no packet arrived this iteration, return immediately so loop() — and the
+    // web server — stays responsive.  (A blocking radio.receive() here stalls the
+    // loop ~410 ms per call and makes the web UI time out once a radio is fitted.)
+    if (!packetReceived) {
+        return;
+    }
+    packetReceived = false;
+
     uint8_t buf[8] = {};
-    int state = radio.receive(buf, sizeof(buf));
+    int state = radio.readData(buf, sizeof(buf));
+    radio.startReceive();   // re-arm for the next packet
 
     if (state == RADIOLIB_ERR_NONE) {
         if (!loraOperational) {
@@ -133,20 +152,16 @@ void pollLoRa() {
         } else {
             ohTankState = newState;
         }
-        radio.startReceive();
 
-    } else if (state == RADIOLIB_ERR_RX_TIMEOUT) {
-        // Normal – nothing received this poll
     } else {
         retryCount++;
-        Log(WARN, "[LoRa] Receive error " + String(state) + " (retry " + String(retryCount) + ")");
+        Log(WARN, "[LoRa] Read error " + String(state) + " (retry " + String(retryCount) + ")");
         if (retryCount >= MAX_LORA_RETRIES) {
             loraReady       = false;
             loraOperational = false;
             Log(ERROR, "[LoRa] Too many errors – marking non-operational");
-        } else {
-            radio.startReceive();
         }
+        // (receiver already re-armed above via startReceive())
     }
 }
 

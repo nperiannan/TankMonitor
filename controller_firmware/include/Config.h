@@ -4,16 +4,35 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "2.3.4"
+#define FW_VERSION "2.4.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "2.0.0"
 
 // =============================================================================
+//                              BOARD REVISION SELECT
+// =============================================================================
+// The v2.0 PCB (EasyEDA "esp32-otg" rev 1.0) moved a few pins vs the original
+// v1.x board.  Only those pins are guarded by BOARD_V2 (see each #ifdef below);
+// everything else is identical on both.
+//   v2.0 differences: I2C moved to GPIO8/9, RFM95 DIO1 not wired, and the
+//   touch/float inputs moved off the JTAG lines (GPIO40/41/42) to GPIO17/18/47.
+//
+// BOARD_V2 is normally supplied by the PlatformIO build environment
+// (`-D BOARD_V2` in the *_v2 envs, e.g. `nebulas3_v2` / `nebulas3_v2_serial`).
+// Alternatively, uncomment the line below to force v2.0 pins in any build.
+#define BOARD_V2
+
+// =============================================================================
 //                              I2C CONFIGURATION
 // =============================================================================
-#define SDA_PIN     18
-#define SCL_PIN     17
+#ifdef BOARD_V2
+  #define SDA_PIN    8     // v2.0: I2C1_SDA on GPIO8
+  #define SCL_PIN    9     // v2.0: I2C1_SCL on GPIO9
+#else
+  #define SDA_PIN   18     // v1.x
+  #define SCL_PIN   17     // v1.x
+#endif
 
 #define LCD_ADDRESS  0x27
 #define LCD_COLUMNS  16
@@ -29,7 +48,11 @@
 #define LORA_CS    10
 #define LORA_IRQ   14
 #define LORA_RST   21
-#define LORA_DIO1   8
+#ifdef BOARD_V2
+  #define LORA_DIO1  RADIOLIB_NC   // v2.0: RFM95 DIO1 tied to GND; GPIO8 now used by I2C SDA
+#else
+  #define LORA_DIO1  8             // v1.x
+#endif
 
 // LoRa radio parameters  (must match the remote OH-tank node)
 #define LORA_FREQUENCY          865.0f
@@ -63,7 +86,14 @@
 // Float UP   (tank FULL)  → COM→NO 3.3V  → pin HIGH
 // Float DOWN (tank EMPTY) → COM→NC GND   → pin LOW  (GND overrides pullup)
 // Disconnected/wire loose → pullup holds HIGH = FULL  (safe: motor stays off)
-#define UG_FLOAT_PIN  42
+#ifdef BOARD_V2
+  // v2.0 has no dedicated float net (GPIO42 is JTAG TMS), so the float switch
+  //   wires to a spare header GPIO instead.  IO47 is broken out on the 10-pin
+  //   GPIO header — connect the float COM lead there.
+  #define UG_FLOAT_PIN  47   // spare header GPIO (10-pin GPIO breakout)
+#else
+  #define UG_FLOAT_PIN  42   // v1.x
+#endif
 
 // =============================================================================
 //                              OTHER HARDWARE PINS
@@ -76,8 +106,15 @@
 // =============================================================================
 // TTP223 default mode: A=open, B=open → momentary HIGH while touched.
 // We detect rising edge (LOW→HIGH) to toggle the motor.
-#define TOUCH_OH_PIN   41   // OH motor toggle (TTP223 I/O → GPIO41)
-#define TOUCH_UG_PIN   40   // UG motor toggle (TTP223 I/O → GPIO40)
+#ifdef BOARD_V2
+  // v2.0 has no touch nets (GPIO40/41 are JTAG TDO/TDI).  I2C moved off
+  //   GPIO17/18, freeing them on the left header — wire the two buttons there.
+  #define TOUCH_OH_PIN   17   // freed header GPIO (was I2C SCL on v1.x)
+  #define TOUCH_UG_PIN   18   // freed header GPIO (was I2C SDA on v1.x)
+#else
+  #define TOUCH_OH_PIN   41   // v1.x  (TTP223 I/O → GPIO41)
+  #define TOUCH_UG_PIN   40   // v1.x  (TTP223 I/O → GPIO40)
+#endif
 #define TOUCH_DEBOUNCE_MS  50UL   // Ignore re-trigger within 50 ms
 
 // =============================================================================
@@ -146,6 +183,7 @@
 #define NVS_KEY_OH_MAX_RUN     "oh_max_run"     // Max motor runtime in minutes (5-60)
 #define NVS_KEY_OH_MOTOR_INTENT "oh_intent"     // Motor was running before power loss
 #define NVS_KEY_UG_MOTOR_INTENT "ug_intent"     // Motor was running before power loss
+#define NVS_KEY_HEARTBEAT       "hb_epoch"      // Last-alive epoch (power-cut off-time estimate)
 
 // LCD backlight modes
 #define LCD_BL_AUTO       0   // Off 7:00 AM – 5:30 PM, On at night (default)

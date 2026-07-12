@@ -5,6 +5,13 @@
 #include "Buzzer.h"
 #include "History.h"
 #include "LoRaManager.h"
+#include <TimeLib.h>
+#include <esp_system.h>
+
+// Reason to attach to the next OH/UG motor history record.  For buzzer-delayed
+// starts the reason is latched here until the relay is actually energised.
+static uint8_t       ohPendingReason = REASON_NONE;
+static uint8_t       ugPendingReason = REASON_NONE;
 
 // Pending motor start state (for buzzer-delay feature)
 static bool          ohMotorStartPending = false;
@@ -82,7 +89,7 @@ void saveMotorConfig() {
 //  Internal helpers
 // ---------------------------------------------------------------------------
 
-static void energiseOHRelay(bool on) {
+static void energiseOHRelay(bool on, uint8_t reason) {
     digitalWrite(OH_RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
     ohMotorRunning = on;
     if (on) ohMotorStartedMs = millis();
@@ -91,10 +98,10 @@ static void energiseOHRelay(bool on) {
     preferences.putBool(NVS_KEY_OH_MOTOR_INTENT, on);
     preferences.end();
     Log(INFO, String("[Motor] OH relay ") + (on ? "ON" : "OFF"));
-    addHistoryRecord(on ? HIST_MOTOR_OH_ON : HIST_MOTOR_OH_OFF, ohTankState, ugTankState);
+    addHistoryRecord(on ? HIST_MOTOR_OH_ON : HIST_MOTOR_OH_OFF, ohTankState, ugTankState, reason);
 }
 
-static void energiseUGRelay(bool on) {
+static void energiseUGRelay(bool on, uint8_t reason) {
     digitalWrite(UG_RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
     ugMotorRunning = on;
     if (on) ugMotorStartedMs = millis();
@@ -102,7 +109,14 @@ static void energiseUGRelay(bool on) {
     preferences.putBool(NVS_KEY_UG_MOTOR_INTENT, on);
     preferences.end();
     Log(INFO, String("[Motor] UG relay ") + (on ? "ON" : "OFF"));
-    addHistoryRecord(on ? HIST_MOTOR_UG_ON : HIST_MOTOR_UG_OFF, ohTankState, ugTankState);
+    addHistoryRecord(on ? HIST_MOTOR_UG_ON : HIST_MOTOR_UG_OFF, ohTankState, ugTankState, reason);
+}
+
+// Stop the pre-start warning buzzer, but ONLY when neither motor is still in
+// its buzzer-delay countdown.  Otherwise cancelling/starting one motor would
+// silence the warning buzzer of the other motor that is still counting down.
+static void stopMotorBuzzer() {
+    if (!ohMotorStartPending && !ugMotorStartPending) stopBuzzer();
 }
 
 // ---------------------------------------------------------------------------
@@ -125,8 +139,8 @@ void autoControlOHMotor() {
         if (runMs >= (unsigned long)ohMaxRunMin * 60000UL) {
             Log(WARN, "[Motor] OH OFF – max runtime " + String(ohMaxRunMin) + " min exceeded");
             ohMotorStartPending = false;
-            stopBuzzer();
-            energiseOHRelay(false);
+            stopMotorBuzzer();
+            energiseOHRelay(false, REASON_MAX_RUNTIME);
             ohMotorSource = MOTOR_SRC_NONE;
             return;
         }
@@ -137,10 +151,10 @@ void autoControlOHMotor() {
         if (millis() - lastLoraReceivedTime >= LORA_MOTOR_SAFETY_TIMEOUT_MS) {
             Log(WARN, "[Motor] OH OFF – no LoRa signal for 5 min while motor running");
             ohMotorStartPending = false;
-            stopBuzzer();
+            stopMotorBuzzer();
             // Intent stays true in NVS (energiseOHRelay(false) clears it,
             // but we want to resume after LoRa returns), so set it back
-            energiseOHRelay(false);
+            energiseOHRelay(false, REASON_LORA_LOST);
             // Re-set intent so power recovery can resume
             preferences.begin(NVS_MOTOR_NS, false);
             preferences.putBool(NVS_KEY_OH_MOTOR_INTENT, true);
@@ -162,8 +176,8 @@ void autoControlOHMotor() {
         Log(INFO, "[Motor] OH " + String(ohMotorSource == MOTOR_SRC_MANUAL ? "MANUAL" : "AUTO")
                   + " OFF – tank reached " + String(tankStateStr(ohTankState)));
         ohMotorStartPending = false;
-        stopBuzzer();
-        energiseOHRelay(false);
+        stopMotorBuzzer();
+        energiseOHRelay(false, REASON_AUTO_FULL);
         ohMotorSource = MOTOR_SRC_NONE;
         return;
     }
@@ -175,7 +189,7 @@ void autoControlOHMotor() {
     if (ohMotorStartPending && ohMotorSource == MOTOR_SRC_AUTO && ohTankState > ohStartLevel) {
         Log(WARN, "[Motor] OH AUTO cancel pending – state above start level");
         ohMotorStartPending = false;
-        stopBuzzer();
+        stopMotorBuzzer();
         ohMotorSource = MOTOR_SRC_NONE;
         return;
     }
@@ -189,13 +203,14 @@ void autoControlOHMotor() {
             return;
         }
         ohMotorSource = MOTOR_SRC_AUTO;
+        ohPendingReason = REASON_AUTO;
         if (buzzerDelayEnabled) {
             Log(INFO, "[Motor] OH AUTO ON pending – buzzer delay started");
             ohMotorStartPending = true;
             ohMotorPendingStart = millis();
             startBuzzer(BUZZER_COUNTDOWN);
         } else {
-            energiseOHRelay(true);
+            energiseOHRelay(true, REASON_AUTO);
         }
     }
 }
@@ -210,8 +225,8 @@ void autoControlUGMotor() {
         if (runMs >= (unsigned long)ohMaxRunMin * 60000UL) {
             Log(WARN, "[Motor] UG OFF – max runtime " + String(ohMaxRunMin) + " min exceeded");
             ugMotorStartPending = false;
-            stopBuzzer();
-            energiseUGRelay(false);
+            stopMotorBuzzer();
+            energiseUGRelay(false, REASON_MAX_RUNTIME);
             ugMotorSource = MOTOR_SRC_NONE;
             return;
         }
@@ -222,8 +237,8 @@ void autoControlUGMotor() {
         if (millis() - lastLoraReceivedTime >= LORA_MOTOR_SAFETY_TIMEOUT_MS) {
             Log(WARN, "[Motor] UG OFF – no LoRa signal for 5 min while motor running");
             ugMotorStartPending = false;
-            stopBuzzer();
-            energiseUGRelay(false);
+            stopMotorBuzzer();
+            energiseUGRelay(false, REASON_LORA_LOST);
             preferences.begin(NVS_MOTOR_NS, false);
             preferences.putBool(NVS_KEY_UG_MOTOR_INTENT, true);
             preferences.end();
@@ -240,7 +255,7 @@ void autoControlUGMotor() {
         Log(INFO, "[Motor] UG " + String(ugMotorSource == MOTOR_SRC_MANUAL ? "MANUAL" : "AUTO")
                   + " OFF – tank full");
         ugMotorStartPending = false;
-        energiseUGRelay(false);
+        energiseUGRelay(false, REASON_AUTO_FULL);
         ugMotorSource = MOTOR_SRC_NONE;
         return;
     }
@@ -249,20 +264,21 @@ void autoControlUGMotor() {
     if (ugMotorStartPending && ugMotorSource == MOTOR_SRC_AUTO && ugTankState != TANK_STATE_LOW) {
         Log(WARN, "[Motor] UG AUTO cancel pending – state no longer LOW");
         ugMotorStartPending = false;
-        stopBuzzer();
+        stopMotorBuzzer();
         ugMotorSource = MOTOR_SRC_NONE;
         return;
     }
 
     if (ugTankState == TANK_STATE_LOW && !ugMotorRunning && !ugMotorStartPending) {
         ugMotorSource = MOTOR_SRC_AUTO;
+        ugPendingReason = REASON_AUTO;
         if (buzzerDelayEnabled) {
             Log(INFO, "[Motor] UG AUTO ON pending – buzzer delay");
             ugMotorStartPending = true;
             ugMotorPendingStart = millis();
             startBuzzer(BUZZER_COUNTDOWN);
         } else {
-            energiseUGRelay(true);
+            energiseUGRelay(true, REASON_AUTO);
         }
     }
 }
@@ -276,13 +292,13 @@ void processPendingMotorStarts() {
 
     if (ohMotorStartPending && now - ohMotorPendingStart >= MOTOR_START_BUZZER_DELAY_MS) {
         ohMotorStartPending = false;
-        stopBuzzer();
+        stopMotorBuzzer();
         if (ohMotorSource == MOTOR_SRC_MANUAL || ohMotorSource == MOTOR_SRC_SCHEDULED) {
-            energiseOHRelay(true);
+            energiseOHRelay(true, ohPendingReason);
         } else {
             // Auto start: only proceed if still at/below start level and not display-only
             if (ohTankState != TANK_STATE_UNKNOWN && ohTankState <= ohStartLevel && !ohDisplayOnly) {
-                energiseOHRelay(true);
+                energiseOHRelay(true, ohPendingReason);
             } else {
                 ohMotorSource = MOTOR_SRC_NONE;
             }
@@ -291,12 +307,12 @@ void processPendingMotorStarts() {
 
     if (ugMotorStartPending && now - ugMotorPendingStart >= MOTOR_START_BUZZER_DELAY_MS) {
         ugMotorStartPending = false;
-        stopBuzzer();
+        stopMotorBuzzer();
         if (ugMotorSource == MOTOR_SRC_MANUAL || ugMotorSource == MOTOR_SRC_SCHEDULED) {
-            energiseUGRelay(true);
+            energiseUGRelay(true, ugPendingReason);
         } else {
             if (ugTankState == TANK_STATE_LOW && !ugDisplayOnly) {
-                energiseUGRelay(true);
+                energiseUGRelay(true, ugPendingReason);
             } else {
                 ugMotorSource = MOTOR_SRC_NONE;
             }
@@ -318,12 +334,13 @@ void processPendingMotorStarts() {
                 Log(INFO, "[Motor] Boot recovery: resuming OH motor (intent=true, state="
                     + String(tankStateStr(ohTankState)) + ")");
                 ohMotorSource = MOTOR_SRC_AUTO;
+                ohPendingReason = REASON_POWER_RESTORE;
                 if (buzzerDelayEnabled) {
                     ohMotorStartPending = true;
                     ohMotorPendingStart = millis();
                     startBuzzer(BUZZER_COUNTDOWN);
                 } else {
-                    energiseOHRelay(true);
+                    energiseOHRelay(true, REASON_POWER_RESTORE);
                 }
             }
         } else if (ohIntent) {
@@ -338,12 +355,13 @@ void processPendingMotorStarts() {
             if (!ugDisplayOnly) {
                 Log(INFO, "[Motor] Boot recovery: resuming UG motor");
                 ugMotorSource = MOTOR_SRC_AUTO;
+                ugPendingReason = REASON_POWER_RESTORE;
                 if (buzzerDelayEnabled) {
                     ugMotorStartPending = true;
                     ugMotorPendingStart = millis();
                     startBuzzer(BUZZER_COUNTDOWN);
                 } else {
-                    energiseUGRelay(true);
+                    energiseUGRelay(true, REASON_POWER_RESTORE);
                 }
             }
         } else if (ugIntent) {
@@ -359,45 +377,114 @@ void processPendingMotorStarts() {
 //  Manual commands
 // ---------------------------------------------------------------------------
 
-void turnOnOHMotor() {
+void turnOnOHMotor(uint8_t reason) {
     if (ohMotorRunning || ohMotorStartPending) return;
     if (ohMotorSource == MOTOR_SRC_NONE) ohMotorSource = MOTOR_SRC_MANUAL;
+    ohPendingReason = reason;
     if (buzzerDelayEnabled) {
         ohMotorStartPending = true;
         ohMotorPendingStart = millis();
         startBuzzer(BUZZER_COUNTDOWN);
         Log(INFO, "[Motor] OH ON – buzzer delay started");
     } else {
-        energiseOHRelay(true);
+        energiseOHRelay(true, reason);
     }
 }
 
-void turnOffOHMotor() {
+void turnOffOHMotor(uint8_t reason) {
+    const bool wasRunning = ohMotorRunning;
     ohMotorStartPending   = false;
     ohMotorSource         = MOTOR_SRC_NONE;
-    stopBuzzer();
-    energiseOHRelay(false);
+    stopMotorBuzzer();
+    if (wasRunning) {
+        energiseOHRelay(false, reason);   // real stop — logs OFF + clears intent
+    }
+    // else: pending start cancelled (or already off) — nothing energised, no OFF record
 }
 
-void turnOnUGMotor() {
+void turnOnUGMotor(uint8_t reason) {
     if (ugMotorRunning || ugMotorStartPending) return;
     if (ugMotorSource == MOTOR_SRC_NONE) ugMotorSource = MOTOR_SRC_MANUAL;
+    ugPendingReason = reason;
     if (buzzerDelayEnabled) {
         ugMotorStartPending = true;
         ugMotorPendingStart = millis();
         startBuzzer(BUZZER_COUNTDOWN);
         Log(INFO, "[Motor] UG ON – buzzer delay started");
     } else {
-        energiseUGRelay(true);
+        energiseUGRelay(true, reason);
     }
 }
 
-void turnOffUGMotor() {
+void turnOffUGMotor(uint8_t reason) {
+    const bool wasRunning = ugMotorRunning;
     ugMotorStartPending   = false;
     ugMotorSource         = MOTOR_SRC_NONE;
-    stopBuzzer();
-    energiseUGRelay(false);
+    stopMotorBuzzer();
+    if (wasRunning) {
+        energiseUGRelay(false, reason);   // real stop — logs OFF + clears intent
+    }
+    // else: pending start cancelled (or already off) — nothing energised, no OFF record
 }
 
 bool isOHBuzzerPending() { return ohMotorStartPending; }
 bool isUGBuzzerPending() { return ugMotorStartPending; }
+
+int getPendingStartCountdown(bool* isOH) {
+    unsigned long now = millis();
+    if (ohMotorStartPending) {
+        if (isOH) *isOH = true;
+        long rem = (long)MOTOR_START_BUZZER_DELAY_MS - (long)(now - ohMotorPendingStart);
+        return rem > 0 ? (int)(rem / 1000) : 0;
+    }
+    if (ugMotorStartPending) {
+        if (isOH) *isOH = false;
+        long rem = (long)MOTOR_START_BUZZER_DELAY_MS - (long)(now - ugMotorPendingStart);
+        return rem > 0 ? (int)(rem / 1000) : 0;
+    }
+    return -1;
+}
+
+// ---------------------------------------------------------------------------
+//  Power-cut recovery + heartbeat
+// ---------------------------------------------------------------------------
+
+// Called from loop().  While a motor is running, periodically persist the
+// current epoch to NVS so that, after an unexpected power loss, we can estimate
+// when the motor actually stopped.  Only writes while pumping → minimal wear.
+void motorHeartbeat() {
+    if (!ohMotorRunning && !ugMotorRunning) return;
+    if (timeStatus() == timeNotSet) return;
+    static unsigned long lastHbMs = 0;
+    if (lastHbMs != 0 && millis() - lastHbMs < 30000UL) return;
+    lastHbMs = millis();
+    preferences.begin(NVS_MOTOR_NS, false);
+    preferences.putUInt(NVS_KEY_HEARTBEAT, (uint32_t)now());
+    preferences.end();
+}
+
+// Called once from setup() AFTER initHistory().  If the last reset was a power
+// event and a motor was still intended ON, the clean OFF was never written —
+// synthesize it, backdated to the last heartbeat (best estimate of the cut).
+void checkPowerCutRecovery() {
+    esp_reset_reason_t rr = esp_reset_reason();
+    if (rr != ESP_RST_POWERON && rr != ESP_RST_BROWNOUT) return;
+
+    preferences.begin(NVS_MOTOR_NS, true);
+    bool     ohIntent = preferences.getBool(NVS_KEY_OH_MOTOR_INTENT, false);
+    bool     ugIntent = preferences.getBool(NVS_KEY_UG_MOTOR_INTENT, false);
+    uint32_t hb       = preferences.getUInt(NVS_KEY_HEARTBEAT, 0);
+    preferences.end();
+
+    if (!ohIntent && !ugIntent) return;
+    uint32_t offTs = hb ? hb : (uint32_t)now();
+
+    if (ohIntent) {
+        addHistoryRecord(HIST_MOTOR_OH_OFF, ohTankState, ugTankState, REASON_POWER_CUT, offTs);
+        Log(WARN, "[Motor] Power-cut inferred – OH motor OFF logged (backdated)");
+    }
+    if (ugIntent) {
+        addHistoryRecord(HIST_MOTOR_UG_OFF, ohTankState, ugTankState, REASON_POWER_CUT, offTs);
+        Log(WARN, "[Motor] Power-cut inferred – UG motor OFF logged (backdated)");
+    }
+}

@@ -96,6 +96,9 @@ void setup() {
     // EEPROM history (after Wire and RTC are ready)
     initHistory();
 
+    // If power was lost while a motor was running, log the (backdated) OFF now
+    checkPowerCutRecovery();
+
     // TTP223 capacitive touch switches
     initTouchSwitches();
 
@@ -151,6 +154,7 @@ void loop() {
     autoControlOHMotor();
     autoControlUGMotor();
     processPendingMotorStarts();
+    motorHeartbeat();
 
     // --- Buzzer pattern update ---
     updateBuzzer();

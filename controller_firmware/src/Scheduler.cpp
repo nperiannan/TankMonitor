@@ -83,7 +83,7 @@ void checkSchedules() {
                     }
                 }
                 if (!anyRunning) {
-                    if (isUG) turnOffUGMotor(); else turnOffOHMotor();
+                    if (isUG) turnOffUGMotor(REASON_SCHEDULED); else turnOffOHMotor(REASON_SCHEDULED);
                     Log(INFO, "[Sched] " + String(i) + " stopped (disabled)");
                 }
             }
@@ -95,8 +95,8 @@ void checkSchedules() {
             Log(INFO, "[Sched] " + String(i) + " (" + (isUG?"UG":"OH") + ") starting at " + s.time
                 + " for " + String(s.duration) + " min");
             // Set motor source BEFORE calling turnOn so auto-control won't interfere
-            if (isUG) { ugMotorSource = MOTOR_SRC_SCHEDULED; turnOnUGMotor(); }
-            else      { ohMotorSource = MOTOR_SRC_SCHEDULED; turnOnOHMotor(); }
+            if (isUG) { ugMotorSource = MOTOR_SRC_SCHEDULED; turnOnUGMotor(REASON_SCHEDULED); }
+            else      { ohMotorSource = MOTOR_SRC_SCHEDULED; turnOnOHMotor(REASON_SCHEDULED); }
             s.isRunning = true;
             s.startTime = millis();
         }
@@ -115,7 +115,7 @@ void checkSchedules() {
                     }
                 }
                 if (!anyRunning) {
-                    if (isUG) turnOffUGMotor(); else turnOffOHMotor();
+                    if (isUG) turnOffUGMotor(REASON_SCHEDULED); else turnOffOHMotor(REASON_SCHEDULED);
                 }
             }
         }

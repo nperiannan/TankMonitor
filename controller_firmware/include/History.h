@@ -17,6 +17,27 @@ typedef enum : uint8_t {
     HIST_BOOT         = 6,
 } HistEvent;
 
+// Reason a motor/boot event happened.  Packed into the HIGH nibble (bits 4-7)
+// of HistoryRecord.flags — interpret together with the ON/OFF event type.
+// Legacy records (written before this field existed) read back as REASON_NONE.
+typedef enum : uint8_t {
+    REASON_NONE          = 0,   // unknown / not applicable
+    REASON_AUTO          = 1,   // ON: tank reached start level
+    REASON_MANUAL_APP    = 2,   // manual via mobile app / BLE
+    REASON_MANUAL_WEB    = 3,   // manual via web UI
+    REASON_MANUAL_TOUCH  = 4,   // manual via touch button
+    REASON_SCHEDULED     = 5,   // scheduler start/stop
+    REASON_AUTO_FULL     = 6,   // OFF: tank reached stop/full level
+    REASON_MAX_RUNTIME   = 7,   // OFF: max-runtime safety cutoff
+    REASON_LORA_LOST     = 8,   // OFF: no-LoRa-signal safety cutoff
+    REASON_POWER_CUT     = 9,   // OFF: inferred power failure (backdated)
+    REASON_POWER_RESTORE = 10,  // ON: resumed after power/LoRa restore
+    REASON_BOOT_POWER    = 11,  // BOOT: power-on reset
+    REASON_BOOT_SW       = 12,  // BOOT: software / OTA reset
+    REASON_BOOT_BROWN    = 13,  // BOOT: brownout reset
+    REASON_BOOT_OTHER    = 14,  // BOOT: panic / watchdog / other
+} HistReason;
+
 // =============================================================================
 //  8-byte packed record stored in EEPROM circular buffer
 // =============================================================================
@@ -39,7 +60,14 @@ extern bool histEepromFound;
 void    initHistory();
 
 // Record one event. oh/ug = current tank states at time of event.
-void    addHistoryRecord(HistEvent evt, TankState oh, TankState ug);
+// reason     = why it happened (HistReason), stored in the flags high nibble.
+// tsOverride = explicit epoch (0 = use current time); used to backdate a
+//              synthetic power-cut OFF to when power was actually lost.
+void    addHistoryRecord(HistEvent evt, TankState oh, TankState ug,
+                         uint8_t reason = REASON_NONE, uint32_t tsOverride = 0);
+
+// Detected EEPROM I2C address (valid after initHistory when histEepromFound).
+uint8_t getEepromAddress();
 
 // Return last maxRecords events as a JSON string (newest first).
 String  getHistoryJson(uint16_t maxRecords = 100);

@@ -4,10 +4,12 @@
 #include "Globals.h"
 #include "LoRaManager.h"
 #include "WiFiManager.h"
+#include "MotorControl.h"
 #include <Wire.h>
 #include <WiFi.h>
 #include <LiquidCrystal_I2C.h>
 #include <time.h>
+#include <new>          // placement new (rebuild LCD object with the detected address)
 
 // Screen indices
 #define SCREEN_OH_TANK   0
@@ -18,6 +20,7 @@
 #define SCREEN_COUNT     5
 
 static LiquidCrystal_I2C lcd(LCD_ADDRESS, LCD_COLUMNS, LCD_ROWS);
+static uint8_t  lcdAddr         = LCD_ADDRESS;   // actual address (auto-detected in initDisplay)
 static bool     lcdInitOk       = false;
 static bool     backlightOn     = true;
 static bool     pairingPinShown = false;
@@ -31,6 +34,10 @@ static bool          loraBlinkActive     = false;
 static unsigned long loraBlinkStartMs    = 0;
 static bool          loraBlinkPhase      = false;  // true = blinking 30s, false = idle 10min
 static unsigned long loraBlinkToggleMs   = 0;
+
+// Motor-start countdown screen state
+static bool          countdownActive     = false;
+static int           lastCountdownSec    = -1;
 
 // ---------------------------------------------------------------------------
 //  Helpers
@@ -103,6 +110,28 @@ static void showLora() {
     }
 }
 
+// Priority screen during a motor's buzzer-delay countdown: motor + seconds on
+// row 0, and a 16-cell bar on row 1 that shrinks as the countdown runs.
+static void showMotorStarting(bool isOH, int secs) {
+    if (!backlightOn) { lcd.backlight(); backlightOn = true; }
+    // Redraw only when the second changes (prevents flicker / I2C spam).
+    if (countdownActive && secs == lastCountdownSec) return;
+    countdownActive  = true;
+    lastCountdownSec = secs;
+
+    char l0[17];
+    snprintf(l0, sizeof(l0), "%s Motor %6ds", isOH ? "OH" : "UG", secs);
+    lcd.setCursor(0, 0);
+    lcd.print(l0);
+
+    const int total = (int)(MOTOR_START_BUZZER_DELAY_MS / 1000);
+    int filled = (total > 0) ? (secs * 16 / total) : 0;
+    if (filled > 16) filled = 16;
+    if (filled < 0)  filled = 0;
+    lcd.setCursor(0, 1);
+    for (int i = 0; i < 16; i++) lcd.write(i < filled ? (uint8_t)0xFF : (uint8_t)' ');
+}
+
 static void renderCurrentScreen() {
     if (pairingPinShown) return;   // Pairing PIN has priority
     switch (currentScreen) {
@@ -119,7 +148,44 @@ static void renderCurrentScreen() {
 //  Public API
 // ---------------------------------------------------------------------------
 
+// Scan the I2C bus and return the LCD backpack address.  PCF8574 boards sit at
+// 0x20–0x27 and PCF8574A at 0x38–0x3F, so we probe those (0x27/0x3F first, the
+// two most common) and skip the RTC (0x68) / EEPROM (0x50–0x57) on the same bus.
+// Falls back to the compile-time LCD_ADDRESS if nothing matching is found.
+static uint8_t findLcdAddress() {
+    String found;
+    for (uint8_t a = 0x08; a <= 0x77; ++a) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) {
+            if (found.length()) found += ", ";
+            found += "0x" + String(a, HEX);
+        }
+    }
+    Log(INFO, "[I2C] Devices found: " + (found.length() ? found : String("none")));
+
+    const uint8_t candidates[] = {
+        0x27, 0x3F,
+        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26,
+        0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E
+    };
+    for (uint8_t a : candidates) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) return a;
+    }
+    Log(WARN, "[Display] No LCD backpack detected – falling back to 0x" + String(LCD_ADDRESS, HEX));
+    return LCD_ADDRESS;
+}
+
 void initDisplay() {
+    // Auto-detect the LCD's I2C address (backpacks vary: 0x27 vs 0x3F, etc.).
+    // If it differs from the compile-time default, rebuild the LCD object
+    // in-place (placement new) so every existing lcd.* call keeps working.
+    lcdAddr = findLcdAddress();
+    if (lcdAddr != LCD_ADDRESS) {
+        lcd.~LiquidCrystal_I2C();
+        new (&lcd) LiquidCrystal_I2C(lcdAddr, LCD_COLUMNS, LCD_ROWS);
+    }
+
     lcd.init();
     lcd.backlight();
     lcd.clear();
@@ -130,13 +196,30 @@ void initDisplay() {
     lcdInitOk   = true;
     backlightOn = true;
     applyBacklightMode();  // apply persisted mode at startup
-    Log(INFO, "[Display] LCD initialised at 0x" + String(LCD_ADDRESS, HEX));
+    Log(INFO, "[Display] LCD initialised at 0x" + String(lcdAddr, HEX));
 }
+
+uint8_t getLcdAddress() { return lcdAddr; }
 
 void updateDisplay() {
     if (!lcdInitOk || pairingPinShown) return;
 
     unsigned long now = millis();
+
+    // --- Priority: a motor is about to start (buzzer-delay countdown) ---
+    bool isOH = true;
+    int cdSecs = getPendingStartCountdown(&isOH);
+    if (cdSecs >= 0) {
+        showMotorStarting(isOH, cdSecs);
+        return;
+    }
+    if (countdownActive) {
+        // Countdown ended (motor started or cancelled) — resume normal display
+        countdownActive  = false;
+        lastCountdownSec = -1;
+        lastScreenChange = now;
+        renderCurrentScreen();
+    }
 
     // --- LCD blink for lost transmitter ---
     if (isTransmitterLost()) {

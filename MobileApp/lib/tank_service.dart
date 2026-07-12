@@ -479,14 +479,20 @@ class TankService extends ChangeNotifier {
     try {
       final baseUrl = await _resolveUrl();
       final res = await http.delete(
-        Uri.parse('$baseUrl/api/devices/$mac'),
+        Uri.parse('$baseUrl/api/devices/${mac.toUpperCase()}'),
         headers: {
           if (authToken != null) 'Authorization': 'Bearer $authToken',
         },
       ).timeout(const Duration(seconds: 10));
-      return res.statusCode == 200;
+      // 200/204 = removed; 404 = already not in your list → goal achieved.
+      if (res.statusCode == 200 || res.statusCode == 204 || res.statusCode == 404) {
+        return true;
+      }
+      error = 'Remove failed (HTTP ${res.statusCode})';
+      notifyListeners();
+      return false;
     } catch (e) {
-      error = e.toString();
+      error = 'Cannot reach server: ${e.toString()}';
       notifyListeners();
       return false;
     }

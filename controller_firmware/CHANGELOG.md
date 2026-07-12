@@ -4,6 +4,24 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.4.0] — 2026-07-13
+
+### Added
+- **v2.0 PCB support (`BOARD_V2`)** — build-time board select via PlatformIO envs `nebulas3_v2` / `nebulas3_v2_serial` (or `#define BOARD_V2`). v2.0 pin map: I2C SDA=8/SCL=9, LoRa DIO1 not wired (`RADIOLIB_NC`), touch buttons GPIO17/18, UG float GPIO47. v1.x pins are unchanged when the guard is off.
+- **LCD I2C auto-detect** — scans the bus at boot and rebuilds the LCD object with the found address (handles 0x27 vs 0x3F backpacks); logs all I2C devices found.
+- **Event-history reasons** — every motor ON/OFF now records *why* (Auto/level, Manual app/web/touch, Scheduled, Tank-full, Max runtime, LoRa lost, Power cut, Power restore) plus a boot reason (power-on/OTA/brownout). Packed into the record's spare flags nibble — no EEPROM migration.
+- **Power-cut inference** — on boot, if a power reset occurred while a motor was intended ON, a synthetic OFF is logged, backdated to the last heartbeat (persisted only while pumping).
+- **About / Device Info** on the ESP32 web UI — controller & transmitter FW, LCD/EEPROM/RTC I2C addresses, and RAM/flash usage.
+- **Run-pairing** in the web Event History — motor ON→OFF merged into one row with duration and start/stop reasons.
+- **LCD motor-start countdown** — a priority screen with a shrinking bar shows the pending motor and seconds remaining during the buzzer delay.
+
+### Fixed
+- **Web UI unreachable once the RFM95 was fitted** — `pollLoRa()` used a blocking `radio.receive()` (~410 ms/iteration) that starved the synchronous web server. Switched to interrupt-driven RX (`setPacketReceivedAction` + `readData`) so the loop stays responsive.
+- **Buzzer silenced when cancelling one of two pending motors** — the pre-start buzzer now only stops when no motor is still counting down.
+- **Push-button couldn't cancel during the countdown** — a second tap while pending now cancels the start (stops buzzer, no motor, no phantom OFF record).
+
+---
+
 ## [2.2.0] — 2026-06-10
 
 ### Fixed

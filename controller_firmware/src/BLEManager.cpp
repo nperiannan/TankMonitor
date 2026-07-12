@@ -242,13 +242,13 @@ void BLEManager::processCommand(const String& cmd) {
     if (cmd == CMD_GET_STATUS) {
         sendStatus();
     } else if (cmd == CMD_MOTOR_OH_ON)  {
-        turnOnOHMotor();   sendResponse("{\"ok\":true,\"msg\":\"OH motor ON\"}");
+        turnOnOHMotor(REASON_MANUAL_APP);   sendResponse("{\"ok\":true,\"msg\":\"OH motor ON\"}");
     } else if (cmd == CMD_MOTOR_OH_OFF) {
-        turnOffOHMotor();  sendResponse("{\"ok\":true,\"msg\":\"OH motor OFF\"}");
+        turnOffOHMotor(REASON_MANUAL_APP);  sendResponse("{\"ok\":true,\"msg\":\"OH motor OFF\"}");
     } else if (cmd == CMD_MOTOR_UG_ON)  {
-        turnOnUGMotor();   sendResponse("{\"ok\":true,\"msg\":\"UG motor ON\"}");
+        turnOnUGMotor(REASON_MANUAL_APP);   sendResponse("{\"ok\":true,\"msg\":\"UG motor ON\"}");
     } else if (cmd == CMD_MOTOR_UG_OFF) {
-        turnOffUGMotor();  sendResponse("{\"ok\":true,\"msg\":\"UG motor OFF\"}");
+        turnOffUGMotor(REASON_MANUAL_APP);  sendResponse("{\"ok\":true,\"msg\":\"UG motor OFF\"}");
     } else if (cmd == CMD_BUZZER_ON)  {
         startBuzzer(BUZZER_SHORT_BEEPS);
         sendResponse("{\"ok\":true}");

@@ -10,6 +10,7 @@
 #include "Scheduler.h"
 #include "History.h"
 #include "MQTTManager.h"
+#include "RTCManager.h"
 #include <WebServer.h>   // Arduino ESP32 WebServer library
 #include <ArduinoJson.h>
 #include <WiFi.h>
@@ -328,6 +329,7 @@ input:checked+.sld::before{transform:translateX(18px)}
       <thead><tr>
         <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap">Time</th>
         <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left">Event</th>
+        <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:left">Reason</th>
         <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:center">OH</th>
         <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:center">UG</th>
         <th style="color:var(--tx2);font-weight:500;padding:5px 6px;border-bottom:1px solid var(--bd);text-align:center">OH&#9587;</th>
@@ -337,6 +339,12 @@ input:checked+.sld::before{transform:translateX(18px)}
     </table>
     <div id="histEmpty" style="font-size:12px;color:var(--tx2);padding:10px 0;display:none">No history records found.</div>
   </div>
+</div>
+
+<!-- About / Device Info -->
+<div class="card-full">
+  <div class="ctitle">About / Device Info</div>
+  <div id="aboutBox" style="font-size:12px;line-height:1.7">Loading&hellip;</div>
 </div>
 
 <!-- Logs -->
@@ -436,6 +444,23 @@ function refreshStatus(){
     if(lo)lo.textContent=d.loraOk?('OK | '+d.loraRSSI+' dBm | SNR '+d.loraSNR+' dB'):'Error';
     var lt=document.getElementById('loraTime');
     if(lt)lt.textContent=d.lastLoraReceived;
+    var ab=document.getElementById('aboutBox');
+    if(ab&&d.fwVersion!==undefined){
+      var fmtB=function(n){n=n||0;return n>=1048576?(n/1048576).toFixed(2)+' MB':(n/1024).toFixed(1)+' KB';};
+      var hx=function(n){return '0x'+(n||0).toString(16).toUpperCase();};
+      var okB=function(b){return b?'<span style="color:var(--green)">OK</span>':'<span style="color:var(--red)">not found</span>';};
+      var ramUsed=(d.heapSize||0)-(d.freeHeap||0);
+      ab.innerHTML=
+        '<b>Firmware</b><br>Controller: '+d.fwVersion+'<br>Transmitter: '+(d.txFw||'?')+'<br><br>'
+        +'<b>I2C devices</b><br>'
+        +'LCD: '+hx(d.lcdAddr)+'<br>'
+        +'EEPROM: '+hx(d.eepromAddr)+' '+okB(d.eepromOk)+'<br>'
+        +'RTC (DS3231): '+hx(d.rtcAddr)+' '+okB(d.rtcOk)+'<br><br>'
+        +'<b>Memory</b><br>'
+        +'RAM: '+fmtB(ramUsed)+' used / '+fmtB(d.heapSize)+' ('+fmtB(d.freeHeap)+' free)<br>'
+        +'Flash (sketch): '+fmtB(d.sketchSize)+' used / '+fmtB((d.sketchSize||0)+(d.freeSketch||0))+' app partition<br>'
+        +'Flash chip: '+fmtB(d.flashSize);
+    }
     var ck=document.getElementById('clock');
     if(ck&&d.time)ck.textContent=d.time;
     var st=document.getElementById('sysTime');
@@ -742,15 +767,41 @@ function loadHistory(){
     var stColor=function(s){return s==='FULL'?'var(--green)':s==='HALF'?'var(--blue)':s==='LOW'?'var(--orange)':s==='EMPTY'?'var(--red)':'var(--gold)';};
     var mColor=function(b){return b?'var(--green)':'var(--tx2)';};
     var mTxt=function(b){return b?'ON':'--';};
-    document.getElementById('histBody').innerHTML=rows.map(function(r){
-      return '<tr>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd);white-space:nowrap;color:var(--tx2)">'+r.time+'</td>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd)">'+r.ev+'</td>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd);text-align:center;color:'+stColor(r.oh)+'">'+r.oh+'</td>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd);text-align:center;color:'+stColor(r.ug)+'">'+r.ug+'</td>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd);text-align:center;color:'+mColor(r.ohM)+'">'+mTxt(r.ohM)+'</td>'
-        +'<td style="padding:4px 6px;border-bottom:1px solid var(--bd);text-align:center;color:'+mColor(r.ugM)+'">'+mTxt(r.ugM)+'</td>'
-        +'</tr>';
+    var td=function(h,x){return '<td style="padding:4px 6px;border-bottom:1px solid var(--bd);'+(x||'')+'">'+h+'</td>';};
+    var hhmm=function(t){return t?t.split(' ').slice(0,2).join(' '):'';};
+    var fmtDur=function(sec){if(sec<0||isNaN(sec))return'';if(sec<60)return sec+'s';var m=Math.floor(sec/60),s=sec%60;return m+'m'+(s?(' '+s+'s'):'');};
+    // Pair each motor ON with its following OFF into a single "run" row.
+    var chrono=rows.slice().reverse(); // oldest-first
+    var openOH=null,openUG=null,items=[];
+    chrono.forEach(function(r){
+      if(r.ev==='OH Motor ON'){openOH=r;}
+      else if(r.ev==='OH Motor OFF'){items.push({run:true,m:'OH',on:openOH,off:r});openOH=null;}
+      else if(r.ev==='UG Motor ON'){openUG=r;}
+      else if(r.ev==='UG Motor OFF'){items.push({run:true,m:'UG',on:openUG,off:r});openUG=null;}
+      else{items.push({run:false,r:r});}
+    });
+    if(openOH)items.push({run:true,m:'OH',on:openOH,off:null});
+    if(openUG)items.push({run:true,m:'UG',on:openUG,off:null});
+    items.reverse(); // newest-first
+    document.getElementById('histBody').innerHTML=items.map(function(it){
+      if(!it.run){
+        var r=it.r;
+        return '<tr>'+td(r.time,'white-space:nowrap;color:var(--tx2)')+td(r.ev)+td(r.rsnStr||'','color:var(--tx2)')
+          +td(r.oh,'text-align:center;color:'+stColor(r.oh))+td(r.ug,'text-align:center;color:'+stColor(r.ug))
+          +td(mTxt(r.ohM),'text-align:center;color:'+mColor(r.ohM))+td(mTxt(r.ugM),'text-align:center;color:'+mColor(r.ugM))+'</tr>';
+      }
+      var on=it.on,off=it.off,ref=off||on||{};
+      var when=(on&&off)?(hhmm(on.time)+' \u2192 '+hhmm(off.time)):hhmm(ref.time);
+      var dur=(on&&off)?fmtDur(off.ts-on.ts):(on&&!off?'running':'');
+      var reason=(on?(on.rsnStr||'?'):'\u2014')+' \u2192 '+(off?(off.rsnStr||'?'):'still on');
+      var durHtml=dur?(' <span style="color:var(--tx2)">('+dur+')</span>'):'';
+      return '<tr>'+td(when,'white-space:nowrap;color:var(--tx2)')
+        +td('<b>'+it.m+' Motor</b>'+durHtml)
+        +td(reason,'color:var(--tx2)')
+        +td(ref.oh||'','text-align:center;color:'+stColor(ref.oh))
+        +td(ref.ug||'','text-align:center;color:'+stColor(ref.ug))
+        +td(off?'\u25A0':'\u25B6','text-align:center;color:'+(off?'var(--tx2)':'var(--green)'))
+        +td('','text-align:center')+'</tr>';
     }).join('');
   }).catch(function(){document.getElementById('histStatus').textContent='Failed to load';});
 }
@@ -806,7 +857,7 @@ loadMqttConfig();
 // ---------------------------------------------------------------------------
 
 static void handleStatus() {
-    StaticJsonDocument<768> doc;
+    StaticJsonDocument<1024> doc;
     doc["ugState"]           = tankStateStr(ugTankState);
     doc["ohState"]           = tankStateStr(ohTankState);
     doc["ohLastKnown"]       = tankStateStr(ohLastKnownState);
@@ -859,6 +910,17 @@ static void handleStatus() {
         if (schedules[i].isRunning) { anySchedRunning = true; break; }
     }
     doc["schedRunning"]      = anySchedRunning;
+    // --- About / device info ---
+    doc["lcdAddr"]           = getLcdAddress();
+    doc["eepromAddr"]        = histEepromFound ? getEepromAddress() : 0;
+    doc["eepromOk"]          = histEepromFound;
+    doc["rtcAddr"]           = 0x68;
+    doc["rtcOk"]             = ds3231Found;
+    doc["freeHeap"]          = (uint32_t)ESP.getFreeHeap();
+    doc["heapSize"]          = (uint32_t)ESP.getHeapSize();
+    doc["sketchSize"]        = (uint32_t)ESP.getSketchSize();
+    doc["freeSketch"]        = (uint32_t)ESP.getFreeSketchSpace();
+    doc["flashSize"]         = (uint32_t)ESP.getFlashChipSize();
     String out;
     serializeJson(doc, out);
     sendJson(200, out);

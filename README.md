@@ -10,7 +10,7 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 flowchart TD
     subgraph Field["Field Hardware"]
         TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.1.0"]
-        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.3.4"]
+        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.4.0"]
         TX -- "LoRa 865 MHz · level packets" --> CTRL
     end
 
@@ -25,7 +25,7 @@ flowchart TD
     CTRL -. "HTTP OTA poll · every 5 min" .-> WEB
 
     BROWSER["Web Browser"]
-    APP["Mobile App\nFlutter Android · v2.5.3"]
+    APP["Mobile App\nFlutter Android · v2.6.0"]
 
     BROWSER <-- "HTTP + WebSocket · :1880" --> WEB
     APP <-- "HTTP + WebSocket · :1880" --> WEB
@@ -47,13 +47,13 @@ flowchart LR
 
     subgraph ESP32["Controller · ESP32-S3 Nebula S3"]
         RXlora["LoRa RFM95\nHSPI CS=10 IRQ=14 RST=21"]
-        F_UG["UG Float Switch\nGPIO 42"]
-        TOUCH["Touch Switches\nGPIO 40 / 41"]
-        MCU["ESP32-S3\nFW v2.3.4"]
+        F_UG["UG Float Switch\nGPIO 47"]
+        TOUCH["Touch Switches\nGPIO 17 / 18"]
+        MCU["ESP32-S3\nFW v2.4.0"]
         R_OH["OH Relay\nGPIO 1"]
         R_UG["UG Relay\nGPIO 2"]
         BUZ["Buzzer\nGPIO 3"]
-        LCD["LCD 16x2\nI2C 0x27\nSDA=18 SCL=17"]
+        LCD["LCD 16x2\nI2C 0x3F\nSDA=8 SCL=9"]
         RTC["RTC DS3231\nAT24C512 EEPROM"]
 
         RXlora --> MCU
@@ -87,7 +87,7 @@ flowchart LR
 
     subgraph Clients["Client Devices"]
         BROWSER["Web Browser"]
-        PHONE["Mobile App\nFlutter · v2.5.3"]
+        PHONE["Mobile App\nFlutter · v2.6.0"]
     end
 
     TXlora -->|"LoRa 865 MHz / FloatPacket 4B"| RXlora
@@ -136,14 +136,16 @@ TankMonitor/
 
 | Component | Latest |
 | --- | --- |
-| Controller Firmware | v2.3.4 |
+| Controller Firmware | v2.4.0 |
 | Transmitter Firmware | v2.1.0 |
 | Web App | v2.2.3 |
-| Mobile App | v2.5.3 |
+| Mobile App | v2.6.0 |
 
 ---
 
 ## Hardware
+
+> Pin map below reflects the **v2.0 PCB**. The v1.x board used I2C SDA=18/SCL=17, UG float GPIO42, touch GPIO40/41, LCD 0x27 — selectable at build time via the `BOARD_V2` flag.
 
 | Component | Details |
 | --- | --- |
@@ -151,12 +153,12 @@ TankMonitor/
 | OH Relay | GPIO 1 (RLY1 — Overhead tank motor) |
 | UG Relay | GPIO 2 (RLY2 — Underground tank motor) |
 | Buzzer | GPIO 3 |
-| UG Float Switch | GPIO 42 (INPUT_PULLUP, HIGH=FULL) |
-| Touch Switch OH | GPIO 41 |
-| Touch Switch UG | GPIO 40 |
-| I2C LCD | 16×2 at address 0x27 (SDA=18, SCL=17) |
-| RTC | DS3231 |
-| EEPROM | AT24C512 (I2C 0x50) |
+| UG Float Switch | GPIO 47 (INPUT_PULLUP, HIGH=FULL) |
+| Touch Switch OH | GPIO 17 |
+| Touch Switch UG | GPIO 18 |
+| I2C LCD | 16×2, auto-detected at 0x3F (SDA=8, SCL=9) |
+| RTC | DS3231 (I2C 0x68) |
+| EEPROM | AT24C512 (I2C 0x57) |
 | LoRa | RFM95 on HSPI (CS=10, IRQ=14, RST=21) — 865 MHz |
 | OH Tank node | ATmega328 + LoRa, float switch (replaces HC-SR04T ultrasonic) |
 

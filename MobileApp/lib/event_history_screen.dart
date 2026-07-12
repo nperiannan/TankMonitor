@@ -68,11 +68,50 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       switch (_filter) {
         case 'OH':    return ev.contains('OH');
         case 'UG':    return ev.contains('UG');
-        case 'MOTOR': return ev.startsWith('MOTOR_');
-        case 'BOOT':  return ev == 'BOOT';
+        case 'MOTOR': return ev.contains('Motor');
+        case 'BOOT':  return ev == 'Boot';
         default:      return true;
       }
     }).toList();
+  }
+
+  // Merge each motor ON with its following OFF into a single "run" item.
+  // Returns newest-first display items: {run:true, motor, on, off} or {run:false, r}.
+  List<Map<String, dynamic>> _pairRecords(List<Map<String, dynamic>> recs) {
+    final chrono = recs.reversed.toList(); // oldest-first
+    Map<String, dynamic>? openOH, openUG;
+    final items = <Map<String, dynamic>>[];
+    for (final r in chrono) {
+      final ev = r['ev'] as String? ?? '';
+      if (ev == 'OH Motor ON') {
+        openOH = r;
+      } else if (ev == 'OH Motor OFF') {
+        items.add({'run': true, 'motor': 'OH', 'on': openOH, 'off': r});
+        openOH = null;
+      } else if (ev == 'UG Motor ON') {
+        openUG = r;
+      } else if (ev == 'UG Motor OFF') {
+        items.add({'run': true, 'motor': 'UG', 'on': openUG, 'off': r});
+        openUG = null;
+      } else {
+        items.add({'run': false, 'r': r});
+      }
+    }
+    if (openOH != null) items.add({'run': true, 'motor': 'OH', 'on': openOH, 'off': null});
+    if (openUG != null) items.add({'run': true, 'motor': 'UG', 'on': openUG, 'off': null});
+    return items.reversed.toList(); // newest-first
+  }
+
+  String _fmtDur(int sec) {
+    if (sec <= 0) return '';
+    if (sec < 60) return '${sec}s';
+    final m = sec ~/ 60, s = sec % 60;
+    return s > 0 ? '${m}m ${s}s' : '${m}m';
+  }
+
+  String _shortTime(String t) {
+    final p = t.split(' ');
+    return p.length >= 2 ? '${p[0]} ${p[1]}' : t;
   }
 
   @override
@@ -136,21 +175,20 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   }
 
   Widget _buildEventList() {
-    final events = _filtered;
-    if (events.isEmpty) {
+    final items = _pairRecords(_filtered);
+    if (items.isEmpty) {
       return Center(
         child: Text('No events', style: TextStyle(color: labelColor(context), fontSize: 14)),
       );
     }
 
-    // Group by date
+    // Group by date (from each display item's timestamp string)
     final grouped = <String, List<Map<String, dynamic>>>{};
-    for (final r in events) {
-      final time = r['time'] as String? ?? '';
-      // time format: "HH:MM AM DD-MM-YYYY" — extract date part
+    for (final it in items) {
+      final time = _itemTime(it);
       final parts = time.split(' ');
       final date = parts.length >= 3 ? parts.last : 'Unknown';
-      grouped.putIfAbsent(date, () => []).add(r);
+      grouped.putIfAbsent(date, () => []).add(it);
     }
 
     return RefreshIndicator(
@@ -160,7 +198,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         itemCount: grouped.length,
         itemBuilder: (context, groupIdx) {
           final date = grouped.keys.elementAt(groupIdx);
-          final items = grouped[date]!;
+          final rows = grouped[date]!;
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -177,29 +215,14 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                   border: Border.all(color: cardBd(context)),
                 ),
                 child: Column(
-                  children: List.generate(items.length, (i) {
-                    final r = items[i];
-                    final ev = r['ev'] as String? ?? '';
-                    final time = r['time'] as String? ?? '';
-                    // Extract just the time portion (e.g. "10:45 AM")
-                    final timeParts = time.split(' ');
-                    final timeStr = timeParts.length >= 2
-                        ? '${timeParts[0]} ${timeParts[1]}'
-                        : time;
-
+                  children: List.generate(rows.length, (i) {
+                    final it = rows[i];
                     return Column(
                       children: [
                         if (i > 0) Divider(height: 1, color: cardBd(context)),
-                        ListTile(
-                          dense: true,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-                          leading: _eventIcon(ev),
-                          title: Text(_eventLabel(ev),
-                              style: TextStyle(color: textColor(context), fontSize: 13)),
-                          subtitle: _eventSubtitle(r),
-                          trailing: Text(timeStr,
-                              style: TextStyle(color: labelColor(context), fontSize: 11)),
-                        ),
+                        (it['run'] == true)
+                            ? _runTile(it)
+                            : _eventTile(it['r'] as Map<String, dynamic>),
                       ],
                     );
                   }),
@@ -212,19 +235,70 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     );
   }
 
+  String _itemTime(Map<String, dynamic> it) {
+    if (it['run'] == true) {
+      final off = it['off'] as Map<String, dynamic>?;
+      final on = it['on'] as Map<String, dynamic>?;
+      return (off?['time'] ?? on?['time'] ?? '') as String;
+    }
+    return (it['r'] as Map<String, dynamic>)['time'] as String? ?? '';
+  }
+
+  Widget _runTile(Map<String, dynamic> it) {
+    final motor = it['motor'] as String;
+    final on = it['on'] as Map<String, dynamic>?;
+    final off = it['off'] as Map<String, dynamic>?;
+    final running = off == null;
+    final onReason = ((on?['rsnStr'] as String? ?? '').isEmpty) ? '—' : on!['rsnStr'] as String;
+    final offReason = running
+        ? 'running'
+        : (((off?['rsnStr'] as String? ?? '').isEmpty) ? '—' : off!['rsnStr'] as String);
+    final dur = (on != null && off != null)
+        ? _fmtDur((off['ts'] as int? ?? 0) - (on['ts'] as int? ?? 0))
+        : '';
+    final when = (on != null && off != null)
+        ? '${_shortTime(on['time'] as String? ?? '')} → ${_shortTime(off['time'] as String? ?? '')}'
+        : _shortTime(((off ?? on)?['time'] as String?) ?? '');
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      leading: Icon(running ? Icons.play_circle_fill : Icons.timelapse,
+          color: running ? kGreen : accentBlue(context), size: 20),
+      title: Text('$motor Motor${dur.isNotEmpty ? '  ($dur)' : ''}',
+          style: TextStyle(color: textColor(context), fontSize: 13)),
+      subtitle: Text('$onReason → $offReason',
+          style: TextStyle(color: labelColor(context), fontSize: 11)),
+      trailing: Text(when,
+          style: TextStyle(color: labelColor(context), fontSize: 10)),
+    );
+  }
+
+  Widget _eventTile(Map<String, dynamic> r) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+      leading: _eventIcon(r['ev'] as String? ?? ''),
+      title: Text(_eventLabel(r),
+          style: TextStyle(color: textColor(context), fontSize: 13)),
+      subtitle: _eventSubtitle(r),
+      trailing: Text(_shortTime(r['time'] as String? ?? ''),
+          style: TextStyle(color: labelColor(context), fontSize: 11)),
+    );
+  }
+
   Widget _eventIcon(String ev) {
     IconData icon;
     Color color;
-    if (ev.startsWith('MOTOR_') && ev.endsWith('_ON')) {
+    if (ev.contains('Motor ON')) {
       icon = Icons.flash_on;
       color = kGreen;
-    } else if (ev.startsWith('MOTOR_') && ev.endsWith('_OFF')) {
+    } else if (ev.contains('Motor OFF')) {
       icon = Icons.flash_off;
       color = kRed;
-    } else if (ev.startsWith('TANK_')) {
+    } else if (ev.contains('State')) {
       icon = Icons.water_drop;
       color = kBlue;
-    } else if (ev == 'BOOT') {
+    } else if (ev == 'Boot') {
       icon = Icons.restart_alt;
       color = kOrange;
     } else {
@@ -234,39 +308,26 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     return Icon(icon, color: color, size: 20);
   }
 
-  String _eventLabel(String ev) {
-    switch (ev) {
-      case 'MOTOR_OH_ON':   return 'OH Motor ON';
-      case 'MOTOR_OH_OFF':  return 'OH Motor OFF';
-      case 'MOTOR_UG_ON':   return 'UG Motor ON';
-      case 'MOTOR_UG_OFF':  return 'UG Motor OFF';
-      case 'BOOT':          return 'System Boot';
-      default:
-        // Tank state changes: "TANK_OH_FULL", "TANK_UG_LOW", etc.
-        if (ev.startsWith('TANK_')) {
-          final parts = ev.replaceFirst('TANK_', '').split('_');
-          if (parts.length >= 2) {
-            return '${parts[0]} Tank → ${parts.sublist(1).join(' ')}';
-          }
-        }
-        return ev;
-    }
+  String _eventLabel(Map<String, dynamic> r) {
+    final ev = r['ev'] as String? ?? '';
+    if (ev == 'Boot') return 'System Boot';
+    if (ev == 'OH State') return 'OH Tank → ${r['oh'] ?? ''}';
+    if (ev == 'UG State') return 'UG Tank → ${r['ug'] ?? ''}';
+    return ev; // e.g. "OH Motor ON"
   }
 
   Widget? _eventSubtitle(Map<String, dynamic> r) {
     final ev = r['ev'] as String? ?? '';
+    final rsn = r['rsnStr'] as String? ?? '';
     final oh = r['oh'] as String? ?? '';
     final ug = r['ug'] as String? ?? '';
-    final ohM = r['ohM'] as bool? ?? false;
-    final ugM = r['ugM'] as bool? ?? false;
-
-    if (ev == 'BOOT') return null;
 
     final parts = <String>[];
-    if (oh.isNotEmpty) parts.add('OH:$oh');
-    if (ug.isNotEmpty) parts.add('UG:$ug');
-    if (ohM) parts.add('OH Motor ON');
-    if (ugM) parts.add('UG Motor ON');
+    if (rsn.isNotEmpty) parts.add(rsn);
+    if (ev != 'Boot') {
+      if (oh.isNotEmpty && oh != '?') parts.add('OH:$oh');
+      if (ug.isNotEmpty && ug != '?') parts.add('UG:$ug');
+    }
 
     if (parts.isEmpty) return null;
     return Text(parts.join(' • '),

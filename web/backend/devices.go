@@ -177,19 +177,21 @@ func handleUnclaimDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	uid := userIDFromRequest(r)
-	mac := strings.ToUpper(macFromPath(r.URL.Path, "/api/devices/"))
+	mac := strings.ToUpper(strings.TrimSpace(macFromPath(r.URL.Path, "/api/devices/")))
 
-	res, err := db.Exec(`DELETE FROM user_devices WHERE user_id=? AND mac=?`, uid, mac)
+	res, err := db.Exec(`DELETE FROM user_devices WHERE user_id=? AND UPPER(mac)=?`, uid, mac)
 	if err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return
 	}
 	n, _ := res.RowsAffected()
+	// Idempotent: if the device wasn't in the user's list there is nothing to
+	// remove, but the desired end state (not in list) is already satisfied.
 	if n == 0 {
-		jsonError(w, "device not in your list", http.StatusNotFound)
-		return
+		log.Printf("[DEVICE] user %d unclaim %s: nothing to remove (idempotent)", uid, mac)
+	} else {
+		log.Printf("[DEVICE] user %d unclaimed %s", uid, mac)
 	}
-	log.Printf("[DEVICE] user %d unclaimed %s", uid, mac)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
 }

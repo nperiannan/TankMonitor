@@ -16,6 +16,7 @@
 #include "Config.h"
 #include <Wire.h>
 #include <TimeLib.h>
+#include <esp_system.h>   // esp_reset_reason() for boot-event tagging
 
 // ---------------------------------------------------------------------------
 //  Constants
@@ -107,6 +108,17 @@ static bool detectEeprom() {
     return false;
 }
 
+// Map the ESP32 reset cause to a boot reason code for the HIST_BOOT record.
+static uint8_t bootReasonCode() {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:   return REASON_BOOT_POWER;
+        case ESP_RST_BROWNOUT:  return REASON_BOOT_BROWN;
+        case ESP_RST_SW:
+        case ESP_RST_DEEPSLEEP:  return REASON_BOOT_SW;
+        default:                return REASON_BOOT_OTHER;
+    }
+}
+
 // ---------------------------------------------------------------------------
 //  initHistory()
 // ---------------------------------------------------------------------------
@@ -123,7 +135,7 @@ void initHistory() {
         histHead  = 0;
         histCount = 0;
         writeHeader();
-        addHistoryRecord(HIST_BOOT, ohTankState, ugTankState);
+        addHistoryRecord(HIST_BOOT, ohTankState, ugTankState, bootReasonCode());
         return;
     }
 
@@ -138,21 +150,24 @@ void initHistory() {
         Log(INFO, "[History] Loaded – " + String(histCount) + " records, head=" + String(histHead));
     }
 
-    addHistoryRecord(HIST_BOOT, ohTankState, ugTankState);
+    addHistoryRecord(HIST_BOOT, ohTankState, ugTankState, bootReasonCode());
 }
 
 // ---------------------------------------------------------------------------
 //  addHistoryRecord()
 // ---------------------------------------------------------------------------
-void addHistoryRecord(HistEvent evt, TankState oh, TankState ug) {
+void addHistoryRecord(HistEvent evt, TankState oh, TankState ug, uint8_t reason, uint32_t tsOverride) {
     if (!histEepromFound) return;
 
     HistoryRecord r;
-    r.timestamp = (uint32_t)now();
+    r.timestamp = tsOverride ? tsOverride : (uint32_t)now();
     r.event     = (uint8_t)evt;
     r.ohState   = (uint8_t)oh;
     r.ugState   = (uint8_t)ug;
-    r.flags     = (ohMotorRunning ? 0x01 : 0x00) | (ugMotorRunning ? 0x02 : 0x00);
+    // Low nibble = motor-running bits; high nibble = reason code (0-15).
+    r.flags     = (ohMotorRunning ? 0x01 : 0x00)
+                | (ugMotorRunning ? 0x02 : 0x00)
+                | (uint8_t)((reason & 0x0F) << 4);
 
     if (!eepromWriteBytes(recAddr(histHead), (uint8_t*)&r, sizeof(r))) {
         Log(WARN, "[History] Write failed at slot " + String(histHead));
@@ -185,6 +200,26 @@ static const char* stStr(uint8_t s) {
         case TANK_STATE_FULL: return "FULL";
         case TANK_STATE_LOW:  return "LOW";
         default:              return "?";
+    }
+}
+
+static const char* reasonStr(uint8_t rc) {
+    switch (rc) {
+        case REASON_AUTO:          return "Auto (level)";
+        case REASON_MANUAL_APP:    return "Manual (app)";
+        case REASON_MANUAL_WEB:    return "Manual (web)";
+        case REASON_MANUAL_TOUCH:  return "Manual (touch)";
+        case REASON_SCHEDULED:     return "Scheduled";
+        case REASON_AUTO_FULL:     return "Auto (tank full)";
+        case REASON_MAX_RUNTIME:   return "Max runtime";
+        case REASON_LORA_LOST:     return "LoRa signal lost";
+        case REASON_POWER_CUT:     return "Power cut";
+        case REASON_POWER_RESTORE: return "Power restored";
+        case REASON_BOOT_POWER:    return "Power-on";
+        case REASON_BOOT_SW:       return "Reboot/OTA";
+        case REASON_BOOT_BROWN:    return "Brownout";
+        case REASON_BOOT_OTHER:    return "Reset";
+        default:                   return "";
     }
 }
 
@@ -239,6 +274,9 @@ String getHistoryJson(uint16_t maxRecords) {
         out += ",\"ug\":\"";   out += stStr(r.ugState);       out += '"';
         out += ",\"ohM\":";    out += (r.flags & 0x01) ? "true" : "false";
         out += ",\"ugM\":";    out += (r.flags & 0x02) ? "true" : "false";
+        uint8_t rc = (uint8_t)((r.flags >> 4) & 0x0F);
+        out += ",\"rsn\":";    out += rc;
+        out += ",\"rsnStr\":\""; out += reasonStr(rc); out += '"';
         out += '}';
     }
 
@@ -256,3 +294,5 @@ void clearHistory() {
     writeHeader();
     Log(INFO, "[History] Cleared");
 }
+
+uint8_t getEepromAddress() { return eepromAddr; }

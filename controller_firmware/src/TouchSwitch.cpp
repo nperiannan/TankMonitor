@@ -47,12 +47,12 @@ void pollTouchSwitches() {
     bool ohNow = (digitalRead(TOUCH_OH_PIN) == LOW);
     if (ohNow && !lastOHTouch && (now - lastOHTriggerMs >= TOUCH_DEBOUNCE_MS)) {
         lastOHTriggerMs = now;
-        if (ohMotorRunning) {
-            Log(INFO, "[Touch] OH button → Motor OFF");
-            turnOffOHMotor();
+        if (ohMotorRunning || isOHBuzzerPending()) {
+            Log(INFO, "[Touch] OH button → OFF / cancel");
+            turnOffOHMotor(REASON_MANUAL_TOUCH);
         } else {
             Log(INFO, "[Touch] OH button → Motor ON");
-            turnOnOHMotor();   // returns early if already running/pending
+            turnOnOHMotor(REASON_MANUAL_TOUCH);   // returns early if already running/pending
         }
     }
     lastOHTouch = ohNow;
@@ -61,12 +61,12 @@ void pollTouchSwitches() {
     bool ugNow = (digitalRead(TOUCH_UG_PIN) == LOW);
     if (ugNow && !lastUGTouch && (now - lastUGTriggerMs >= TOUCH_DEBOUNCE_MS)) {
         lastUGTriggerMs = now;
-        if (ugMotorRunning) {
-            Log(INFO, "[Touch] UG button → Motor OFF");
-            turnOffUGMotor();
+        if (ugMotorRunning || isUGBuzzerPending()) {
+            Log(INFO, "[Touch] UG button → OFF / cancel");
+            turnOffUGMotor(REASON_MANUAL_TOUCH);
         } else {
             Log(INFO, "[Touch] UG button → Motor ON");
-            turnOnUGMotor();   // returns early if already running/pending
+            turnOnUGMotor(REASON_MANUAL_TOUCH);   // returns early if already running/pending
         }
     }
     lastUGTouch = ugNow;

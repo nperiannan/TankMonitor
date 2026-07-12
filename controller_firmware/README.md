@@ -24,13 +24,14 @@ Water tank monitoring and motor control system built on the **Kinetic Dynamics N
 | --- | --- |
 | MCU | ESP32-S3, 240 MHz dual-core, 320 KB RAM, 4 MB Flash |
 | Board | Kinetic Dynamics Nebula S3 |
-| RTC | DS3231 on I2C (SDA=18, SCL=17) |
+| RTC | DS3231 on I2C (SDA=8, SCL=9) |
 | EEPROM | AT24C512 on I2C |
 | LoRa | RFM95 on HSPI (MISO=12, MOSI=11, SCLK=13, CS=10, IRQ=14, RST=21) |
 | Relays | OH motor GPIO1, UG motor GPIO2 |
 | Buzzer | GPIO3 |
-| Float switch | GPIO42 (UG tank) |
-| LCD | 16×2 I2C at address 0x27 |
+| Float switch | GPIO47 (UG tank) |
+| Touch buttons | OH GPIO17, UG GPIO18 |
+| LCD | 16×2 I2C, auto-detected (0x3F on v2.0 board) |
 
 ## Build & Flash
 

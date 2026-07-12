@@ -21,6 +21,9 @@ void setLcdBacklight(bool on);
 // Returns true when the LCD is currently backlit.
 bool isLcdBacklightOn();
 
+// Detected LCD I2C address (auto-scanned in initDisplay).
+uint8_t getLcdAddress();
+
 // Apply the stored lcdBacklightMode (auto / always-on / always-off).
 // Called automatically every 30 s from updateDisplay(); can also be
 // called explicitly after the mode changes via MQTT.
