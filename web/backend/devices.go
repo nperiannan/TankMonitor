@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -46,23 +45,12 @@ func handleListDevices(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 	uid := userIDFromRequest(r)
 
-	var isAdmin bool
-	db.QueryRow(`SELECT is_admin FROM users WHERE user_id=?`, uid).Scan(&isAdmin) //nolint:errcheck
-
-	var rows *sql.Rows
-	var err error
-
-	if isAdmin {
-		// Admin: all devices with optional role if they own it
-		rows, err = db.Query(`
-			SELECT d.mac, COALESCE(d.type_id,''), COALESCE(d.display_name,''),
-			       COALESCE(d.fw_version,''), COALESCE(d.last_seen,''),
-			       COALESCE(ud.role,'')
-			FROM devices d
-			LEFT JOIN user_devices ud ON ud.mac = d.mac AND ud.user_id = ?
-			ORDER BY d.last_seen DESC`, uid)
-	} else {
-		rows, err = db.Query(`
+	// The personal "My Devices" list only shows devices the user has claimed —
+	// this holds for admins too, otherwise removing (unclaiming) a device would
+	// never hide it because it would still appear via the all-devices view.
+	// Admins can still see every device through the dedicated admin panel
+	// (handleAdminListDevices).
+	rows, err := db.Query(`
 			SELECT d.mac, COALESCE(d.type_id,''), COALESCE(d.display_name,''),
 			       COALESCE(d.fw_version,''), COALESCE(d.last_seen,''),
 			       ud.role
@@ -70,7 +58,6 @@ func handleListDevices(w http.ResponseWriter, r *http.Request) {
 			JOIN user_devices ud ON ud.mac = d.mac
 			WHERE ud.user_id = ?
 			ORDER BY d.last_seen DESC`, uid)
-	}
 	if err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return
