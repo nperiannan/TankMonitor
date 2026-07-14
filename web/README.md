@@ -2,9 +2,9 @@
 
 Go backend + React/Ant Design frontend, deployed as a Docker container on Oracle Cloud VM.
 
-- **Backend version**: 2.2.2
-- **Frontend version**: 2.2.2
-- **Docker image**: `tankmonitor-web:2.2.2`
+- **Backend version**: 2.2.4
+- **Frontend version**: 2.2.4
+- **Docker image**: `tankmonitor-web:2.2.4`
 
 ## Features
 
