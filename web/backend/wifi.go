@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +38,45 @@ func onWifiMsg(topic string, raw []byte) {
 		wifiCache[mac] = wifiEntry{raw: raw, seenAt: time.Now()}
 	}
 	wifiMu.Unlock()
+
+	// Persist history snapshots to the DB so they can be served instantly and
+	// survive restarts (idempotent — dedups by mac+ts+ev).
+	if isHistory {
+		persistHistory(mac, raw)
+	}
+}
+
+// persistHistory stores each record from a history_list payload into the DB.
+func persistHistory(mac string, raw []byte) {
+	var msg struct {
+		Data struct {
+			Records []json.RawMessage `json:"records"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &msg); err != nil || len(msg.Data.Records) == 0 {
+		return
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return
+	}
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO history_events(mac, ts, ev, record) VALUES(?,?,?,?)`)
+	if err != nil {
+		tx.Rollback() //nolint:errcheck
+		return
+	}
+	for _, rec := range msg.Data.Records {
+		var meta struct {
+			TS int64  `json:"ts"`
+			EV string `json:"ev"`
+		}
+		if json.Unmarshal(rec, &meta) != nil || meta.TS == 0 {
+			continue
+		}
+		stmt.Exec(strings.ToUpper(mac), meta.TS, meta.EV, string(rec)) //nolint:errcheck
+	}
+	stmt.Close() //nolint:errcheck
+	tx.Commit()  //nolint:errcheck
 }
 
 // handleDeviceWifi serves GET /api/devices/{mac}/wifi
@@ -69,7 +110,7 @@ func handleDeviceWifi(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleDeviceHistory serves GET /api/devices/{mac}/history
-// Returns the last history_list response published by the device.
+// Serves persisted history events from the DB (fast, survives restarts).
 func handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 	if r.Method == http.MethodOptions {
@@ -85,15 +126,34 @@ func handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "forbidden", http.StatusForbidden)
 		return
 	}
-
-	wifiMu.RLock()
-	entry, ok := historyCache[mac]
-	wifiMu.RUnlock()
-
-	w.Header().Set("Content-Type", "application/json")
-	if !ok || len(entry.raw) == 0 {
-		w.Write([]byte(`{"type":"history_list","data":{"count":0,"eeprom":false,"records":[]}}`)) //nolint:errcheck
+	if r.Method == http.MethodDelete {
+		db.Exec(`DELETE FROM history_events WHERE UPPER(mac)=UPPER(?)`, mac) //nolint:errcheck
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
 		return
 	}
-	w.Write(entry.raw) //nolint:errcheck
+
+	rows, err := db.Query(
+		`SELECT record FROM history_events WHERE UPPER(mac)=UPPER(?) ORDER BY ts DESC LIMIT 1000`, mac)
+	if err != nil {
+		jsonError(w, "db error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	records := make([]string, 0, 256)
+	for rows.Next() {
+		var rec string
+		if rows.Scan(&rec) == nil {
+			records = append(records, rec)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString(`{"type":"history_list","data":{"count":`)
+	b.WriteString(strconv.Itoa(len(records)))
+	b.WriteString(`,"eeprom":true,"records":[`)
+	b.WriteString(strings.Join(records, ","))
+	b.WriteString(`]}}`)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(b.String())) //nolint:errcheck
 }

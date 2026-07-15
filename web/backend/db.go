@@ -62,6 +62,14 @@ func migrate() {
 			updated_at TEXT
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id)`,
+		`CREATE TABLE IF NOT EXISTS history_events (
+			mac    TEXT    NOT NULL,
+			ts     INTEGER NOT NULL,
+			ev     TEXT    NOT NULL,
+			record TEXT    NOT NULL,
+			PRIMARY KEY (mac, ts, ev)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_history_mac_ts ON history_events(mac, ts)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
