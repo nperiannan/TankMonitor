@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.8.0';
+const mobileAppVersion = '2.9.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -62,6 +62,13 @@ class TankService extends ChangeNotifier {
   // value when a stale status arrives before the ESP32 processes the change.
   final Map<String, _PendingSetting> _pendingSettings = {};
   Map<String, dynamic>? _lastRawStatus; // last received WS payload (pre-pending)
+
+  // Cached WiFi list (per active device) so the WiFi card shows instantly and
+  // refreshes in the background instead of reloading blank on every expand.
+  Map<String, dynamic>? _wifiCache;
+  bool _wifiCacheLoaded = false;
+  Timer? _wifiPollTimer;
+  Map<String, dynamic>? get wifiCache => _wifiCache;
 
   WebSocketChannel? _channel;
   StreamSubscription? _sub;
@@ -367,6 +374,7 @@ class TankService extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _wifiPollTimer?.cancel();
     disconnect();
     super.dispose();
   }
@@ -375,6 +383,9 @@ class TankService extends ChangeNotifier {
 
   Future<void> connectToDevice(Device device) async {
     currentDevice = device;
+    // Reset per-device WiFi cache so the new device loads its own.
+    _wifiCache = null;
+    _wifiCacheLoaded = false;
     await connectAuto();
   }
 
@@ -694,13 +705,13 @@ class TankService extends ChangeNotifier {
     await sendControl({'cmd': 'set_setting', 'key': statusKey, 'value': value});
   }
 
-  /// Store an optimistic value for [key] that overrides incoming WS status for 4 seconds.
+  /// Store an optimistic value for [key] that overrides incoming WS status for [seconds].
   /// Also immediately updates the current status so the UI responds without waiting for
   /// the next WS message.
-  void setPendingSetting(String key, dynamic value) {
+  void setPendingSetting(String key, dynamic value, {int seconds = 4}) {
     _pendingSettings[key] = _PendingSetting(
       value: value,
-      expiresAt: DateTime.now().add(const Duration(seconds: 4)),
+      expiresAt: DateTime.now().add(Duration(seconds: seconds)),
     );
     // Immediately reflect the change in the UI
     if (_lastRawStatus != null) {
@@ -829,11 +840,69 @@ class TankService extends ChangeNotifier {
     if (directMode && _directService != null) {
       return _directService!.fetchWifiList();
     }
-    // Cloud mode: send wifi_list command, then poll for response
+    // Cloud mode: cache-first. Return the last-known list immediately and
+    // refresh in the background so the card never reloads blank.
+    await _ensureWifiCacheLoaded();
+    if (_wifiCache != null) {
+      refreshWifiInBackground();
+      _startWifiPolling();
+      return _wifiCache!;
+    }
+    // No cache yet — do a full fetch and store it.
+    final data = await _doWifiFetch();
+    if (data != null) {
+      _wifiCache = data;
+      _persistWifiCache();
+    }
+    _startWifiPolling();
+    return _wifiCache ?? {};
+  }
+
+  /// Sends wifi_list and reads the device's reply from the backend cache.
+  Future<Map<String, dynamic>?> _doWifiFetch() async {
     await sendControl({'cmd': 'wifi_list'});
     await Future.delayed(const Duration(seconds: 2));
-    final resp = await _fetchWifiResponse();
-    return resp ?? {};
+    return _fetchWifiResponse();
+  }
+
+  /// Refreshes the WiFi list without blocking the UI; updates cache + notifies.
+  Future<void> refreshWifiInBackground() async {
+    if (directMode) return;
+    final data = await _doWifiFetch();
+    if (data != null && data.isNotEmpty) {
+      _wifiCache = data;
+      _persistWifiCache();
+      notifyListeners();
+    }
+  }
+
+  void _startWifiPolling() {
+    _wifiPollTimer ??= Timer.periodic(const Duration(minutes: 5), (_) {
+      if (!directMode && connected) refreshWifiInBackground();
+    });
+  }
+
+  String get _wifiPrefsKey => 'wifi_cache_${currentDevice?.mac ?? 'default'}';
+
+  Future<void> _ensureWifiCacheLoaded() async {
+    if (_wifiCacheLoaded && _wifiCache != null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_wifiPrefsKey);
+      if (raw != null) {
+        _wifiCache = jsonDecode(raw) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    _wifiCacheLoaded = true;
+  }
+
+  Future<void> _persistWifiCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_wifiCache != null) {
+        await prefs.setString(_wifiPrefsKey, jsonEncode(_wifiCache));
+      }
+    } catch (_) {}
   }
 
   Future<List<Map<String, dynamic>>> scanWifi() async {
@@ -892,33 +961,26 @@ class TankService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<Map<String, dynamic>> fetchHistory() async {
+  Future<Map<String, dynamic>> fetchHistory({bool triggerRefresh = true}) async {
     if (directMode && _directService != null) {
       return _directService!.fetchHistory();
     }
-    // Cloud mode: ask the device to publish its history, then poll the backend
-    // cache for the reply. A single fixed wait was unreliable (the device's
-    // MQTT reply often lands after 2s), so retry for up to ~8s.
-    await sendControl({'cmd': 'history_list'});
-    final headers = <String, String>{};
-    if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
-    final url = Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}');
-    for (var attempt = 0; attempt < 6; attempt++) {
-      await Future.delayed(const Duration(milliseconds: 1400));
-      try {
-        final res = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
-        if (res.statusCode == 200) {
-          final body = jsonDecode(res.body) as Map<String, dynamic>;
-          if (body['type'] == 'history_list') {
-            final data = body['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
-            final records = data['records'] as List<dynamic>? ?? [];
-            // Keep polling until the device's reply arrives (non-empty) or we
-            // run out of attempts — an empty cache just means "not yet".
-            if (records.isNotEmpty || attempt == 5) return data;
-          }
+    // History is derived and stored server-side from the status stream, so we
+    // just read it straight from the backend DB — fast, always available.
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 6));
+      if (res.statusCode == 200) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
+        if (body['type'] == 'history_list') {
+          return body['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
     return {'count': 0, 'records': []};
   }
 
@@ -953,6 +1015,15 @@ class TankService extends ChangeNotifier {
       return _directService!.clearHistory();
     }
     await sendControl({'cmd': 'history_clear'});
+    // Also clear the backend DB archive so it matches the device.
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      await http.delete(
+        Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 6));
+    } catch (_) {}
     return true;
   }
 
@@ -973,6 +1044,14 @@ class TankService extends ChangeNotifier {
   }
 
   Future<void> sendControl(Map<String, dynamic> cmd) async {
+    // Optimistic UI: reflect motor ON/OFF immediately so the button responds
+    // without waiting for the next status round-trip from the device.
+    switch (cmd['cmd'] as String? ?? '') {
+      case 'oh_on':  setPendingSetting('oh_motor', true,  seconds: 10); break;
+      case 'oh_off': setPendingSetting('oh_motor', false, seconds: 10); break;
+      case 'ug_on':  setPendingSetting('ug_motor', true,  seconds: 10); break;
+      case 'ug_off': setPendingSetting('ug_motor', false, seconds: 10); break;
+    }
     // ── Direct mode: translate commands to controller HTTP endpoints ──────
     if (directMode && _directService != null) {
       try {

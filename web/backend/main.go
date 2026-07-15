@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.2.6"
+const webVersion = "2.2.7"
 
 func main() {
 	// Init subsystems in order

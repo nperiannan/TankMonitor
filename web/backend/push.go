@@ -149,38 +149,112 @@ func b64url(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 // motorFields is the minimal status subset used for edge detection.
 type motorFields struct {
-	OHMotor bool `json:"oh_motor"`
-	UGMotor bool `json:"ug_motor"`
-	TxLost  bool `json:"tx_lost"`
+	OHMotor bool   `json:"oh_motor"`
+	UGMotor bool   `json:"ug_motor"`
+	TxLost  bool   `json:"tx_lost"`
+	OHState string `json:"oh_state"`
+	UGState string `json:"ug_state"`
 }
 
-// detectAndPushEdges compares the previous and current status payloads and
-// pushes a notification on each motor on/off change and on transmitter-lost.
+// ── Reason inference ────────────────────────────────────────────────────────
+// The backend derives history purely from the status stream, so it can't see
+// the controller's granular reason codes. It infers a basic reason: "Manual"
+// when a remote ON/OFF command passed through just before the change.
+var (
+	remoteCmdMu sync.Mutex
+	remoteCmdAt = map[string]time.Time{} // "MAC|OH" / "MAC|UG" → last remote cmd
+)
+
+func noteRemoteMotorCmd(mac string, body []byte) {
+	var c struct {
+		Cmd string `json:"cmd"`
+	}
+	if json.Unmarshal(body, &c) != nil {
+		return
+	}
+	var motor string
+	switch c.Cmd {
+	case "oh_on", "oh_off":
+		motor = "OH"
+	case "ug_on", "ug_off":
+		motor = "UG"
+	default:
+		return
+	}
+	remoteCmdMu.Lock()
+	remoteCmdAt[strings.ToUpper(mac)+"|"+motor] = time.Now()
+	remoteCmdMu.Unlock()
+}
+
+func inferReason(mac, motor string) string {
+	remoteCmdMu.Lock()
+	t, ok := remoteCmdAt[strings.ToUpper(mac)+"|"+motor]
+	remoteCmdMu.Unlock()
+	if ok && time.Since(t) < 25*time.Second {
+		return "Manual (App/Web)"
+	}
+	return "Auto / Scheduled"
+}
+
+// recordHistoryEvent stores a derived event in the DB in the same JSON shape the
+// controller (and the app) uses.
+func recordHistoryEvent(mac, ev, ohState, ugState string, ohM, ugM bool, reason string) {
+	now := time.Now()
+	rec := map[string]any{
+		"ts":     now.Unix(),
+		"time":   now.Format("15:04 Mon 02-01-2006"),
+		"ev":     ev,
+		"oh":     ohState,
+		"ug":     ugState,
+		"ohM":    ohM,
+		"ugM":    ugM,
+		"rsn":    0,
+		"rsnStr": reason,
+	}
+	b, _ := json.Marshal(rec)
+	db.Exec(`INSERT OR IGNORE INTO history_events(mac, ts, ev, record) VALUES(?,?,?,?)`,
+		strings.ToUpper(mac), now.Unix(), ev, string(b)) //nolint:errcheck
+}
+
+func onOffWord(on bool) string {
+	if on {
+		return "ON"
+	}
+	return "OFF"
+}
+
+// detectAndPushEdges compares previous and current status, records derived
+// history events, and (when enabled) pushes a notification on each change.
 func detectAndPushEdges(mac string, prevRaw, newRaw []byte) {
-	if !fcmEnabled || len(prevRaw) == 0 {
-		return // need a prior sample; also skip entirely when push is disabled
+	if len(prevRaw) == 0 {
+		return // need a prior sample to detect an edge
 	}
 	var prev, cur motorFields
 	if json.Unmarshal(prevRaw, &prev) != nil || json.Unmarshal(newRaw, &cur) != nil {
 		return
 	}
 	name := deviceDisplayName(mac)
+
 	if prev.OHMotor != cur.OHMotor {
-		if cur.OHMotor {
-			pushToDeviceOwners(mac, name, "OH motor turned ON")
-		} else {
-			pushToDeviceOwners(mac, name, "OH motor turned OFF")
+		recordHistoryEvent(mac, "OH Motor "+onOffWord(cur.OHMotor),
+			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, inferReason(mac, "OH"))
+		if fcmEnabled {
+			pushToDeviceOwners(mac, name, "OH motor turned "+onOffWord(cur.OHMotor))
 		}
 	}
 	if prev.UGMotor != cur.UGMotor {
-		if cur.UGMotor {
-			pushToDeviceOwners(mac, name, "UG motor turned ON")
-		} else {
-			pushToDeviceOwners(mac, name, "UG motor turned OFF")
+		recordHistoryEvent(mac, "UG Motor "+onOffWord(cur.UGMotor),
+			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, inferReason(mac, "UG"))
+		if fcmEnabled {
+			pushToDeviceOwners(mac, name, "UG motor turned "+onOffWord(cur.UGMotor))
 		}
 	}
 	if !prev.TxLost && cur.TxLost {
-		pushToDeviceOwners(mac, name, "⚠ Transmitter signal lost")
+		recordHistoryEvent(mac, "Transmitter Lost",
+			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, "Signal lost")
+		if fcmEnabled {
+			pushToDeviceOwners(mac, name, "⚠ Transmitter signal lost")
+		}
 	}
 }
 

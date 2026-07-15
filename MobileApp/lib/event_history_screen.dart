@@ -26,18 +26,26 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showSpinner = true}) async {
     final svc = context.read<TankService>();
 
-    setState(() => _loading = true);
-    final data = await svc.fetchHistory();
+    if (showSpinner) setState(() => _loading = true);
+    // Fast path: read persisted history straight from the backend DB. On the
+    // initial load we also trigger the device to republish; a moment later we
+    // silently re-read to pick up any brand-new events.
+    final data = await svc.fetchHistory(triggerRefresh: showSpinner);
     if (!mounted) return;
     setState(() {
       _records = (data['records'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
-      _totalCount = data['count'] as int? ?? 0;
+      _totalCount = data['count'] as int? ?? _records.length;
       _loading = false;
     });
+    if (showSpinner) {
+      Future.delayed(const Duration(milliseconds: 2800), () {
+        if (mounted) _load(showSpinner: false);
+      });
+    }
   }
 
   Future<void> _clearHistory() async {

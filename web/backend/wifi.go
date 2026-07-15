@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -22,6 +21,10 @@ type wifiEntry struct {
 
 // onWifiMsg routes incoming tm/{mac}/wifi messages to the correct cache
 // based on the "type" field in the JSON payload.
+//
+// Note: history is derived server-side from the status stream (see
+// detectAndPushEdges) — we no longer persist the controller's history_list
+// snapshot, so the two sources can't produce duplicate rows.
 func onWifiMsg(topic string, raw []byte) {
 	mac := macFromTopic(topic)
 	if mac == "" {
@@ -38,45 +41,6 @@ func onWifiMsg(topic string, raw []byte) {
 		wifiCache[mac] = wifiEntry{raw: raw, seenAt: time.Now()}
 	}
 	wifiMu.Unlock()
-
-	// Persist history snapshots to the DB so they can be served instantly and
-	// survive restarts (idempotent — dedups by mac+ts+ev).
-	if isHistory {
-		persistHistory(mac, raw)
-	}
-}
-
-// persistHistory stores each record from a history_list payload into the DB.
-func persistHistory(mac string, raw []byte) {
-	var msg struct {
-		Data struct {
-			Records []json.RawMessage `json:"records"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(raw, &msg); err != nil || len(msg.Data.Records) == 0 {
-		return
-	}
-	tx, err := db.Begin()
-	if err != nil {
-		return
-	}
-	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO history_events(mac, ts, ev, record) VALUES(?,?,?,?)`)
-	if err != nil {
-		tx.Rollback() //nolint:errcheck
-		return
-	}
-	for _, rec := range msg.Data.Records {
-		var meta struct {
-			TS int64  `json:"ts"`
-			EV string `json:"ev"`
-		}
-		if json.Unmarshal(rec, &meta) != nil || meta.TS == 0 {
-			continue
-		}
-		stmt.Exec(strings.ToUpper(mac), meta.TS, meta.EV, string(rec)) //nolint:errcheck
-	}
-	stmt.Close() //nolint:errcheck
-	tx.Commit()  //nolint:errcheck
 }
 
 // handleDeviceWifi serves GET /api/devices/{mac}/wifi

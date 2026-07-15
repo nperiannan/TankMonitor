@@ -143,6 +143,8 @@ func publishControl(mac string, body []byte) error {
 	if mqttCli == nil || !mqttCli.IsConnected() {
 		return fmt.Errorf("MQTT not connected")
 	}
+	// Track remote motor commands so derived history can infer a "Manual" reason.
+	noteRemoteMotorCmd(mac, body)
 	// Determine which topic scheme the device uses by checking if it has a real MAC
 	// New firmware uses tm/{mac}/control; legacy uses tankmonitor/{location}/control
 	var topic string

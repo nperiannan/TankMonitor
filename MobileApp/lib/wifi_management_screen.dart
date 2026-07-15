@@ -25,10 +25,13 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
     _loadWifiList();
   }
 
-  Future<void> _loadWifiList() async {
+  Future<void> _loadWifiList({bool showSpinner = true}) async {
     final svc = context.read<TankService>();
 
-    setState(() => _loading = true);
+    // Show the cached list instantly; only spin when we have nothing yet.
+    if (showSpinner && _savedNetworks.isEmpty && svc.wifiCache == null) {
+      setState(() => _loading = true);
+    }
     final data = await svc.fetchWifiList();
     if (!mounted) return;
     // Cloud mode response wraps in {type: "wifi_list", data: {...}}
@@ -44,6 +47,12 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
       _apIp = payload['apIP'] as String? ?? '';
       _loading = false;
     });
+    // Pick up the background refresh a moment later (no spinner).
+    if (showSpinner) {
+      Future.delayed(const Duration(milliseconds: 2800), () {
+        if (mounted) _loadWifiList(showSpinner: false);
+      });
+    }
   }
 
   Future<void> _scan() async {
