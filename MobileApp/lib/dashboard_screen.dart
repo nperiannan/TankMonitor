@@ -20,6 +20,7 @@ import 'theme_data.dart';
 import 'wifi_management_screen.dart';
 import 'event_history_screen.dart';
 import 'push_service.dart';
+import 'haptics.dart';
 
 // ─── Colours (resolved from theme for backward-compat helpers) ──────────────
 const _blue    = kBlue;
@@ -271,6 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () async {
+            AppHaptics.confirm();
             Navigator.pop(ctx);
             setState(() { _otaBusy = true; _otaPhase = 'triggered'; });
             await svc.triggerOta();
@@ -368,6 +370,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () async {
+            AppHaptics.confirm();
             Navigator.pop(ctx);
             setState(() => _otaBusy = true);
             await svc.triggerRollback();
@@ -525,10 +528,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ohMotorName: prefs.ohMotorName,
                         ugBuzzer: (s?.ugBuzzer ?? false) || buzzerFallback,
                         ohBuzzer: (s?.ohBuzzer ?? false) || buzzerFallback,
-                        onUgOn:  () => svc.sendControl({'cmd': 'ug_on'}),
-                        onUgOff: () => svc.sendControl({'cmd': 'ug_off'}),
-                        onOhOn:  () => svc.sendControl({'cmd': 'oh_on'}),
-                        onOhOff: () => svc.sendControl({'cmd': 'oh_off'}),
+                        onUgOn:  () { AppHaptics.motor(); svc.sendControl({'cmd': 'ug_on'}); },
+                        onUgOff: () { AppHaptics.motor(); svc.sendControl({'cmd': 'ug_off'}); },
+                        onOhOn:  () { AppHaptics.motor(); svc.sendControl({'cmd': 'oh_on'}); },
+                        onOhOff: () { AppHaptics.motor(); svc.sendControl({'cmd': 'oh_off'}); },
                         loraOk: s?.loraOk ?? true,
                         loraRssi: s?.loraRssi ?? 0.0,
                         loraSNR: s?.loraSNR ?? 0.0,
@@ -1416,7 +1419,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
-          onPressed: () { Navigator.pop(ctx); svc.sendControl({'cmd': 'reboot'}); },
+          onPressed: () { AppHaptics.confirm(); Navigator.pop(ctx); svc.sendControl({'cmd': 'reboot'}); },
           child: const Text('Reboot', style: TextStyle(color: _red)),
         ),
       ],
@@ -1433,6 +1436,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () async {
+            AppHaptics.confirm();
             Navigator.pop(ctx);
             final ds = svc.directService;
             if (ds != null) await ds.factoryReset();
@@ -1973,7 +1977,7 @@ class _SmallButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final clr = danger ? accentRed(context) : accentBlue(context);
     return GestureDetector(
-      onTap: onTap,
+      onTap: () { AppHaptics.tap(); onTap(); },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
@@ -2000,7 +2004,7 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Expanded(
     child: OutlinedButton.icon(
-      onPressed: enabled ? onTap : null,
+      onPressed: enabled ? () { AppHaptics.tap(); onTap(); } : null,
       icon: Icon(icon, size: 16),
       label: Text(label),
       style: OutlinedButton.styleFrom(

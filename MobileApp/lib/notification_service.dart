@@ -9,6 +9,17 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
+    // Pre-create the channel so background/terminated FCM notifications (which
+    // the OS renders directly) display reliably on Android O+.
+    const channel = AndroidNotificationChannel(
+      'motor_status',
+      'Motor Status',
+      description: 'Notifications when motors turn on or off',
+      importance: Importance.high,
+    );
+    await _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
     _initialized = true;
   }
 
