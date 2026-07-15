@@ -56,6 +56,12 @@ func migrate() {
 		)`,
 		// Index for fast per-user device lookups
 		`CREATE INDEX IF NOT EXISTS idx_user_devices_user ON user_devices(user_id)`,
+		`CREATE TABLE IF NOT EXISTS push_tokens (
+			token      TEXT PRIMARY KEY,
+			user_id    INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+			updated_at TEXT
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {

@@ -8,6 +8,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Enable Firebase (push notifications) only when a google-services.json is
+// present, so the project still builds for anyone without a Firebase config.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Load the release signing config from key.properties (kept out of git). If it is
 // absent, the release build falls back to the debug key so the project still builds.
 val keystoreProperties = Properties()

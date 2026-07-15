@@ -19,6 +19,7 @@ import 'dashboard_themes.dart';
 import 'theme_data.dart';
 import 'wifi_management_screen.dart';
 import 'event_history_screen.dart';
+import 'push_service.dart';
 
 // ─── Colours (resolved from theme for backward-compat helpers) ──────────────
 const _blue    = kBlue;
@@ -78,6 +79,8 @@ class _DashboardScreenState extends State<DashboardScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TankService>().checkForUpdate();
       _loadOtaStatus();
+      // Register (and keep refreshed) the FCM push token with the backend.
+      PushService.onToken((t) => context.read<TankService>().registerPushToken(t));
     });
   }
 

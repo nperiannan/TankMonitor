@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'app_preferences.dart';
 import 'notification_service.dart';
+import 'push_service.dart';
 import 'theme_data.dart';
 import 'login_screen.dart';
 import 'setup_screen.dart';
 import 'device_list_screen.dart';
 import 'dashboard_screen.dart';
 
+/// Background/terminated FCM handler. Notification messages are displayed by
+/// the OS automatically; this just needs to exist and be a top-level function.
+@pragma('vm:entry-point')
+Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.init();
+  await PushService.init(); // no-op if Firebase isn't configured
+  if (PushService.enabled) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseBackgroundHandler);
+  }
   runApp(
     MultiProvider(
       providers: [

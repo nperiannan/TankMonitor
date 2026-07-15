@@ -114,10 +114,14 @@ func onStatusMsg(topic string, raw []byte) {
 	// Auto-register/update the device in the DB
 	upsertDevice(mac, fields.DeviceType, fields.FW)
 
-	// Cache latest status per device
+	// Cache latest status per device (capture previous for edge detection)
 	deviceStatusMu.Lock()
+	prev := deviceStatus[mac]
 	deviceStatus[mac] = raw
 	deviceStatusMu.Unlock()
+
+	// Push notifications on motor on/off and transmitter-lost transitions
+	detectAndPushEdges(mac, prev, raw)
 
 	// Detect OTA success for this device
 	otaOnStatusReceived(mac, fields.FW)

@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.7.0';
+const mobileAppVersion = '2.8.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -875,6 +875,22 @@ class TankService extends ChangeNotifier {
   }
 
   // ── Event history (cloud + direct) ───────────────────────────────────────
+
+  /// Registers this device's FCM push token with the backend (cloud mode only).
+  Future<void> registerPushToken(String token) async {
+    if (authToken == null || directMode) return;
+    try {
+      final baseUrl = await _resolveUrl();
+      await http.post(
+        Uri.parse('$baseUrl/api/push/register'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+        body: jsonEncode({'token': token}),
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {}
+  }
 
   Future<Map<String, dynamic>> fetchHistory() async {
     if (directMode && _directService != null) {
