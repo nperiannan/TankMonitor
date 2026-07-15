@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.9.0';
+const mobileAppVersion = '2.9.1';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -1046,11 +1046,27 @@ class TankService extends ChangeNotifier {
   Future<void> sendControl(Map<String, dynamic> cmd) async {
     // Optimistic UI: reflect motor ON/OFF immediately so the button responds
     // without waiting for the next status round-trip from the device.
+    //
+    // When buzzer mode is enabled the motor doesn't start right away — it first
+    // enters a buzzer countdown (the button shows CANCEL). In that case we must
+    // NOT force the motor "on", or we'd skip the CANCEL state; we let the real
+    // status drive it. OFF/cancel always clears both immediately.
+    final buzzerMode = status?.buzzerDelay == true;
     switch (cmd['cmd'] as String? ?? '') {
-      case 'oh_on':  setPendingSetting('oh_motor', true,  seconds: 10); break;
-      case 'oh_off': setPendingSetting('oh_motor', false, seconds: 10); break;
-      case 'ug_on':  setPendingSetting('ug_motor', true,  seconds: 10); break;
-      case 'ug_off': setPendingSetting('ug_motor', false, seconds: 10); break;
+      case 'oh_on':
+        if (!buzzerMode) setPendingSetting('oh_motor', true, seconds: 10);
+        break;
+      case 'oh_off':
+        setPendingSetting('oh_motor', false, seconds: 8);
+        setPendingSetting('oh_buzzer', false, seconds: 8);
+        break;
+      case 'ug_on':
+        if (!buzzerMode) setPendingSetting('ug_motor', true, seconds: 10);
+        break;
+      case 'ug_off':
+        setPendingSetting('ug_motor', false, seconds: 8);
+        setPendingSetting('ug_buzzer', false, seconds: 8);
+        break;
     }
     // ── Direct mode: translate commands to controller HTTP endpoints ──────
     if (directMode && _directService != null) {

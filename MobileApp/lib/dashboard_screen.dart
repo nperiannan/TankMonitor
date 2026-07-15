@@ -461,14 +461,10 @@ class _DashboardScreenState extends State<DashboardScreen>
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
               Icon(Icons.circle, size: 8,
-                color: svc.connected
-                    ? accentGreen(context)
-                    : svc.connecting
-                        ? _orange
-                        : accentRed(context)),
+                color: svc.connected ? accentGreen(context) : _orange),
               const SizedBox(width: 4),
               Text(
-                svc.connected ? 'Live' : svc.connecting ? 'Connecting…' : 'Offline',
+                svc.connected ? 'Live' : 'Connecting…',
                 style: TextStyle(color: labelColor(context), fontSize: 12)),
             ]),
           ),
@@ -513,8 +509,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         onUpdate: _downloadAndInstall,
                       ),
                     if (!svc.connected)
-                      _Banner(svc.connecting ? 'Connecting to device…' : 'Disconnected — reconnecting…',
-                          isError: false),
+                      const _Banner('Connecting to device…', isError: false),
                     if (s?.txLost == true)
                       const _Banner('⚠ Transmitter lost — no signal received', isError: true),
                     // ── Tank + Motor cards (switchable concept) ──
