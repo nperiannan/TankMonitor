@@ -1,7 +1,7 @@
 name: tank_monitor
 description: Tank Monitor - remote control app for ESP32 water tank system
 publish_to: none
-version: 2.6.0+29
+version: 2.7.0+30
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
@@ -18,6 +18,7 @@ dependencies:
   path_provider: ^2.1.4
   file_picker: ^8.1.2
   flutter_local_notifications: ^18.0.1
+  fl_chart: ^0.69.0
 
 dev_dependencies:
   flutter_test:

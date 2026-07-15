@@ -1,10 +1,12 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'theme_data.dart';
 
 class EventHistoryScreen extends StatefulWidget {
-  const EventHistoryScreen({super.key});
+  final bool initialGraph;
+  const EventHistoryScreen({super.key, this.initialGraph = false});
 
   @override
   State<EventHistoryScreen> createState() => _EventHistoryScreenState();
@@ -14,11 +16,13 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   List<Map<String, dynamic>> _records = [];
   int _totalCount = 0;
   bool _loading = true;
+  bool _showGraph = false;
   String _filter = 'ALL'; // ALL, OH, UG, MOTOR, BOOT
 
   @override
   void initState() {
     super.initState();
+    _showGraph = widget.initialGraph;
     _load();
   }
 
@@ -136,12 +140,165 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-                _buildFilterBar(),
-                Expanded(child: _buildEventList()),
+                _buildViewToggle(),
+                if (!_showGraph) _buildFilterBar(),
+                Expanded(child: _showGraph ? _buildGraph() : _buildEventList()),
               ],
             ),
     );
   }
+
+  Widget _buildViewToggle() {
+    return Container(
+      color: cardBg(context),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: SegmentedButton<bool>(
+        segments: const [
+          ButtonSegment(value: false, label: Text('Table'), icon: Icon(Icons.table_rows, size: 16)),
+          ButtonSegment(value: true, label: Text('Trend Graph'), icon: Icon(Icons.show_chart, size: 16)),
+        ],
+        selected: {_showGraph},
+        onSelectionChanged: (s) => setState(() => _showGraph = s.first),
+        showSelectedIcon: false,
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          textStyle: WidgetStateProperty.all(const TextStyle(fontSize: 12)),
+        ),
+      ),
+    );
+  }
+
+  /// Sum motor runtime (minutes) per day per motor from on/off event pairs.
+  /// Returns oldest→newest days with {date, oh, ug} minute totals.
+  List<Map<String, dynamic>> _runtimePerDay() {
+    final runs = _pairRecords(_records).where((it) => it['run'] == true);
+    final byDay = <String, Map<String, double>>{};
+    final order = <String>[];
+    for (final it in runs) {
+      final on = it['on'] as Map<String, dynamic>?;
+      final off = it['off'] as Map<String, dynamic>?;
+      if (on == null || off == null) continue;
+      final onTs = on['ts'] as int? ?? 0;
+      final offTs = off['ts'] as int? ?? 0;
+      final durMin = (offTs - onTs) / 60.0;
+      if (durMin <= 0) continue;
+      final day = _dayKey(onTs);
+      if (day.isEmpty) continue;
+      if (!byDay.containsKey(day)) { byDay[day] = {'OH': 0, 'UG': 0}; order.add(day); }
+      final motor = it['motor'] as String;
+      byDay[day]![motor] = (byDay[day]![motor] ?? 0) + durMin;
+    }
+    return order.map((d) => {'date': d, 'oh': byDay[d]!['OH']!, 'ug': byDay[d]!['UG']!}).toList();
+  }
+
+  String _dayKey(int ts) {
+    if (ts <= 0) return '';
+    final d = DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildGraph() {
+    final data = _runtimePerDay();
+    if (data.isEmpty) {
+      return Center(
+        child: Text('No motor runs to chart', style: TextStyle(color: labelColor(context), fontSize: 14)),
+      );
+    }
+    // Keep the most recent 14 days for readability.
+    final days = data.length > 14 ? data.sublist(data.length - 14) : data;
+    double maxY = 0;
+    for (final d in days) {
+      final t = (d['oh'] as double) + (d['ug'] as double);
+      if (t > maxY) maxY = t;
+    }
+    maxY = maxY <= 0 ? 10 : (maxY * 1.15);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 16, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Motor runtime per day (minutes)',
+              style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Row(children: [
+            _legendDot(accentGreen(context), 'OH'),
+            const SizedBox(width: 14),
+            _legendDot(const Color(0xFF7c4dff), 'UG'),
+          ]),
+          const SizedBox(height: 12),
+          Expanded(
+            child: BarChart(
+              BarChartData(
+                maxY: maxY,
+                alignment: BarChartAlignment.spaceAround,
+                barTouchData: BarTouchData(
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, gi, rod, ri) {
+                      final d = days[group.x.toInt()];
+                      return BarTooltipItem(
+                        '${d['date']}\nOH ${(d['oh'] as double).toStringAsFixed(0)}m\nUG ${(d['ug'] as double).toStringAsFixed(0)}m',
+                        TextStyle(color: textColor(context), fontSize: 11),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true, reservedSize: 32, interval: (maxY / 4).ceilToDouble(),
+                      getTitlesWidget: (v, _) => Text(v.toInt().toString(),
+                          style: TextStyle(color: labelColor(context), fontSize: 9)),
+                    ),
+                  ),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true, reservedSize: 28,
+                      getTitlesWidget: (v, _) {
+                        final i = v.toInt();
+                        if (i < 0 || i >= days.length) return const SizedBox();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(days[i]['date'] as String,
+                              style: TextStyle(color: labelColor(context), fontSize: 8)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                gridData: FlGridData(show: true, drawVerticalLine: false,
+                    getDrawingHorizontalLine: (_) => FlLine(color: cardBd(context), strokeWidth: 0.5)),
+                borderData: FlBorderData(show: false),
+                barGroups: List.generate(days.length, (i) {
+                  final oh = days[i]['oh'] as double;
+                  final ug = days[i]['ug'] as double;
+                  return BarChartGroupData(x: i, barRods: [
+                    BarChartRodData(
+                      toY: oh + ug,
+                      width: 14,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
+                      rodStackItems: [
+                        BarChartRodStackItem(0, oh, accentGreen(context)),
+                        BarChartRodStackItem(oh, oh + ug, const Color(0xFF7c4dff)),
+                      ],
+                    ),
+                  ]);
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _legendDot(Color c, String label) => Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 10, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: labelColor(context), fontSize: 11)),
+      ]);
 
   Widget _buildFilterBar() {
     return Container(

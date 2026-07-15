@@ -141,6 +141,91 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
+  /// Fetches the latest controller firmware.bin from the GitHub release and
+  /// stages it to the backend automatically (no manual file picking needed).
+  Future<void> _stageFromGitHub() async {
+    final svc = context.read<TankService>();
+    setState(() { _uploadProgress = 0; _uploadError = null; });
+    http.Client? client;
+    try {
+      final asset = await svc.fetchLatestControllerFirmware();
+      if (asset == null) {
+        if (mounted) setState(() {
+          _uploadProgress = null;
+          _uploadError = 'No controller firmware release found on GitHub.';
+        });
+        return;
+      }
+      // ── Download the .bin from GitHub (first half of the progress bar) ──
+      client = http.Client();
+      final resp = await client.send(http.Request('GET', Uri.parse(asset.url)));
+      if (resp.statusCode != 200) {
+        throw Exception('GitHub returned ${resp.statusCode}');
+      }
+      final total = resp.contentLength ?? 0;
+      final bytes = <int>[];
+      await for (final chunk in resp.stream) {
+        bytes.addAll(chunk);
+        if (mounted && total > 0) {
+          setState(() => _uploadProgress = (bytes.length / total) * 0.5);
+        }
+      }
+      client.close();
+      client = null;
+      if (bytes.length < 100 * 1024) {
+        throw Exception('firmware too small (${bytes.length} bytes)');
+      }
+      // ── Stage (upload) to the backend (second half of the progress bar) ──
+      final ok = await svc.uploadFirmware(
+        bytes,
+        onProgress: (p) {
+          if (mounted) setState(() => _uploadProgress = 0.5 + p * 0.5);
+        },
+      );
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _uploadProgress = null);
+        await _loadOtaStatus();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Staged controller firmware v${asset.version} from GitHub')),
+          );
+        }
+      } else {
+        setState(() { _uploadProgress = null; _uploadError = 'Staging failed — check connection.'; });
+      }
+    } catch (e) {
+      client?.close();
+      if (mounted) setState(() { _uploadProgress = null; _uploadError = 'GitHub fetch failed: $e'; });
+    }
+  }
+
+  /// Firmware staging buttons: primary "Get latest from GitHub", secondary manual pick.
+  Widget _stageFirmwareButtons() {
+    final busy = _otaBusy || _uploadProgress != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(children: [
+          _ActionButton(
+            label: 'Get latest from GitHub',
+            icon: Icons.cloud_download,
+            enabled: !busy,
+            onTap: _stageFromGitHub,
+          ),
+        ]),
+        Align(
+          alignment: Alignment.center,
+          child: TextButton.icon(
+            onPressed: busy ? null : _pickAndUploadFirmware,
+            icon: const Icon(Icons.upload_file, size: 15),
+            label: const Text('or choose a .bin file', style: TextStyle(fontSize: 12)),
+          ),
+        ),
+      ],
+    );
+  }
+
   void _startOtaPolling() {
     _otaCountdownTimer?.cancel();
     _otaPollTimer?.cancel();
@@ -370,9 +455,14 @@ class _DashboardScreenState extends State<DashboardScreen>
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
               Icon(Icons.circle, size: 8,
-                color: svc.connected ? accentGreen(context) : accentRed(context)),
+                color: svc.connected
+                    ? accentGreen(context)
+                    : svc.connecting
+                        ? _orange
+                        : accentRed(context)),
               const SizedBox(width: 4),
-              Text(svc.connected ? 'Live' : 'Offline',
+              Text(
+                svc.connected ? 'Live' : svc.connecting ? 'Connecting…' : 'Offline',
                 style: TextStyle(color: labelColor(context), fontSize: 12)),
             ]),
           ),
@@ -417,7 +507,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         onUpdate: _downloadAndInstall,
                       ),
                     if (!svc.connected)
-                      const _Banner('Disconnected — reconnecting…', isError: false),
+                      _Banner(svc.connecting ? 'Connecting to device…' : 'Disconnected — reconnecting…',
+                          isError: false),
                     if (s?.txLost == true)
                       const _Banner('⚠ Transmitter lost — no signal received', isError: true),
                     // ── Tank + Motor cards (switchable concept) ──
@@ -752,36 +843,21 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ]),
                     ),
                     const SizedBox(height: 10),
-                    // ── Actions ──
-                    _SectionCard(
-                      title: 'ACTIONS',
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(children: [
-                          _ActionButton(
-                            label: 'Sync NTP',
-                            icon: Icons.sync,
-                            enabled: s != null,
-                            onTap: () => svc.sendControl({'cmd': 'sync_ntp'}),
-                          ),
-                          const SizedBox(width: 10),
-                          _ActionButton(
-                            label: 'Reboot',
-                            icon: Icons.power_settings_new,
-                            danger: true,
-                            enabled: s != null,
-                            onTap: () => _confirmReboot(context, svc),
-                          ),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // ── Device Management (WiFi, History, Factory Reset) ──
+                    // ── Device Management (single column: Sync NTP, WiFi, Reboot, Factory Reset) ──
                     _SectionCard(
                       title: 'DEVICE MANAGEMENT',
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Column(children: [
+                          Row(children: [
+                            _ActionButton(
+                              label: 'Sync NTP',
+                              icon: Icons.sync,
+                              enabled: s != null,
+                              onTap: () => svc.sendControl({'cmd': 'sync_ntp'}),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
                           Row(children: [
                             _ActionButton(
                               label: 'WiFi',
@@ -791,14 +867,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 MaterialPageRoute(builder: (_) => const WifiManagementScreen()),
                               ),
                             ),
-                            const SizedBox(width: 10),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
                             _ActionButton(
-                              label: 'History',
-                              icon: Icons.history,
-                              enabled: true,
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(builder: (_) => const EventHistoryScreen()),
-                              ),
+                              label: 'Reboot',
+                              icon: Icons.power_settings_new,
+                              danger: true,
+                              enabled: s != null,
+                              onTap: () => _confirmReboot(context, svc),
                             ),
                           ]),
                           const SizedBox(height: 8),
@@ -823,6 +900,45 @@ class _DashboardScreenState extends State<DashboardScreen>
                               child: Text('Waiting for device IP…',
                                   style: TextStyle(color: labelColor(context), fontSize: 10)),
                             ),
+                        ]),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // ── History (separate card: Table or Trend Graph) ──
+                    _SectionCard(
+                      title: 'HISTORY',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('Motor & tank event history',
+                                  style: TextStyle(color: labelColor(context), fontSize: 12)),
+                            ),
+                          ),
+                          Row(children: [
+                            _ActionButton(
+                              label: 'Table',
+                              icon: Icons.table_rows,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const EventHistoryScreen(initialGraph: false)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _ActionButton(
+                              label: 'Trend Graph',
+                              icon: Icons.show_chart,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const EventHistoryScreen(initialGraph: true)),
+                              ),
+                            ),
+                          ]),
                         ]),
                       ),
                     ),
@@ -880,12 +996,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   Text('❌ $_uploadError',
                                     style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
                                   const SizedBox(height: 6),
-                                  _ActionButton(
-                                    label: 'Choose firmware.bin',
-                                    icon: Icons.upload_file,
-                                    enabled: !_otaBusy,
-                                    onTap: _pickAndUploadFirmware,
-                                  ),
+                                  _stageFirmwareButtons(),
                                 ] else if (_otaHasFirmware) ...[
                                   Row(children: [
                                     const Icon(Icons.check_circle, color: _green, size: 14),
@@ -904,22 +1015,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     ),
                                   ],
                                   const SizedBox(height: 6),
-                                  _ActionButton(
-                                    label: 'Replace firmware.bin',
-                                    icon: Icons.upload_file,
-                                    enabled: !_otaBusy,
-                                    onTap: _pickAndUploadFirmware,
-                                  ),
+                                  _stageFirmwareButtons(),
                                 ] else ...[
                                   const Text('No firmware staged.',
                                     style: TextStyle(color: _label, fontSize: 12)),
                                   const SizedBox(height: 6),
-                                  _ActionButton(
-                                    label: 'Choose firmware.bin',
-                                    icon: Icons.upload_file,
-                                    enabled: !_otaBusy,
-                                    onTap: _pickAndUploadFirmware,
-                                  ),
+                                  _stageFirmwareButtons(),
                                 ],
                               ],
                             ),

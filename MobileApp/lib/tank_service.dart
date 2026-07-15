@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.6.0';
+const mobileAppVersion = '2.7.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -48,6 +48,7 @@ class TankService extends ChangeNotifier {
 
   Status? status;
   bool connected = false;
+  bool connecting = false; // true while the first WS handshake is in flight
   String? error;
 
   // ── Motor notification tracking ──────────────────────────────────────────
@@ -254,6 +255,8 @@ class TankService extends ChangeNotifier {
     _closeChannel();
     _activeUrl = url.trimRight().replaceAll(RegExp(r'/$'), '');
     webAppVersion = null; // reset on reconnect
+    connecting = true; // show "Connecting…" instead of a false "Offline"
+    notifyListeners();
 
     var wsUrl = _activeUrl
         .replaceFirst(RegExp(r'^http://'), 'ws://')
@@ -279,6 +282,7 @@ class TankService extends ChangeNotifier {
             _checkMotorStateChange();
             if (!connected) {
               connected = true;
+              connecting = false;
               fetchVersion(); // fire and forget
               fetchMe();      // restore isAdmin + currentUsername from token
             }
@@ -295,16 +299,19 @@ class TankService extends ChangeNotifier {
             authToken = null;
             SharedPreferences.getInstance().then((p) => p.remove(_kAuthToken));
             connected = false;
+            connecting = false;
             notifyListeners();
             return;
           }
           connected = false;
+          connecting = false;
           notifyListeners();
           _scheduleReconnect();
         },
         onDone: () {
           if (_disposed) return;
           connected = false;
+          connecting = false;
           notifyListeners();
           _scheduleReconnect();
         },
@@ -313,6 +320,7 @@ class TankService extends ChangeNotifier {
     } catch (e) {
       if (_disposed) return;
       connected = false;
+      connecting = false;
       error = e.toString();
       notifyListeners();
       _scheduleReconnect();
@@ -872,24 +880,56 @@ class TankService extends ChangeNotifier {
     if (directMode && _directService != null) {
       return _directService!.fetchHistory();
     }
-    // Cloud mode: send history_list command, then poll for response
+    // Cloud mode: ask the device to publish its history, then poll the backend
+    // cache for the reply. A single fixed wait was unreliable (the device's
+    // MQTT reply often lands after 2s), so retry for up to ~8s.
     await sendControl({'cmd': 'history_list'});
-    await Future.delayed(const Duration(seconds: 2));
+    final headers = <String, String>{};
+    if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+    final url = Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}');
+    for (var attempt = 0; attempt < 6; attempt++) {
+      await Future.delayed(const Duration(milliseconds: 1400));
+      try {
+        final res = await http.get(url, headers: headers).timeout(const Duration(seconds: 5));
+        if (res.statusCode == 200) {
+          final body = jsonDecode(res.body) as Map<String, dynamic>;
+          if (body['type'] == 'history_list') {
+            final data = body['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
+            final records = data['records'] as List<dynamic>? ?? [];
+            // Keep polling until the device's reply arrives (non-empty) or we
+            // run out of attempts — an empty cache just means "not yet".
+            if (records.isNotEmpty || attempt == 5) return data;
+          }
+        }
+      } catch (_) {}
+    }
+    return {'count': 0, 'records': []};
+  }
+
+  /// Fetches the latest `controller_firmware/*` GitHub release asset.
+  /// Returns the firmware.bin download URL and version, or null if none found.
+  Future<({String url, String version})?> fetchLatestControllerFirmware() async {
     try {
-      final headers = <String, String>{};
-      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
       final res = await http.get(
-        Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 5));
+        Uri.parse('https://api.github.com/repos/nperiannan/TankMonitor/releases?per_page=30'),
+        headers: {'Accept': 'application/vnd.github+json'},
+      ).timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
-        final body = jsonDecode(res.body) as Map<String, dynamic>;
-        if (body['type'] == 'history_list') {
-          return body['data'] as Map<String, dynamic>? ?? {'count': 0, 'records': []};
+        final releases = jsonDecode(res.body) as List<dynamic>;
+        for (final r in releases) {
+          final tagName = (r['tag_name'] as String?) ?? '';
+          if (!tagName.startsWith('controller_firmware/')) continue;
+          final version = tagName.replaceFirst('controller_firmware/', '').replaceFirst('v', '');
+          final assets = r['assets'] as List<dynamic>? ?? [];
+          for (final a in assets) {
+            if ((a['name'] as String?)?.endsWith('.bin') == true) {
+              return (url: a['browser_download_url'] as String, version: version);
+            }
+          }
         }
       }
     } catch (_) {}
-    return {'count': 0, 'records': []};
+    return null;
   }
 
   Future<bool> clearHistory() async {
