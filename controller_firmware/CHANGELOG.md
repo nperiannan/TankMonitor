@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.5.0] — 2026-07-20
+
+### Added
+- **Buzzer countdown in MQTT status** — the status payload now includes `oh_cd` / `ug_cd` (buzzer-delay seconds remaining, `0` when idle). Lets the mobile app render an accurate shrinking "starting in Ns" progress bar during the pre-start buzzer, and confirms the controller acknowledged a motor command.
+
+---
+
 ## [2.4.0] — 2026-07-13
 
 ### Added

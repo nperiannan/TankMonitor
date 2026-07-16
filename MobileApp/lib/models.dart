@@ -46,6 +46,8 @@ class Status {
   final bool buzzerActive;
   final bool ohBuzzer;    // buzzer countdown running for OH motor
   final bool ugBuzzer;    // buzzer countdown running for UG motor
+  final int  ohCd;        // buzzer countdown remaining seconds for OH (0 when idle)
+  final int  ugCd;        // buzzer countdown remaining seconds for UG (0 when idle)
   final String txFw;      // transmitter firmware version
   final String mgmtIp;    // ESP32 management IP (WiFi STA IP)
   final String wifiSsid;  // connected SSID, empty when in AP mode
@@ -79,6 +81,8 @@ class Status {
     required this.buzzerActive,
     required this.ohBuzzer,
     required this.ugBuzzer,
+    required this.ohCd,
+    required this.ugCd,
     required this.txFw,
     required this.mgmtIp,
     required this.wifiSsid,
@@ -115,6 +119,8 @@ class Status {
         buzzerActive: j['buzzer_active'] as bool? ?? false,
         ohBuzzer:   j['oh_buzzer']    as bool? ?? false,
         ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
+        ohCd:       j['oh_cd']         as int?  ?? 0,
+        ugCd:       j['ug_cd']         as int?  ?? 0,
         txFw:       j['tx_fw']        as String? ?? '',
         mgmtIp:     j['ip']           as String? ?? '',
         wifiSsid:   j['wifi_ssid']    as String? ?? '',
@@ -150,5 +156,35 @@ class Device {
         fwVersion:   j['fw_version']   as String? ?? '',
         role:        j['role']         as String? ?? '',
         online:      j['online']       as bool?   ?? false,
+      );
+}
+
+/// A locally-recorded motor command that the controller never acknowledged
+/// (no ack received within the timeout). Shown as a separate card in History.
+class DeliveryIssue {
+  final DateTime time;
+  final String motor;      // 'OH' | 'UG'
+  final bool start;        // true = start request, false = stop/cancel request
+  final String deviceName; // device display name at the time
+
+  const DeliveryIssue({
+    required this.time,
+    required this.motor,
+    required this.start,
+    required this.deviceName,
+  });
+
+  Map<String, dynamic> toJson() => {
+        't': time.toIso8601String(),
+        'm': motor,
+        's': start,
+        'd': deviceName,
+      };
+
+  factory DeliveryIssue.fromJson(Map<String, dynamic> j) => DeliveryIssue(
+        time: DateTime.tryParse(j['t'] as String? ?? '') ?? DateTime.now(),
+        motor: j['m'] as String? ?? '',
+        start: j['s'] as bool? ?? true,
+        deviceName: j['d'] as String? ?? '',
       );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
+import 'models.dart';
 import 'theme_data.dart';
 
 // Accent colours are theme-independent (they read well on light & dark).
@@ -172,6 +173,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final runs = _runs();
+    final issues = context.watch<TankService>().deliveryIssues;
     return Scaffold(
       backgroundColor: _bg,
       appBar: AppBar(
@@ -197,6 +199,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
+                  if (issues.isNotEmpty) ...[
+                    _deliveryIssuesCard(issues),
+                    const SizedBox(height: 12),
+                  ],
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
@@ -213,6 +219,75 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // ── DELIVERY ISSUES card (local, unacknowledged commands) ────────────────
+  Widget _deliveryIssuesCard(List<DeliveryIssue> issues) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _red.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _red.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.error_outline, color: _red, size: 18),
+            const SizedBox(width: 6),
+            Text('DELIVERY ISSUES',
+                style: TextStyle(color: _red, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.8)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => context.read<TankService>().clearDeliveryIssues(),
+              child: Text('CLEAR',
+                  style: TextStyle(color: _red.withOpacity(0.85), fontSize: 10.5, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Text('Commands the controller never acknowledged (no ack received).',
+              style: TextStyle(color: _lbl, fontSize: 11)),
+          const SizedBox(height: 10),
+          ...issues.map(_deliveryIssueRow),
+        ],
+      ),
+    );
+  }
+
+  Widget _deliveryIssueRow(DeliveryIssue e) {
+    final d = e.time.toLocal();
+    final dateStr = '${d.day} ${_months[d.month - 1]} · ${_two(d.hour)}:${_two(d.minute)}';
+    final label = '${e.motor} motor ${e.start ? 'start' : 'stop'}';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            color: _red.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(Icons.wifi_off_rounded, color: _red, size: 17),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 1),
+              Text('Not delivered — signal did not reach the controller',
+                  style: TextStyle(color: _lbl, fontSize: 10.5)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(dateStr,
+            style: TextStyle(color: _lbl, fontSize: 10.5, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 

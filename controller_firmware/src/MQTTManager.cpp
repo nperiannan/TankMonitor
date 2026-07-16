@@ -617,6 +617,7 @@ void publishMQTTStatus() {
         "\"log_level\":\"%s\","
         "\"buzzer_active\":%s,"
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
+        "\"oh_cd\":%d,\"ug_cd\":%d,"
         "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
         macStr.c_str(),
@@ -647,6 +648,8 @@ void publishMQTTStatus() {
         isBuzzerActive()     ? "true" : "false",
         isOHBuzzerPending()  ? "true" : "false",
         isUGBuzzerPending()  ? "true" : "false",
+        getOHStartCountdown(),
+        getUGStartCountdown(),
         TRANSMITTER_FW_VERSION,
         schedJson
     );

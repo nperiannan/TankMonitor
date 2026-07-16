@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'models.dart';
@@ -18,6 +19,15 @@ class DashboardData {
   final VoidCallback onUgOff;
   final VoidCallback onOhOn;
   final VoidCallback onOhOff;
+  // Command-feedback state machine
+  final bool ugCmdSending;
+  final bool ohCmdSending;
+  final bool ugCmdFailed;
+  final bool ohCmdFailed;
+  final int  ugCd;   // buzzer countdown remaining seconds
+  final int  ohCd;
+  final VoidCallback? onUgClearFailed;
+  final VoidCallback? onOhClearFailed;
   final bool loraOk;
   final double loraRssi;
   final double loraSNR;
@@ -35,6 +45,14 @@ class DashboardData {
     required this.onUgOff,
     required this.onOhOn,
     required this.onOhOff,
+    this.ugCmdSending = false,
+    this.ohCmdSending = false,
+    this.ugCmdFailed = false,
+    this.ohCmdFailed = false,
+    this.ugCd = 0,
+    this.ohCd = 0,
+    this.onUgClearFailed,
+    this.onOhClearFailed,
     this.loraOk = true,
     this.loraRssi = 0.0,
     this.loraSNR = 0.0,
@@ -99,16 +117,24 @@ class ConceptDDashboard extends StatelessWidget {
         Expanded(child: _GridMotorButton(
           motorOn: s?.ugMotor ?? false,
           buzzer: d.ugBuzzer,
+          sending: d.ugCmdSending,
+          failed: d.ugCmdFailed,
+          cd: s?.ugCd ?? 0,
           onOn: d.onUgOn,
           onOff: d.onUgOff,
+          onClearFailed: d.onUgClearFailed,
           context: context,
         )),
         const SizedBox(width: 10),
         Expanded(child: _GridMotorButton(
           motorOn: s?.ohMotor ?? false,
           buzzer: d.ohBuzzer,
+          sending: d.ohCmdSending,
+          failed: d.ohCmdFailed,
+          cd: s?.ohCd ?? 0,
           onOn: d.onOhOn,
           onOff: d.onOhOff,
+          onClearFailed: d.onOhClearFailed,
           context: context,
         )),
       ]),
@@ -176,16 +202,24 @@ class ConceptFDashboard extends StatelessWidget {
         Expanded(child: _GridMotorButton(
           motorOn: s?.ugMotor ?? false,
           buzzer: d.ugBuzzer,
+          sending: d.ugCmdSending,
+          failed: d.ugCmdFailed,
+          cd: s?.ugCd ?? 0,
           onOn: d.onUgOn,
           onOff: d.onUgOff,
+          onClearFailed: d.onUgClearFailed,
           context: context,
         )),
         const SizedBox(width: 10),
         Expanded(child: _GridMotorButton(
           motorOn: s?.ohMotor ?? false,
           buzzer: d.ohBuzzer,
+          sending: d.ohCmdSending,
+          failed: d.ohCmdFailed,
+          cd: s?.ohCd ?? 0,
           onOn: d.onOhOn,
           onOff: d.onOhOff,
+          onClearFailed: d.onOhClearFailed,
           context: context,
         )),
       ]),
@@ -924,14 +958,22 @@ class _GridMotorStatus extends StatelessWidget {
 class _GridMotorButton extends StatelessWidget {
   final bool motorOn;
   final bool buzzer;
+  final bool sending;
+  final bool failed;
+  final int cd;
   final VoidCallback onOn;
   final VoidCallback onOff;
+  final VoidCallback? onClearFailed;
   final BuildContext context;
 
   const _GridMotorButton({
     required this.motorOn, required this.onOn,
     required this.onOff, required this.context,
     this.buzzer = false,
+    this.sending = false,
+    this.failed = false,
+    this.cd = 0,
+    this.onClearFailed,
   });
 
   @override
@@ -956,7 +998,165 @@ class _GridMotorButton extends StatelessWidget {
           ),
         ],
       ),
-      child: _PowerButton(motorOn: motorOn, onOn: onOn, onOff: onOff, buzzer: buzzer, expanded: true),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Failed-delivery banner (auto-clears after 10s; tap X to dismiss).
+          if (failed && !sending) ...[
+            _NotDeliveredBanner(onDismiss: onClearFailed),
+            const SizedBox(height: 10),
+          ],
+          _PowerButton(
+            motorOn: motorOn, onOn: onOn, onOff: onOff,
+            buzzer: buzzer, sending: sending, cd: cd, expanded: true,
+          ),
+          // Shrinking countdown bar while the buzzer is sounding.
+          if (buzzer && !sending) ...[
+            const SizedBox(height: 10),
+            _CountdownBar(seconds: cd, color: kOrange),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ─── "Not delivered" banner ──────────────────────────────────────────────────
+class _NotDeliveredBanner extends StatelessWidget {
+  final VoidCallback? onDismiss;
+  const _NotDeliveredBanner({this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    final red = accentRed(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: red.withOpacity(0.12),
+        border: Border.all(color: red.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(children: [
+        Icon(Icons.error_outline, color: red, size: 16),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Not delivered — no ack from controller',
+            style: TextStyle(color: red, fontSize: 10.5, fontWeight: FontWeight.w700, height: 1.2),
+          ),
+        ),
+        if (onDismiss != null)
+          GestureDetector(
+            onTap: onDismiss,
+            child: Icon(Icons.close, color: red.withOpacity(0.8), size: 14),
+          ),
+      ]),
+    );
+  }
+}
+
+// ─── Shrinking buzzer countdown bar ──────────────────────────────────────────
+class _CountdownBar extends StatefulWidget {
+  final int seconds;   // remaining seconds reported by the controller
+  final Color color;
+  const _CountdownBar({required this.seconds, required this.color});
+
+  @override
+  State<_CountdownBar> createState() => _CountdownBarState();
+}
+
+class _CountdownBarState extends State<_CountdownBar> {
+  double _total = 1;
+  double _remaining = 0;
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+    _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (!mounted) return;
+      setState(() => _remaining = (_remaining - 0.1).clamp(0.0, _total));
+    });
+  }
+
+  @override
+  void didUpdateWidget(_CountdownBar old) {
+    super.didUpdateWidget(old);
+    if (widget.seconds != old.seconds) _sync();
+  }
+
+  // Resync to the controller's authoritative remaining value; remember the
+  // largest value seen as the bar's full scale.
+  void _sync() {
+    final s = widget.seconds.toDouble();
+    if (s > _total) _total = s;
+    if (_total <= 0) _total = 1;
+    setState(() => _remaining = s);
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final frac = (_remaining / _total).clamp(0.0, 1.0);
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(3),
+          child: LinearProgressIndicator(
+            value: frac,
+            minHeight: 6,
+            backgroundColor: widget.color.withOpacity(0.15),
+            valueColor: AlwaysStoppedAnimation<Color>(widget.color),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Starting in ${_remaining.ceil()}s…',
+          style: TextStyle(color: widget.color, fontSize: 10.5, fontWeight: FontWeight.w700),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Press-down scale wrapper (tactile button feel) ──────────────────────────
+class _PressableScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const _PressableScale({required this.child, this.onTap});
+
+  @override
+  State<_PressableScale> createState() => _PressableScaleState();
+}
+
+class _PressableScaleState extends State<_PressableScale> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
+    return GestureDetector(
+      onTapDown: enabled ? (_) => setState(() => _down = true) : null,
+      onTapUp: enabled ? (_) => setState(() => _down = false) : null,
+      onTapCancel: enabled ? () => setState(() => _down = false) : null,
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _down ? 0.96 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          curve: Curves.easeOut,
+          transform: Matrix4.translationValues(0, _down ? 3 : 0, 0),
+          child: widget.child,
+        ),
+      ),
     );
   }
 }
@@ -1072,25 +1272,37 @@ class _GearIconState extends State<_GearIcon> with SingleTickerProviderStateMixi
 class _PowerButton extends StatelessWidget {
   final bool motorOn;
   final bool buzzer;
+  final bool sending;
+  final int cd;
   final VoidCallback onOn;
   final VoidCallback onOff;
   final bool compact;
   final bool expanded;
   const _PowerButton({
     required this.motorOn, required this.onOn, required this.onOff,
-    this.buzzer = false, this.compact = false, this.expanded = false,
+    this.buzzer = false, this.sending = false, this.cd = 0,
+    this.compact = false, this.expanded = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final VoidCallback action;
+    final VoidCallback? action;
     final List<Color> gradient;
     final Color fg;
     final String text;
     final IconData icon;
 
-    if (buzzer) {
+    if (sending) {
+      // Waiting for the controller to acknowledge — button is disabled.
+      action = null;
+      gradient = isDark
+          ? const [Color(0xFF37474F), Color(0xFF455A64)]
+          : const [Color(0xFF78909C), Color(0xFF90A4AE)];
+      fg = Colors.white;
+      text = 'Sending…';
+      icon = Icons.sync;
+    } else if (buzzer) {
       action = onOff;
       gradient = const [Color(0xFFe65100), Color(0xFFff6d00)];
       fg = Colors.white;
@@ -1118,7 +1330,7 @@ class _PowerButton extends StatelessWidget {
     final double radius = compact ? 8 : 12;
 
     if (compact) {
-      return GestureDetector(
+      return _PressableScale(
         onTap: action,
         child: Container(
           width: 70, height: 36,
@@ -1131,15 +1343,20 @@ class _PowerButton extends StatelessWidget {
             boxShadow: [BoxShadow(color: gradient[0].withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 3))],
           ),
           child: Center(
-            child: Text(buzzer ? 'CANCEL' : (motorOn ? 'OFF' : 'ON'),
-              style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
+            child: sending
+                ? SizedBox(
+                    width: 14, height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(fg)),
+                  )
+                : Text(buzzer ? 'CANCEL' : (motorOn ? 'OFF' : 'ON'),
+                    style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700)),
           ),
         ),
       );
     }
 
     // Full-size button (default + expanded)
-    return GestureDetector(
+    return _PressableScale(
       onTap: action,
       child: Container(
         constraints: expanded ? null : const BoxConstraints(minWidth: 120),
@@ -1168,7 +1385,13 @@ class _PowerButton extends StatelessWidget {
           mainAxisSize: expanded ? MainAxisSize.max : MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: fg, size: 16),
+            if (sending)
+              SizedBox(
+                width: 15, height: 15,
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(fg)),
+              )
+            else
+              Icon(icon, color: fg, size: 16),
             const SizedBox(width: 6),
             Text(text,
               style: TextStyle(color: fg, fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.6)),
@@ -1196,12 +1419,16 @@ class ConceptGDashboard extends StatelessWidget {
         motorName: d.ohMotorName,
         motorOn: s?.ohMotor ?? false,
         buzzer: d.ohBuzzer,
+        sending: d.ohCmdSending,
+        failed: d.ohCmdFailed,
+        cd: s?.ohCd ?? 0,
         loraOk: d.loraOk,
         loraRssi: d.loraRssi,
         loraSNR: d.loraSNR,
         lastLoraReceived: d.lastLoraReceived,
         onOn: d.onOhOn,
         onOff: d.onOhOff,
+        onClearFailed: d.onOhClearFailed,
         context: context,
       ),
       const SizedBox(height: 14),
@@ -1211,8 +1438,12 @@ class ConceptGDashboard extends StatelessWidget {
         motorName: d.ugMotorName,
         motorOn: s?.ugMotor ?? false,
         buzzer: d.ugBuzzer,
+        sending: d.ugCmdSending,
+        failed: d.ugCmdFailed,
+        cd: s?.ugCd ?? 0,
         onOn: d.onUgOn,
         onOff: d.onUgOff,
+        onClearFailed: d.onUgClearFailed,
         context: context,
       ),
     ]);
@@ -1226,12 +1457,16 @@ class _ProTankCard extends StatelessWidget {
   final String motorName;
   final bool motorOn;
   final bool buzzer;
+  final bool sending;
+  final bool failed;
+  final int cd;
   final bool? loraOk;
   final double? loraRssi;
   final double? loraSNR;
   final String? lastLoraReceived;
   final VoidCallback onOn;
   final VoidCallback onOff;
+  final VoidCallback? onClearFailed;
   final BuildContext context;
 
   const _ProTankCard({
@@ -1239,6 +1474,8 @@ class _ProTankCard extends StatelessWidget {
     required this.motorName, required this.motorOn,
     required this.buzzer, required this.onOn,
     required this.onOff, required this.context,
+    this.sending = false, this.failed = false, this.cd = 0,
+    this.onClearFailed,
     this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
   });
 
@@ -1394,7 +1631,7 @@ class _ProTankCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 5),
                             Text(
-                              motorOn ? 'Running' : 'Stopped',
+                              sending ? 'Sending…' : (motorOn ? 'Running' : 'Stopped'),
                               style: TextStyle(
                                 color: motorOn ? greenC : labelColor(context),
                                 fontSize: 11,
@@ -1412,11 +1649,22 @@ class _ProTankCard extends StatelessWidget {
                     _ProToggleButton(
                       motorOn: motorOn,
                       buzzer: buzzer,
+                      sending: sending,
                       onOn: onOn,
                       onOff: onOff,
                       context: context,
                     ),
                   ]),
+                  // Shrinking countdown bar while the buzzer is sounding.
+                  if (buzzer && !sending) ...[
+                    const SizedBox(height: 10),
+                    _CountdownBar(seconds: cd, color: kOrange),
+                  ],
+                  // Failed-delivery banner (auto-clears after 10s).
+                  if (failed && !sending) ...[
+                    const SizedBox(height: 10),
+                    _NotDeliveredBanner(onDismiss: onClearFailed),
+                  ],
                 ],
               ),
             ),
@@ -1512,6 +1760,7 @@ class _ProLevelBarState extends State<_ProLevelBar>
 class _ProToggleButton extends StatelessWidget {
   final bool motorOn;
   final bool buzzer;
+  final bool sending;
   final VoidCallback onOn;
   final VoidCallback onOff;
   final BuildContext context;
@@ -1520,18 +1769,25 @@ class _ProToggleButton extends StatelessWidget {
     required this.motorOn, required this.buzzer,
     required this.onOn, required this.onOff,
     required this.context,
+    this.sending = false,
   });
 
   @override
   Widget build(BuildContext _) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final VoidCallback action;
+    final VoidCallback? action;
     final Color bg;
     final Color fg;
     final String text;
     final IconData icon;
 
-    if (buzzer) {
+    if (sending) {
+      action = null;
+      bg = isDark ? const Color(0xFF455A64) : const Color(0xFF90A4AE);
+      fg = Colors.white;
+      text = 'Sending…';
+      icon = Icons.sync;
+    } else if (buzzer) {
       action = onOff;
       bg = kOrange;
       fg = Colors.white;
@@ -1551,7 +1807,7 @@ class _ProToggleButton extends StatelessWidget {
       icon = Icons.play_circle_outlined;
     }
 
-    return GestureDetector(
+    return _PressableScale(
       onTap: action,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -1567,7 +1823,13 @@ class _ProToggleButton extends StatelessWidget {
           ],
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: fg, size: 16),
+          if (sending)
+            SizedBox(
+              width: 14, height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(fg)),
+            )
+          else
+            Icon(icon, color: fg, size: 16),
           const SizedBox(width: 5),
           Text(text,
             style: TextStyle(

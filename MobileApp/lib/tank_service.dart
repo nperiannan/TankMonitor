@@ -15,11 +15,12 @@ const _kServerKey = 'server_url'; // legacy fallback
 const _kAuthToken = 'auth_token';
 const _kDirectMode = 'direct_mode';
 const _kDirectIp   = 'direct_ip';
+const _kDeliveryLog = 'delivery_issues';
 
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.10.1';
+const mobileAppVersion = '2.11.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -63,6 +64,25 @@ class TankService extends ChangeNotifier {
   final Map<String, _PendingSetting> _pendingSettings = {};
   Map<String, dynamic>? _lastRawStatus; // last received WS payload (pre-pending)
 
+  // ── Motor command feedback state machine ─────────────────────────────────
+  // A command is "sending" from the moment the user taps until the controller
+  // reflects the change in its status (ack). If no ack arrives within 5s, the
+  // command is marked "failed", logged locally, and cleared after 10s.
+  bool ohCmdSending = false;
+  bool ugCmdSending = false;
+  bool ohCmdFailed  = false;
+  bool ugCmdFailed  = false;
+  bool _ohCmdOn = false; // last OH command was a start request
+  bool _ugCmdOn = false;
+  Timer? _ohAckTimer, _ugAckTimer;
+  Timer? _ohFailTimer, _ugFailTimer;
+  static const _ackTimeout  = Duration(seconds: 5);
+  static const _failClearAfter = Duration(seconds: 10);
+
+  // Locally-recorded delivery failures (no ack from controller).
+  List<DeliveryIssue> _deliveryIssues = [];
+  List<DeliveryIssue> get deliveryIssues => List.unmodifiable(_deliveryIssues);
+
   // Cached WiFi list (per active device) so the WiFi card shows instantly and
   // refreshes in the background instead of reloading blank on every expand.
   Map<String, dynamic>? _wifiCache;
@@ -88,6 +108,7 @@ class TankService extends ChangeNotifier {
     mobileUrl = prefs.getString(_kMobileUrl) ?? defaultMobileUrl;
     directMode = prefs.getBool(_kDirectMode) ?? false;
     directIp   = prefs.getString(_kDirectIp) ?? '';
+    await loadDeliveryIssues();
   }
 
   // Legacy compat used by old startup path
@@ -230,6 +251,7 @@ class TankService extends ChangeNotifier {
       if (_disposed) return;
       if (s != null) {
         status = s;
+        _checkCmdAck();
         _checkMotorStateChange();
         if (!connected) connected = true;
         error = null;
@@ -274,6 +296,7 @@ class TankService extends ChangeNotifier {
         if (raw.containsKey('oh_state') || raw.containsKey('ug_state')) {
           _lastRawStatus = raw;
           status = Status.fromJson(_applyPending(Map<String, dynamic>.from(raw)));
+          _checkCmdAck();
           connected = true; // backend reachable + has device data
           connecting = false;
           fetchVersion(); // web app version (WS handler would otherwise skip it)
@@ -316,6 +339,7 @@ class TankService extends ChangeNotifier {
             final raw = jsonDecode(data as String) as Map<String, dynamic>;
             _lastRawStatus = raw; // store pre-pending snapshot
             status = Status.fromJson(_applyPending(raw));
+            _checkCmdAck();
             _checkMotorStateChange();
             if (!connected) {
               connected = true;
@@ -405,6 +429,10 @@ class TankService extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _wifiPollTimer?.cancel();
+    _ohAckTimer?.cancel();
+    _ugAckTimer?.cancel();
+    _ohFailTimer?.cancel();
+    _ugFailTimer?.cancel();
     disconnect();
     super.dispose();
   }
@@ -750,6 +778,127 @@ class TankService extends ChangeNotifier {
     }
   }
 
+  // ── Motor command feedback ────────────────────────────────────────────────
+
+  /// Begin tracking a motor command. [isOH] selects the tank, [on] is true for
+  /// a start request, false for a stop/cancel. Enters the "sending" state and
+  /// arms a 5s ack timer.
+  void _beginMotorCmd(bool isOH, bool on) {
+    if (isOH) {
+      _ohAckTimer?.cancel();
+      _ohFailTimer?.cancel();
+      ohCmdFailed = false;
+      ohCmdSending = true;
+      _ohCmdOn = on;
+      _ohAckTimer = Timer(_ackTimeout, () => _onAckTimeout(true));
+    } else {
+      _ugAckTimer?.cancel();
+      _ugFailTimer?.cancel();
+      ugCmdFailed = false;
+      ugCmdSending = true;
+      _ugCmdOn = on;
+      _ugAckTimer = Timer(_ackTimeout, () => _onAckTimeout(false));
+    }
+    notifyListeners();
+  }
+
+  /// Called after every status update. Clears the "sending" flag once the
+  /// controller acknowledges the command (buzzer/motor reflects the request).
+  void _checkCmdAck() {
+    final s = status;
+    if (s == null) return;
+    if (ohCmdSending) {
+      final acked = _ohCmdOn ? (s.ohMotor || s.ohBuzzer) : (!s.ohMotor && !s.ohBuzzer);
+      if (acked) {
+        _ohAckTimer?.cancel();
+        ohCmdSending = false;
+      }
+    }
+    if (ugCmdSending) {
+      final acked = _ugCmdOn ? (s.ugMotor || s.ugBuzzer) : (!s.ugMotor && !s.ugBuzzer);
+      if (acked) {
+        _ugAckTimer?.cancel();
+        ugCmdSending = false;
+      }
+    }
+  }
+
+  /// Fired when no ack arrives within the timeout: mark failed, log it, notify,
+  /// and auto-clear the banner after 10s.
+  void _onAckTimeout(bool isOH) {
+    if (isOH) {
+      if (!ohCmdSending) return;
+      ohCmdSending = false;
+      ohCmdFailed = true;
+      _logDeliveryIssue('OH', _ohCmdOn);
+      _ohFailTimer?.cancel();
+      _ohFailTimer = Timer(_failClearAfter, () { ohCmdFailed = false; notifyListeners(); });
+    } else {
+      if (!ugCmdSending) return;
+      ugCmdSending = false;
+      ugCmdFailed = true;
+      _logDeliveryIssue('UG', _ugCmdOn);
+      _ugFailTimer?.cancel();
+      _ugFailTimer = Timer(_failClearAfter, () { ugCmdFailed = false; notifyListeners(); });
+    }
+    NotificationService.showMotorNotification(
+      title: '${isOH ? 'OH' : 'UG'} command not delivered',
+      body: 'The controller did not acknowledge. Please try again.',
+    );
+    notifyListeners();
+  }
+
+  /// Manually dismiss a failed-delivery banner.
+  void clearCmdFailed(bool isOH) {
+    if (isOH) {
+      _ohFailTimer?.cancel();
+      ohCmdFailed = false;
+    } else {
+      _ugFailTimer?.cancel();
+      ugCmdFailed = false;
+    }
+    notifyListeners();
+  }
+
+  // ── Delivery-issue local log ──────────────────────────────────────────────
+
+  Future<void> loadDeliveryIssues() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getStringList(_kDeliveryLog) ?? [];
+    _deliveryIssues = raw
+        .map((s) {
+          try { return DeliveryIssue.fromJson(jsonDecode(s) as Map<String, dynamic>); }
+          catch (_) { return null; }
+        })
+        .whereType<DeliveryIssue>()
+        .toList();
+    notifyListeners();
+  }
+
+  Future<void> _logDeliveryIssue(String motor, bool start) async {
+    _deliveryIssues.insert(0, DeliveryIssue(
+      time: DateTime.now(),
+      motor: motor,
+      start: start,
+      deviceName: currentDevice?.displayName ?? '',
+    ));
+    if (_deliveryIssues.length > 50) {
+      _deliveryIssues = _deliveryIssues.sublist(0, 50);
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      _kDeliveryLog,
+      _deliveryIssues.map((e) => jsonEncode(e.toJson())).toList(),
+    );
+  }
+
+  Future<void> clearDeliveryIssues() async {
+    _deliveryIssues = [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kDeliveryLog);
+    notifyListeners();
+  }
+
   /// Check if motor states changed and fire notifications.
   void _checkMotorStateChange() {
     final s = status;
@@ -1081,43 +1230,16 @@ class TankService extends ChangeNotifier {
   }
 
   Future<void> sendControl(Map<String, dynamic> cmd) async {
-    // Optimistic UI: reflect motor ON/OFF immediately so the button responds
-    // without waiting for the next status round-trip from the device.
-    //
-    // When buzzer mode is enabled the motor doesn't start right away — it first
-    // enters a buzzer countdown (the button shows CANCEL). In that case we must
-    // NOT force the motor "on", or we'd skip the CANCEL state; we let the real
-    // status drive it. OFF/cancel always clears both immediately.
-    final buzzerMode = status?.buzzerDelay == true;
+    // Motor commands drive the feedback state machine: enter the "sending"
+    // state (spinner) until the controller acknowledges via its status. A 5s
+    // no-ack timeout marks the command failed and logs a delivery issue.
+    // We deliberately do NOT optimistically flip the motor/buzzer flags here —
+    // the real controller status drives the CANCEL / countdown / running UI.
     switch (cmd['cmd'] as String? ?? '') {
-      case 'oh_on':
-        // Instant feedback: in buzzer mode show CANCEL (buzzer countdown),
-        // otherwise show the motor running.
-        if (buzzerMode) {
-          setPendingSetting('oh_buzzer', true, seconds: 8);
-        } else {
-          setPendingSetting('oh_motor', true, seconds: 10);
-        }
-        break;
-      case 'oh_off':
-        setPendingSetting('oh_motor', false, seconds: 8);
-        setPendingSetting('oh_buzzer', false, seconds: 8);
-        // Clear the shared buzzer flag too, otherwise the legacy "both motors
-        // blink" fallback would briefly light up the OTHER motor's CANCEL state.
-        if (!(status?.ugBuzzer ?? false)) setPendingSetting('buzzer_active', false, seconds: 8);
-        break;
-      case 'ug_on':
-        if (buzzerMode) {
-          setPendingSetting('ug_buzzer', true, seconds: 8);
-        } else {
-          setPendingSetting('ug_motor', true, seconds: 10);
-        }
-        break;
-      case 'ug_off':
-        setPendingSetting('ug_motor', false, seconds: 8);
-        setPendingSetting('ug_buzzer', false, seconds: 8);
-        if (!(status?.ohBuzzer ?? false)) setPendingSetting('buzzer_active', false, seconds: 8);
-        break;
+      case 'oh_on':  _beginMotorCmd(true,  true);  break;
+      case 'oh_off': _beginMotorCmd(true,  false); break;
+      case 'ug_on':  _beginMotorCmd(false, true);  break;
+      case 'ug_off': _beginMotorCmd(false, false); break;
     }
     // ── Direct mode: translate commands to controller HTTP endpoints ──────
     if (directMode && _directService != null) {

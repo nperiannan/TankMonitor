@@ -445,6 +445,18 @@ int getPendingStartCountdown(bool* isOH) {
     return -1;
 }
 
+int getOHStartCountdown() {
+    if (!ohMotorStartPending) return 0;
+    long rem = (long)MOTOR_START_BUZZER_DELAY_MS - (long)(millis() - ohMotorPendingStart);
+    return rem > 0 ? (int)((rem + 999) / 1000) : 0;
+}
+
+int getUGStartCountdown() {
+    if (!ugMotorStartPending) return 0;
+    long rem = (long)MOTOR_START_BUZZER_DELAY_MS - (long)(millis() - ugMotorPendingStart);
+    return rem > 0 ? (int)((rem + 999) / 1000) : 0;
+}
+
 // ---------------------------------------------------------------------------
 //  Power-cut recovery + heartbeat
 // ---------------------------------------------------------------------------

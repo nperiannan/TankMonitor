@@ -36,14 +36,15 @@ type fcmServiceAccount struct {
 }
 
 var (
-	fcmSA        *fcmServiceAccount
-	fcmKey       *rsa.PrivateKey
-	fcmTokenMu   sync.Mutex
-	fcmToken     string
-	fcmTokenExp  time.Time
-	fcmEnabled   bool
-	fcmInitOnce  sync.Once
+	fcmSA       *fcmServiceAccount
+	fcmKey      *rsa.PrivateKey
+	fcmTokenMu  sync.Mutex
+	fcmToken    string
+	fcmTokenExp time.Time
+	fcmEnabled  bool
+	fcmInitOnce sync.Once
 )
+
 // initFCM loads the service-account file once. Safe to call repeatedly.
 func initFCM() {
 	fcmInitOnce.Do(func() {
@@ -266,7 +267,6 @@ func deviceDisplayName(mac string) string {
 	}
 	return name
 }
-
 
 // sendPushToToken delivers one notification. Returns whether the token is stale
 // (UNREGISTERED / invalid) so the caller can prune it.

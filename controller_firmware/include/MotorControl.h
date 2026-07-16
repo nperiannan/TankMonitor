@@ -46,4 +46,9 @@ bool isUGBuzzerPending();
 // none is pending. *isOH is set true when OH is pending, false when UG.
 int getPendingStartCountdown(bool* isOH);
 
+// Per-motor buzzer-delay countdown remaining seconds (0 when not counting).
+// Rounded up so the app's progress bar stays visible until the motor starts.
+int getOHStartCountdown();
+int getUGStartCountdown();
+
 #endif // MOTOR_CONTROL_H

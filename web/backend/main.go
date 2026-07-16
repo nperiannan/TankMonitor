@@ -14,7 +14,7 @@ func main() {
 	// Init subsystems in order
 	initDB()
 	initAuth()
-	initFCM() // optional push notifications (no-op unless FCM_CREDENTIALS set)
+	initFCM()         // optional push notifications (no-op unless FCM_CREDENTIALS set)
 	otaLoadFromDisk() // restore any firmware staged before this run
 	go startMQTT()
 	go startGitHubPoller() // auto-pull controller_firmware releases from GitHub
