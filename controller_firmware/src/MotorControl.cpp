@@ -171,6 +171,23 @@ void autoControlOHMotor() {
         }
     }
 
+    // --- Tank FULL safety stop (overflow protection) ---
+    // FULL is the physical max, so stop immediately — bypass the min-run
+    // hysteresis (mirrors the UG float-switch behaviour where FULL stops at
+    // once). Scheduled runs keep their existing immunity; a manual run is
+    // honoured only when manualAutoStop is enabled.
+    if (ohTankState == TANK_STATE_FULL && ohMotorRunning
+        && ohMotorSource != MOTOR_SRC_SCHEDULED
+        && (ohMotorSource != MOTOR_SRC_MANUAL || manualAutoStop)) {
+        Log(INFO, "[Motor] OH " + String(ohMotorSource == MOTOR_SRC_MANUAL ? "MANUAL" : "AUTO")
+                  + " OFF – tank FULL (safety)");
+        ohMotorStartPending = false;
+        stopMotorBuzzer();
+        energiseOHRelay(false, REASON_AUTO_FULL);
+        ohMotorSource = MOTOR_SRC_NONE;
+        return;
+    }
+
     // --- Hysteresis: don't stop motor within MOTOR_MIN_RUN_MS ---
     if (ohMotorRunning && (millis() - ohMotorStartedMs < MOTOR_MIN_RUN_MS)) return;
 
@@ -301,7 +318,15 @@ void processPendingMotorStarts() {
         ohMotorStartPending = false;
         stopMotorBuzzer();
         if (ohMotorSource == MOTOR_SRC_MANUAL || ohMotorSource == MOTOR_SRC_SCHEDULED) {
-            energiseOHRelay(true, ohPendingReason);
+            // Don't energise into an already-FULL OH tank when auto-stop is on —
+            // it would only run for one loop before the safety stop fires.
+            if (ohMotorSource == MOTOR_SRC_MANUAL && manualAutoStop
+                && ohTankState == TANK_STATE_FULL) {
+                Log(INFO, "[Motor] OH MANUAL start cancelled – tank already FULL");
+                ohMotorSource = MOTOR_SRC_NONE;
+            } else {
+                energiseOHRelay(true, ohPendingReason);
+            }
         } else {
             // Auto start: only proceed if still at/below start level and not display-only
             if (ohTankState != TANK_STATE_UNKNOWN && ohTankState <= ohStartLevel && !ohDisplayOnly) {

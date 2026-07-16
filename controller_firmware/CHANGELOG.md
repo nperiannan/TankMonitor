@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.6.1] — 2026-07-16
+
+### Fixed
+- **OH motor kept running when the tank was already FULL** — the overhead auto-stop was gated behind the 60 s min-run hysteresis, so a manual (or auto) OH run at FULL kept pumping for up to a minute (the UG float switch stops immediately, which is why UG stopped but OH didn't). FULL is now treated as an immediate overflow-safety stop for OH, bypassing the hysteresis and mirroring UG. A manual OH start into an already-FULL tank is cancelled outright (when auto-stop is enabled) instead of briefly energising the relay. Scheduled runs keep their existing immunity.
+
+---
+
 ## [2.6.0] — 2026-07-16
 
 ### Added
