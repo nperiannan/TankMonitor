@@ -51,4 +51,9 @@ int getPendingStartCountdown(bool* isOH);
 int getOHStartCountdown();
 int getUGStartCountdown();
 
+// Reason code (HistReason) of the most recent OH/UG relay change. Published in
+// the status JSON so cloud-derived history can show the real cause.
+uint8_t getOHLastReason();
+uint8_t getUGLastReason();
+
 #endif // MOTOR_CONTROL_H

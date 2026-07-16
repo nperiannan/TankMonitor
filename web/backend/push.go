@@ -155,6 +155,38 @@ type motorFields struct {
 	TxLost  bool   `json:"tx_lost"`
 	OHState string `json:"oh_state"`
 	UGState string `json:"ug_state"`
+	OHRsn   int    `json:"oh_rsn"`
+	UGRsn   int    `json:"ug_rsn"`
+}
+
+// reasonCodeStr maps the controller's HistReason code (published as oh_rsn /
+// ug_rsn in the status JSON) to the same human string the controller and app
+// use. Returns "" for unknown/absent codes so callers can fall back to guessing.
+func reasonCodeStr(code int) string {
+	switch code {
+	case 1:
+		return "Auto (level)"
+	case 2:
+		return "Manual (app)"
+	case 3:
+		return "Manual (web)"
+	case 4:
+		return "Manual (touch)"
+	case 5:
+		return "Scheduled"
+	case 6:
+		return "Auto (tank full)"
+	case 7:
+		return "Max runtime"
+	case 8:
+		return "LoRa signal lost"
+	case 9:
+		return "Power cut"
+	case 10:
+		return "Power restored"
+	default:
+		return ""
+	}
 }
 
 // ── Reason inference ────────────────────────────────────────────────────────
@@ -237,15 +269,23 @@ func detectAndPushEdges(mac string, prevRaw, newRaw []byte) {
 	name := deviceDisplayName(mac)
 
 	if prev.OHMotor != cur.OHMotor {
+		reason := reasonCodeStr(cur.OHRsn)
+		if reason == "" {
+			reason = inferReason(mac, "OH")
+		}
 		recordHistoryEvent(mac, "OH Motor "+onOffWord(cur.OHMotor),
-			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, inferReason(mac, "OH"))
+			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, reason)
 		if fcmEnabled {
 			pushToDeviceOwners(mac, name, "OH motor turned "+onOffWord(cur.OHMotor))
 		}
 	}
 	if prev.UGMotor != cur.UGMotor {
+		reason := reasonCodeStr(cur.UGRsn)
+		if reason == "" {
+			reason = inferReason(mac, "UG")
+		}
 		recordHistoryEvent(mac, "UG Motor "+onOffWord(cur.UGMotor),
-			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, inferReason(mac, "UG"))
+			cur.OHState, cur.UGState, cur.OHMotor, cur.UGMotor, reason)
 		if fcmEnabled {
 			pushToDeviceOwners(mac, name, "UG motor turned "+onOffWord(cur.UGMotor))
 		}

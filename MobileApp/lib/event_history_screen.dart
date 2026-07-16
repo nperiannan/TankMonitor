@@ -164,9 +164,20 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   ({String text, Color color}) _reason(_Run r) {
     final s = r.reason.toLowerCase();
-    if (s.contains('manual')) return (text: 'Manual', color: _blue);
+    if (s.contains('manual')) {
+      if (s.contains('touch') || s.contains('controller')) return (text: 'Manual · Controller', color: _blue);
+      if (s.contains('web')) return (text: 'Manual · Web', color: _blue);
+      if (s.contains('app')) return (text: 'Manual · App', color: _blue);
+      return (text: 'Manual', color: _blue);
+    }
     if (s.contains('schedul')) return (text: 'Scheduled', color: _orange);
-    if (r.reason.isEmpty) return (text: 'Auto', color: _orange);
+    if (s.contains('full')) return (text: 'Auto · Tank full', color: _green);
+    if (s.contains('auto') || s.contains('level')) return (text: 'Auto · Level', color: _green);
+    if (s.contains('max')) return (text: 'Max runtime', color: _red);
+    if (s.contains('lora') || s.contains('signal')) return (text: 'Signal lost', color: _red);
+    if (s.contains('power restore')) return (text: 'Power restored', color: _green);
+    if (s.contains('power')) return (text: 'Power cut', color: _red);
+    if (r.reason.isEmpty) return (text: 'Auto', color: _green);
     return (text: r.reason, color: _orange);
   }
 

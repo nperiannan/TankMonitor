@@ -13,6 +13,11 @@
 static uint8_t       ohPendingReason = REASON_NONE;
 static uint8_t       ugPendingReason = REASON_NONE;
 
+// Reason of the most recent OH/UG relay change (published in the status JSON so
+// cloud-derived history can show the real cause instead of guessing).
+static uint8_t       ohLastReason = REASON_NONE;
+static uint8_t       ugLastReason = REASON_NONE;
+
 // Pending motor start state (for buzzer-delay feature)
 static bool          ohMotorStartPending = false;
 static unsigned long ohMotorPendingStart = 0;
@@ -92,6 +97,7 @@ void saveMotorConfig() {
 static void energiseOHRelay(bool on, uint8_t reason) {
     digitalWrite(OH_RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
     ohMotorRunning = on;
+    ohLastReason = reason;
     if (on) ohMotorStartedMs = millis();
     // Persist motor intent for power failure recovery
     preferences.begin(NVS_MOTOR_NS, false);
@@ -104,6 +110,7 @@ static void energiseOHRelay(bool on, uint8_t reason) {
 static void energiseUGRelay(bool on, uint8_t reason) {
     digitalWrite(UG_RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
     ugMotorRunning = on;
+    ugLastReason = reason;
     if (on) ugMotorStartedMs = millis();
     preferences.begin(NVS_MOTOR_NS, false);
     preferences.putBool(NVS_KEY_UG_MOTOR_INTENT, on);
@@ -456,6 +463,9 @@ int getUGStartCountdown() {
     long rem = (long)MOTOR_START_BUZZER_DELAY_MS - (long)(millis() - ugMotorPendingStart);
     return rem > 0 ? (int)((rem + 999) / 1000) : 0;
 }
+
+uint8_t getOHLastReason() { return ohLastReason; }
+uint8_t getUGLastReason() { return ugLastReason; }
 
 // ---------------------------------------------------------------------------
 //  Power-cut recovery + heartbeat

@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.6.0] — 2026-07-16
+
+### Added
+- **Motor-change reason in MQTT status** — the status payload now includes `oh_rsn` / `ug_rsn` (the `HistReason` code of the most recent OH/UG relay change: Auto level, Manual app/web/touch, Scheduled, Tank full, Max runtime, LoRa lost, Power cut/restore). The cloud backend uses these to label derived history events accurately instead of guessing "Manual" vs "Auto/Scheduled" from timing.
+
+---
+
 ## [2.5.0] — 2026-07-20
 
 ### Added

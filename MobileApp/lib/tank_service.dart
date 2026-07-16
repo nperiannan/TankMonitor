@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.11.0';
+const mobileAppVersion = '2.12.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -76,7 +76,14 @@ class TankService extends ChangeNotifier {
   bool _ugCmdOn = false;
   Timer? _ohAckTimer, _ugAckTimer;
   Timer? _ohFailTimer, _ugFailTimer;
-  static const _ackTimeout  = Duration(seconds: 5);
+  // While a command is being watched, a late status confirming the desired
+  // state retracts a (false) "not delivered" banner + its logged issue.
+  DateTime? _ohWatchUntil, _ugWatchUntil;
+  DeliveryIssue? _ohLastIssue, _ugLastIssue;
+  // Cloud round-trips (phone → backend → MQTT → controller → status back) can
+  // easily take >5s, so give the controller a generous window to acknowledge.
+  static const _ackTimeout  = Duration(seconds: 12);
+  static const _watchWindow = Duration(seconds: 25);
   static const _failClearAfter = Duration(seconds: 10);
 
   // Locally-recorded delivery failures (no ack from controller).
@@ -782,14 +789,17 @@ class TankService extends ChangeNotifier {
 
   /// Begin tracking a motor command. [isOH] selects the tank, [on] is true for
   /// a start request, false for a stop/cancel. Enters the "sending" state and
-  /// arms a 5s ack timer.
+  /// arms the ack timer.
   void _beginMotorCmd(bool isOH, bool on) {
+    final until = DateTime.now().add(_watchWindow);
     if (isOH) {
       _ohAckTimer?.cancel();
       _ohFailTimer?.cancel();
       ohCmdFailed = false;
       ohCmdSending = true;
       _ohCmdOn = on;
+      _ohWatchUntil = until;
+      _ohLastIssue = null;
       _ohAckTimer = Timer(_ackTimeout, () => _onAckTimeout(true));
     } else {
       _ugAckTimer?.cancel();
@@ -797,47 +807,92 @@ class TankService extends ChangeNotifier {
       ugCmdFailed = false;
       ugCmdSending = true;
       _ugCmdOn = on;
+      _ugWatchUntil = until;
+      _ugLastIssue = null;
       _ugAckTimer = Timer(_ackTimeout, () => _onAckTimeout(false));
     }
     notifyListeners();
   }
 
-  /// Called after every status update. Clears the "sending" flag once the
-  /// controller acknowledges the command (buzzer/motor reflects the request).
+  // True once the controller's status reflects the requested end-state.
+  bool _cmdReached(Status s, bool on) =>
+      on ? (s.ohMotor || s.ohBuzzer) : (!s.ohMotor && !s.ohBuzzer);
+  bool _cmdReachedUg(Status s, bool on) =>
+      on ? (s.ugMotor || s.ugBuzzer) : (!s.ugMotor && !s.ugBuzzer);
+
+  /// Called after every status update. Clears "sending" once the controller
+  /// acknowledges, and retracts a false "not delivered" banner (and its logged
+  /// issue) if a late status confirms the command actually landed.
   void _checkCmdAck() {
     final s = status;
     if (s == null) return;
-    if (ohCmdSending) {
-      final acked = _ohCmdOn ? (s.ohMotor || s.ohBuzzer) : (!s.ohMotor && !s.ohBuzzer);
-      if (acked) {
+    final now = DateTime.now();
+
+    if (_ohWatchUntil != null) {
+      if (_cmdReached(s, _ohCmdOn)) {
         _ohAckTimer?.cancel();
+        final wasFailed = ohCmdFailed;
         ohCmdSending = false;
+        ohCmdFailed = false;
+        _ohWatchUntil = null;
+        if (wasFailed && _ohLastIssue != null) {
+          _retractDeliveryIssue(_ohLastIssue!);
+          _ohLastIssue = null;
+        }
+      } else if (now.isAfter(_ohWatchUntil!)) {
+        _ohWatchUntil = null;
       }
     }
-    if (ugCmdSending) {
-      final acked = _ugCmdOn ? (s.ugMotor || s.ugBuzzer) : (!s.ugMotor && !s.ugBuzzer);
-      if (acked) {
+
+    if (_ugWatchUntil != null) {
+      if (_cmdReachedUg(s, _ugCmdOn)) {
         _ugAckTimer?.cancel();
+        final wasFailed = ugCmdFailed;
         ugCmdSending = false;
+        ugCmdFailed = false;
+        _ugWatchUntil = null;
+        if (wasFailed && _ugLastIssue != null) {
+          _retractDeliveryIssue(_ugLastIssue!);
+          _ugLastIssue = null;
+        }
+      } else if (now.isAfter(_ugWatchUntil!)) {
+        _ugWatchUntil = null;
       }
     }
   }
 
-  /// Fired when no ack arrives within the timeout: mark failed, log it, notify,
-  /// and auto-clear the banner after 10s.
+  /// Fired when no ack arrives within the timeout. Does a final status check
+  /// first; only if the state still hasn't changed does it mark failed, log it,
+  /// and notify. The banner auto-clears after 10s (and can be retracted sooner
+  /// if a late status confirms delivery).
   void _onAckTimeout(bool isOH) {
+    final s = status;
     if (isOH) {
       if (!ohCmdSending) return;
+      if (s != null && _cmdReached(s, _ohCmdOn)) {
+        ohCmdSending = false;
+        _ohWatchUntil = null;
+        notifyListeners();
+        return;
+      }
       ohCmdSending = false;
       ohCmdFailed = true;
-      _logDeliveryIssue('OH', _ohCmdOn);
+      _ohLastIssue = _makeDeliveryIssue('OH', _ohCmdOn);
+      _logDeliveryIssue(_ohLastIssue!);
       _ohFailTimer?.cancel();
       _ohFailTimer = Timer(_failClearAfter, () { ohCmdFailed = false; notifyListeners(); });
     } else {
       if (!ugCmdSending) return;
+      if (s != null && _cmdReachedUg(s, _ugCmdOn)) {
+        ugCmdSending = false;
+        _ugWatchUntil = null;
+        notifyListeners();
+        return;
+      }
       ugCmdSending = false;
       ugCmdFailed = true;
-      _logDeliveryIssue('UG', _ugCmdOn);
+      _ugLastIssue = _makeDeliveryIssue('UG', _ugCmdOn);
+      _logDeliveryIssue(_ugLastIssue!);
       _ugFailTimer?.cancel();
       _ugFailTimer = Timer(_failClearAfter, () { ugCmdFailed = false; notifyListeners(); });
     }
@@ -875,16 +930,28 @@ class TankService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _logDeliveryIssue(String motor, bool start) async {
-    _deliveryIssues.insert(0, DeliveryIssue(
-      time: DateTime.now(),
-      motor: motor,
-      start: start,
-      deviceName: currentDevice?.displayName ?? '',
-    ));
+  DeliveryIssue _makeDeliveryIssue(String motor, bool start) => DeliveryIssue(
+        time: DateTime.now(),
+        motor: motor,
+        start: start,
+        deviceName: currentDevice?.displayName ?? '',
+      );
+
+  Future<void> _logDeliveryIssue(DeliveryIssue issue) async {
+    _deliveryIssues.insert(0, issue);
     if (_deliveryIssues.length > 50) {
       _deliveryIssues = _deliveryIssues.sublist(0, 50);
     }
+    await _persistDeliveryIssues();
+  }
+
+  Future<void> _retractDeliveryIssue(DeliveryIssue issue) async {
+    _deliveryIssues.remove(issue);
+    await _persistDeliveryIssues();
+    notifyListeners();
+  }
+
+  Future<void> _persistDeliveryIssues() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(
       _kDeliveryLog,
@@ -1231,11 +1298,14 @@ class TankService extends ChangeNotifier {
 
   Future<void> sendControl(Map<String, dynamic> cmd) async {
     // Motor commands drive the feedback state machine: enter the "sending"
-    // state (spinner) until the controller acknowledges via its status. A 5s
+    // state (spinner) until the controller acknowledges via its status. A
     // no-ack timeout marks the command failed and logs a delivery issue.
     // We deliberately do NOT optimistically flip the motor/buzzer flags here —
     // the real controller status drives the CANCEL / countdown / running UI.
-    switch (cmd['cmd'] as String? ?? '') {
+    final cmdStr = cmd['cmd'] as String? ?? '';
+    final isMotorCmd = cmdStr == 'oh_on' || cmdStr == 'oh_off' ||
+                       cmdStr == 'ug_on' || cmdStr == 'ug_off';
+    switch (cmdStr) {
       case 'oh_on':  _beginMotorCmd(true,  true);  break;
       case 'oh_off': _beginMotorCmd(true,  false); break;
       case 'ug_on':  _beginMotorCmd(false, true);  break;
@@ -1283,16 +1353,18 @@ class TankService extends ChangeNotifier {
             // handled separately by WiFi/History screens.
             break;
         }
-        if (!ok && c != 'get_logs') {
+        if (!ok && c != 'get_logs' && !isMotorCmd) {
           error = 'Command failed';
           notifyListeners();
           Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
         }
         _pollOnce(); // refresh status immediately after a command
       } catch (e) {
-        error = e.toString();
-        notifyListeners();
-        Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+        if (!isMotorCmd) {
+          error = e.toString();
+          notifyListeners();
+          Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+        }
       }
       return;
     }
@@ -1305,7 +1377,7 @@ class TankService extends ChangeNotifier {
         Uri.parse('$_activeUrl${_devicePath('/api/control', 'control')}'),
         headers: headers,
         body: jsonEncode(cmd),
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 15));
       if (res.statusCode == 401) {
         unauthorized = true;
         authToken = null;
@@ -1313,15 +1385,17 @@ class TankService extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      if (res.statusCode != 200) {
+      if (res.statusCode != 200 && !isMotorCmd) {
         error = 'Control failed (${res.statusCode}): ${res.body}';
         notifyListeners();
         Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
       }
     } catch (e) {
-      error = e.toString();
-      notifyListeners();
-      Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+      if (!isMotorCmd) {
+        error = e.toString();
+        notifyListeners();
+        Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
+      }
     }
   }
 }
