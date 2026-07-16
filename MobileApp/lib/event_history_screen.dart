@@ -1,22 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'tank_service.dart';
+import 'theme_data.dart';
 
-// ── Exact palette from the approved mockup (T1★ / G2★) ───────────────────────
-const _cBg = Color(0xFF0B1219);
-const _cCard = Color(0xFF151E29);
-const _cCard2 = Color(0xFF1B2735);
-const _cBd = Color(0xFF26333F);
-const _cTxt = Color(0xFFE6EDF3);
-const _cLbl = Color(0xFF8B98A6);
-const _cGreen = Color(0xFF00E676);
-const _cPurple = Color(0xFF7C4DFF);
-const _cBlue = Color(0xFF1E88E5);
-const _cOrange = Color(0xFFFFB74D);
-const _cRed = Color(0xFFFF5252);
-const _cRunFg = Color(0xFF08130A);
-
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+// Accent colours are theme-independent (they read well on light & dark).
+const _purple = Color(0xFF7C4DFF);
+const _runFg = Color(0xFF08130A);
 
 /// A single motor run built from an ON event and its following OFF (or null if
 /// the motor is still running).
@@ -36,6 +25,8 @@ class _Run {
   }
 }
 
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 class EventHistoryScreen extends StatefulWidget {
   final bool initialGraph;
   const EventHistoryScreen({super.key, this.initialGraph = false});
@@ -49,6 +40,18 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   int _totalCount = 0;
   bool _loading = true;
   bool _showGraph = false;
+
+  // Theme-aware colour accessors (match the rest of the app, follow light/dark).
+  Color get _bg => scaffoldBg(context);
+  Color get _card => cardBg(context);
+  Color get _card2 => subtleBg(context);
+  Color get _bd => cardBd(context);
+  Color get _txt => textColor(context);
+  Color get _lbl => labelColor(context);
+  Color get _green => accentGreen(context);
+  Color get _blue => accentBlue(context);
+  Color get _orange => kOrange;
+  Color get _red => accentRed(context);
 
   @override
   void initState() {
@@ -78,15 +81,12 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: _cCard,
-        title: const Text('Clear all history?', style: TextStyle(color: _cTxt, fontSize: 16)),
-        content: Text('This will erase all $_totalCount events.',
-            style: const TextStyle(color: _cLbl, fontSize: 13)),
+        backgroundColor: _card,
+        title: Text('Clear all history?', style: TextStyle(color: _txt, fontSize: 16)),
+        content: Text('This will erase all $_totalCount events.', style: TextStyle(color: _lbl, fontSize: 13)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Clear', style: TextStyle(color: _cRed))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Clear', style: TextStyle(color: _red))),
         ],
       ),
     );
@@ -163,37 +163,36 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   ({String text, Color color}) _reason(_Run r) {
     final s = r.reason.toLowerCase();
-    if (s.contains('manual')) return (text: 'Manual', color: _cBlue);
-    if (s.contains('schedul')) return (text: 'Scheduled', color: _cOrange);
-    if (r.reason.isEmpty) return (text: 'Auto', color: _cOrange);
-    return (text: r.reason, color: _cOrange);
+    if (s.contains('manual')) return (text: 'Manual', color: _blue);
+    if (s.contains('schedul')) return (text: 'Scheduled', color: _orange);
+    if (r.reason.isEmpty) return (text: 'Auto', color: _orange);
+    return (text: r.reason, color: _orange);
   }
 
   @override
   Widget build(BuildContext context) {
     final runs = _runs();
     return Scaffold(
-      backgroundColor: _cBg,
+      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _cBg,
+        backgroundColor: _bg,
         elevation: 0,
-        leading: const BackButton(color: _cLbl),
+        leading: BackButton(color: _lbl),
         titleSpacing: 0,
-        title: const Text('History',
-            style: TextStyle(color: _cTxt, fontSize: 16, fontWeight: FontWeight.w600)),
+        title: Text('History', style: TextStyle(color: _txt, fontSize: 16, fontWeight: FontWeight.w600)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: _cRed, size: 20),
+            icon: Icon(Icons.delete_outline, color: _red, size: 20),
             onPressed: runs.isEmpty ? null : _clearHistory,
             tooltip: 'Clear history',
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: _cGreen))
+          ? Center(child: CircularProgressIndicator(color: _green))
           : RefreshIndicator(
-              color: _cGreen,
-              backgroundColor: _cCard,
+              color: _green,
+              backgroundColor: _card,
               onRefresh: () => _load(),
               child: ListView(
                 padding: const EdgeInsets.all(12),
@@ -201,9 +200,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: _cCard,
+                      color: _card,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _cBd),
+                      border: Border.all(color: _bd),
                     ),
                     child: Column(children: [
                       _headerRow(),
@@ -220,11 +219,11 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   Widget _headerRow() => Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('HISTORY',
-              style: TextStyle(color: _cLbl, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+          Text('HISTORY',
+              style: TextStyle(color: _lbl, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
           Container(
             padding: const EdgeInsets.all(3),
-            decoration: BoxDecoration(color: _cCard2, borderRadius: BorderRadius.circular(9)),
+            decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(9)),
             child: Row(children: [
               _toggleBtn('Table', !_showGraph, () => setState(() => _showGraph = false)),
               _toggleBtn('Graph', _showGraph, () => setState(() => _showGraph = true)),
@@ -237,11 +236,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         onTap: onTap,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          decoration: BoxDecoration(
-              color: on ? _cBlue : Colors.transparent, borderRadius: BorderRadius.circular(7)),
+          decoration: BoxDecoration(color: on ? _blue : Colors.transparent, borderRadius: BorderRadius.circular(7)),
           child: Text(label,
               style: TextStyle(
-                  color: on ? Colors.white : _cLbl,
+                  color: on ? Colors.white : _lbl,
                   fontSize: 11,
                   fontWeight: on ? FontWeight.w600 : FontWeight.w400)),
         ),
@@ -250,25 +248,24 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   Widget _stat(String v, String k, Color? vColor) => Expanded(
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-          decoration: BoxDecoration(color: _cCard2, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(10)),
           child: Column(children: [
-            Text(v, style: TextStyle(color: vColor ?? _cTxt, fontSize: 15, fontWeight: FontWeight.w800)),
+            Text(v, style: TextStyle(color: vColor ?? _txt, fontSize: 15, fontWeight: FontWeight.w800)),
             const SizedBox(height: 1),
-            Text(k, textAlign: TextAlign.center,
-                style: const TextStyle(color: _cLbl, fontSize: 8.5, letterSpacing: 0.4)),
+            Text(k, textAlign: TextAlign.center, style: TextStyle(color: _lbl, fontSize: 8.5, letterSpacing: 0.4)),
           ]),
         ),
       );
 
   Widget _empty(String msg) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 44),
-        child: Center(child: Text(msg, style: const TextStyle(color: _cLbl, fontSize: 14))),
+        child: Center(child: Text(msg, style: TextStyle(color: _lbl, fontSize: 14))),
       );
 
   Widget _legend(Color c, String t) => Row(mainAxisSize: MainAxisSize.min, children: [
         Container(width: 10, height: 10, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(3))),
         const SizedBox(width: 4),
-        Text(t, style: const TextStyle(color: _cLbl, fontSize: 10)),
+        Text(t, style: TextStyle(color: _lbl, fontSize: 10)),
       ]);
 
   // ── TABLE (T1★ Enhanced) ─────────────────────────────────────────────────
@@ -310,7 +307,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         const SizedBox(width: 8),
         _stat(_durLong(ohSec + ugSec), 'TOTAL RUN', null),
         const SizedBox(width: 8),
-        _stat(_durShort(ohSec), 'OH · UG ${_durShort(ugSec)}', _cGreen),
+        _stat(_durShort(ohSec), 'OH · UG ${_durShort(ugSec)}', _green),
       ]),
       for (final k in order) ...[
         _dateHeader(groups[k]!, nowTs),
@@ -325,20 +322,19 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       padding: const EdgeInsets.fromLTRB(2, 14, 2, 6),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(_dayHeader(dayRuns.first.onTs),
-            style: const TextStyle(color: _cLbl, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
-        Text('${dayRuns.length} runs · ${_durLong(subtotal)}',
-            style: const TextStyle(color: _cLbl, fontSize: 10)),
+            style: TextStyle(color: _lbl, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.8)),
+        Text('${dayRuns.length} runs · ${_durLong(subtotal)}', style: TextStyle(color: _lbl, fontSize: 10)),
       ]),
     );
   }
 
   Widget _runRow(_Run r, int maxDur, int nowTs) {
     final isOH = r.motor == 'OH';
-    final c = isOH ? _cGreen : _cPurple;
+    final c = isOH ? _green : _purple;
     final dur = r.durSec(nowTs);
     final rsn = _reason(r);
     return Container(
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: _cBd))),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: _bd))),
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(children: [
         Container(width: 3, height: 36, decoration: BoxDecoration(color: c, borderRadius: BorderRadius.circular(2))),
@@ -353,34 +349,30 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                   TextSpan(children: [
                     TextSpan(
                         text: r.running ? '${_hhmm(r.onTs)} → ' : '${_hhmm(r.onTs)} → ${_hhmm(r.offTs!)}',
-                        style: const TextStyle(color: _cTxt, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                        style: TextStyle(color: _txt, fontSize: 12.5, fontWeight: FontWeight.w600)),
                     if (r.running)
-                      const TextSpan(text: 'now',
-                          style: TextStyle(color: _cGreen, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                      TextSpan(text: 'now', style: TextStyle(color: _green, fontSize: 12.5, fontWeight: FontWeight.w600)),
                   ]),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
             ]),
             const SizedBox(height: 4),
-            r.running
-                ? _pill('● RUNNING', _cGreen, solid: true, bold: true)
-                : _pill(rsn.text, rsn.color),
+            r.running ? _pill('● RUNNING', _green, solid: true, bold: true) : _pill(rsn.text, rsn.color),
             const SizedBox(height: 5),
             ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
                 value: (dur / maxDur).clamp(0.02, 1.0),
                 minHeight: 4,
-                backgroundColor: _cCard2,
+                backgroundColor: _card2,
                 color: c,
               ),
             ),
           ]),
         ),
         const SizedBox(width: 10),
-        Text(_durShort(dur),
-            style: TextStyle(color: r.running ? _cGreen : _cTxt, fontSize: 13, fontWeight: FontWeight.w800)),
+        Text(_durShort(dur), style: TextStyle(color: r.running ? _green : _txt, fontSize: 13, fontWeight: FontWeight.w800)),
       ]),
     );
   }
@@ -398,7 +390,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
             BoxDecoration(color: solid ? color : color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
         child: Text(text,
             style: TextStyle(
-                color: solid ? _cRunFg : color, fontSize: 9, fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
+                color: solid ? _runFg : color, fontSize: 9, fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
       );
 
   // ── GRAPH (G2★ Enhanced) ─────────────────────────────────────────────────
@@ -438,11 +430,11 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       ]),
       const SizedBox(height: 12),
       Row(children: [
-        _legend(_cGreen, 'OH'),
+        _legend(_green, 'OH'),
         const SizedBox(width: 14),
-        _legend(_cPurple, 'UG'),
+        _legend(_purple, 'UG'),
         const Spacer(),
-        const Text('minutes', style: TextStyle(color: _cLbl, fontSize: 10)),
+        Text('minutes', style: TextStyle(color: _lbl, fontSize: 10)),
       ]),
       const SizedBox(height: 10),
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -454,7 +446,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               Positioned(
                 top: plotH * (1 - g / maxY) - 6,
                 right: 4,
-                child: Text(g.toInt().toString(), style: const TextStyle(color: _cLbl, fontSize: 8)),
+                child: Text(g.toInt().toString(), style: TextStyle(color: _lbl, fontSize: 8)),
               ),
           ]),
         ),
@@ -463,13 +455,13 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
             height: plotH,
             child: Stack(clipBehavior: Clip.none, children: [
               for (final g in grids)
-                Positioned(top: plotH * (1 - g / maxY), left: 0, right: 0, child: const _DashedLine(color: _cBd)),
+                Positioned(top: plotH * (1 - g / maxY), left: 0, right: 0, child: _DashedLine(color: _bd)),
               if (avgMin > 0 && avgMin <= maxY)
                 Positioned(
                   top: plotH * (1 - avgMin / maxY),
                   left: 0,
                   right: 0,
-                  child: _DashedLine(color: _cOrange, label: 'avg ${avgMin.round()}'),
+                  child: _DashedLine(color: _orange, label: 'avg ${avgMin.round()}', labelBg: _card),
                 ),
               Positioned.fill(
                 child: Row(
@@ -503,8 +495,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                   if (i == 0 || _dayKey(show[i].onTs) != _dayKey(show[i - 1].onTs))
                     Text(_dateShort(show[i].onTs),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: _cTxt, fontSize: 8, fontWeight: FontWeight.w600)),
-                  Text(_hhmm(show[i].onTs), style: const TextStyle(color: _cLbl, fontSize: 8)),
+                        style: TextStyle(color: _txt, fontSize: 8, fontWeight: FontWeight.w600)),
+                  Text(_hhmm(show[i].onTs), style: TextStyle(color: _lbl, fontSize: 8)),
                 ]),
               ),
           ]),
@@ -527,10 +519,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
             begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFB39DFF), Color(0xFF651FFF)]);
     final barH = (plotH * (durMin / maxY)).clamp(3.0, plotH - 18);
     return Container(
-      decoration: dayStart ? const BoxDecoration(border: Border(left: BorderSide(color: _cBd))) : null,
+      decoration: dayStart ? BoxDecoration(border: Border(left: BorderSide(color: _bd))) : null,
       child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
         Text('${durMin.round()}',
-            style: TextStyle(color: isOH ? _cGreen : _cPurple, fontSize: 9, fontWeight: FontWeight.w800)),
+            style: TextStyle(color: isOH ? _green : _purple, fontSize: 9, fontWeight: FontWeight.w800)),
         const SizedBox(height: 3),
         FractionallySizedBox(
           widthFactor: 0.62,
@@ -548,7 +540,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 class _DashedLine extends StatelessWidget {
   final Color color;
   final String? label;
-  const _DashedLine({required this.color, this.label});
+  final Color? labelBg;
+  const _DashedLine({required this.color, this.label, this.labelBg});
 
   @override
   Widget build(BuildContext context) {
@@ -561,7 +554,7 @@ class _DashedLine extends StatelessWidget {
             right: 0,
             top: -13,
             child: Container(
-              color: _cCard,
+              color: labelBg,
               padding: const EdgeInsets.symmetric(horizontal: 3),
               child: Text(label!, style: TextStyle(color: color, fontSize: 8)),
             ),

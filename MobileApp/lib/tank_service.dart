@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.10.0';
+const mobileAppVersion = '2.10.1';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
