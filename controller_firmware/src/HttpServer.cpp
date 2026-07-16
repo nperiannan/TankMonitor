@@ -900,6 +900,10 @@ static void handleStatus() {
     doc["buzzerActive"]      = isBuzzerActive();
     doc["ohBuzzer"]          = isOHBuzzerPending();
     doc["ugBuzzer"]          = isUGBuzzerPending();
+    doc["ohCd"]              = getOHStartCountdown();
+    doc["ugCd"]              = getUGStartCountdown();
+    doc["ohRsn"]             = (int)getOHLastReason();
+    doc["ugRsn"]             = (int)getUGLastReason();
     doc["txFw"]              = TRANSMITTER_FW_VERSION;
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();

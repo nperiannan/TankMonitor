@@ -4,6 +4,14 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.6.2] — 2026-07-16
+
+### Fixed
+- **Slow motor-command acknowledgement** — oh_on/oh_off/ug_on/ug_off (and the buzzer-delay countdown finishing) previously only appeared in the next periodic MQTT status publish, up to `MQTT_PUBLISH_MS` (5s) later. Combined with cloud round-trip latency this could push the app's ack detection past its timeout, producing false "Not delivered" errors. Motor commands and buzzer-countdown completions now trigger an immediate status publish, matching the existing OTA/reboot pattern.
+- **Direct-mode (local WiFi) buzzer countdown bar showed as already empty** — the local `/status` HTTP endpoint (used when connected directly to the controller, bypassing the cloud) never included `ohCd`/`ugCd` (buzzer seconds remaining) or `ohRsn`/`ugRsn`, added only to the MQTT status in v2.5.0/2.6.0. Added to `/status` so the app's countdown bar and reason data work in direct mode too.
+
+---
+
 ## [2.6.1] — 2026-07-16
 
 ### Fixed

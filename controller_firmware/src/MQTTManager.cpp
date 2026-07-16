@@ -142,10 +142,14 @@ static void processPendingMQTT() {
     }
     const char* cmd = doc["cmd"] | "";
 
-    if      (strcmp(cmd, "oh_on")  == 0) { turnOnOHMotor(REASON_MANUAL_APP);  }
-    else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(REASON_MANUAL_APP); }
-    else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor(REASON_MANUAL_APP);  }
-    else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(REASON_MANUAL_APP); }
+    // Motor on/off commands publish an immediate status update right after
+    // being processed (instead of waiting for the next periodic tick, up to
+    // MQTT_PUBLISH_MS later) so the app's ack detection is near-instant —
+    // same pattern already used below for OTA/reboot commands.
+    if      (strcmp(cmd, "oh_on")  == 0) { turnOnOHMotor(REASON_MANUAL_APP);  publishMQTTStatus(); }
+    else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(REASON_MANUAL_APP); publishMQTTStatus(); }
+    else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor(REASON_MANUAL_APP);  publishMQTTStatus(); }
+    else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(REASON_MANUAL_APP); publishMQTTStatus(); }
     else if (strcmp(cmd, "sched_add") == 0) {
         int slot = -1;
         for (int i = 0; i < MAX_SCHEDULES; i++) {

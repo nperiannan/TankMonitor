@@ -5,6 +5,7 @@
 #include "Buzzer.h"
 #include "History.h"
 #include "LoRaManager.h"
+#include "MQTTManager.h"
 #include <TimeLib.h>
 #include <esp_system.h>
 
@@ -335,6 +336,10 @@ void processPendingMotorStarts() {
                 ohMotorSource = MOTOR_SRC_NONE;
             }
         }
+        // Immediate status push — the buzzer-delay countdown just ended (started,
+        // cancelled, or blocked), so the app shouldn't have to wait up to
+        // MQTT_PUBLISH_MS for the next periodic tick to find out.
+        publishMQTTStatus();
     }
 
     if (ugMotorStartPending && now - ugMotorPendingStart >= MOTOR_START_BUZZER_DELAY_MS) {
@@ -349,6 +354,7 @@ void processPendingMotorStarts() {
                 ugMotorSource = MOTOR_SRC_NONE;
             }
         }
+        publishMQTTStatus();
     }
 
     // --- Boot recovery: check NVS motor intent after first valid LoRa + UG data ---
