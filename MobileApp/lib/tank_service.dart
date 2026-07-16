@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.9.1';
+const mobileAppVersion = '2.9.2';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -257,6 +257,31 @@ class TankService extends ChangeNotifier {
 
   // ── WebSocket ────────────────────────────────────────────────────────────
 
+  /// Fetches the backend's last-known device status over REST so the dashboard
+  /// can show data and "Live" immediately, without waiting for the WS handshake.
+  Future<void> _primeStatusFromBackend() async {
+    if (directMode) return;
+    try {
+      final headers = <String, String>{};
+      if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+      final res = await http.get(
+        Uri.parse('$_activeUrl${_devicePath('/api/status', 'status')}'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 5));
+      if (_disposed || connected) return; // WS already took over
+      if (res.statusCode == 200) {
+        final raw = jsonDecode(res.body) as Map<String, dynamic>;
+        if (raw.containsKey('oh_state') || raw.containsKey('ug_state')) {
+          _lastRawStatus = raw;
+          status = Status.fromJson(_applyPending(Map<String, dynamic>.from(raw)));
+          connected = true; // backend reachable + has device data
+          connecting = false;
+          notifyListeners();
+        }
+      }
+    } catch (_) {}
+  }
+
   void connect(String url) {
     _reconnecting = false;
     _closeChannel();
@@ -264,6 +289,9 @@ class TankService extends ChangeNotifier {
     webAppVersion = null; // reset on reconnect
     connecting = true; // show "Connecting…" instead of a false "Offline"
     notifyListeners();
+    // Immediately pull the last-known status from the backend so the dashboard
+    // shows data (and "Live") right away instead of waiting for the WebSocket.
+    _primeStatusFromBackend();
 
     var wsUrl = _activeUrl
         .replaceFirst(RegExp(r'^http://'), 'ws://')
@@ -1059,6 +1087,9 @@ class TankService extends ChangeNotifier {
       case 'oh_off':
         setPendingSetting('oh_motor', false, seconds: 8);
         setPendingSetting('oh_buzzer', false, seconds: 8);
+        // Clear the shared buzzer flag too, otherwise the legacy "both motors
+        // blink" fallback would briefly light up the OTHER motor's CANCEL state.
+        if (!(status?.ugBuzzer ?? false)) setPendingSetting('buzzer_active', false, seconds: 8);
         break;
       case 'ug_on':
         if (!buzzerMode) setPendingSetting('ug_motor', true, seconds: 10);
@@ -1066,6 +1097,7 @@ class TankService extends ChangeNotifier {
       case 'ug_off':
         setPendingSetting('ug_motor', false, seconds: 8);
         setPendingSetting('ug_buzzer', false, seconds: 8);
+        if (!(status?.ohBuzzer ?? false)) setPendingSetting('buzzer_active', false, seconds: 8);
         break;
     }
     // ── Direct mode: translate commands to controller HTTP endpoints ──────

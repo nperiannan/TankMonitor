@@ -34,12 +34,12 @@ class AppHaptics {
     HapticFeedback.mediumImpact();
   }
 
-  /// Strong, long vibration for motor ON/OFF and cancel actions.
+  /// Short, firm vibration for motor ON/OFF and cancel actions.
   static Future<void> motor() async {
     await _ensure();
     if (_hasVibrator) {
       try {
-        Vibration.vibrate(duration: 600, amplitude: _hasAmplitude ? 255 : -1);
+        Vibration.vibrate(duration: 220, amplitude: _hasAmplitude ? 255 : -1);
         return;
       } catch (_) {}
     }

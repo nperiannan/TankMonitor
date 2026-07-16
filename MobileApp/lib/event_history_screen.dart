@@ -176,12 +176,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     );
   }
 
-  /// Sum motor runtime (minutes) per day per motor from on/off event pairs.
-  /// Returns oldest→newest days with {date, oh, ug} minute totals.
-  List<Map<String, dynamic>> _runtimePerDay() {
+  /// Individual motor runs: {ts (start epoch), dur (minutes), motor}.
+  List<Map<String, dynamic>> _runList() {
     final runs = _pairRecords(_records).where((it) => it['run'] == true);
-    final byDay = <String, Map<String, double>>{};
-    final order = <String>[];
+    final out = <Map<String, dynamic>>[];
     for (final it in runs) {
       final on = it['on'] as Map<String, dynamic>?;
       final off = it['off'] as Map<String, dynamic>?;
@@ -189,72 +187,92 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       final onTs = on['ts'] as int? ?? 0;
       final offTs = off['ts'] as int? ?? 0;
       final durMin = (offTs - onTs) / 60.0;
-      if (durMin <= 0) continue;
-      final day = _dayKey(onTs);
-      if (day.isEmpty) continue;
-      if (!byDay.containsKey(day)) { byDay[day] = {'OH': 0, 'UG': 0}; order.add(day); }
-      final motor = it['motor'] as String;
-      byDay[day]![motor] = (byDay[day]![motor] ?? 0) + durMin;
+      if (durMin <= 0 || onTs <= 0) continue;
+      out.add({'ts': onTs, 'dur': durMin, 'motor': it['motor'] as String});
     }
-    return order.map((d) => {'date': d, 'oh': byDay[d]!['OH']!, 'ug': byDay[d]!['UG']!}).toList();
+    out.sort((a, b) => (a['ts'] as int).compareTo(b['ts'] as int));
+    return out;
   }
 
-  String _dayKey(int ts) {
-    if (ts <= 0) return '';
-    final d = DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
+  String _fmtAxisTime(double x, {bool multiDay = true}) {
+    final d = DateTime.fromMillisecondsSinceEpoch(x.toInt() * 1000).toLocal();
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mm = d.minute.toString().padLeft(2, '0');
+    return multiDay ? '${d.day}/${d.month}\n$hh:$mm' : '$hh:$mm';
   }
 
   Widget _buildGraph() {
-    final data = _runtimePerDay();
-    if (data.isEmpty) {
+    final runs = _runList();
+    if (runs.isEmpty) {
       return Center(
-        child: Text('No motor runs to chart', style: TextStyle(color: labelColor(context), fontSize: 14)),
+        child: Text('No motor runs to chart yet', style: TextStyle(color: labelColor(context), fontSize: 14)),
       );
     }
-    // Keep the most recent 14 days for readability.
-    final days = data.length > 14 ? data.sublist(data.length - 14) : data;
+    final ohColor = accentGreen(context);
+    const ugColor = Color(0xFF7c4dff);
+    double minX = (runs.first['ts'] as int).toDouble();
+    double maxX = (runs.last['ts'] as int).toDouble();
     double maxY = 0;
-    for (final d in days) {
-      final t = (d['oh'] as double) + (d['ug'] as double);
-      if (t > maxY) maxY = t;
+    for (final r in runs) {
+      if ((r['dur'] as double) > maxY) maxY = r['dur'] as double;
     }
-    maxY = maxY <= 0 ? 10 : (maxY * 1.15);
+    if (maxX <= minX) maxX = minX + 3600; // avoid a zero-width span
+    final pad = (maxX - minX) * 0.05;
+    minX -= pad;
+    maxX += pad;
+    maxY = maxY <= 0 ? 5 : maxY * 1.2;
+    final multiDay = (maxX - minX) > 86400;
+
+    final spots = runs.map((r) {
+      final c = (r['motor'] == 'OH') ? ohColor : ugColor;
+      return ScatterSpot(
+        (r['ts'] as int).toDouble(),
+        r['dur'] as double,
+        dotPainter: FlDotCirclePainter(color: c, radius: 5),
+      );
+    }).toList();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(8, 16, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Motor runtime per day (minutes)',
+          Text('Motor runs — duration over time',
               style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
           Row(children: [
-            _legendDot(accentGreen(context), 'OH'),
+            _legendDot(ohColor, 'OH'),
             const SizedBox(width: 14),
-            _legendDot(const Color(0xFF7c4dff), 'UG'),
+            _legendDot(ugColor, 'UG'),
+            const Spacer(),
+            Text('y = minutes', style: TextStyle(color: labelColor(context), fontSize: 10)),
           ]),
           const SizedBox(height: 12),
           Expanded(
-            child: BarChart(
-              BarChartData(
-                maxY: maxY,
-                alignment: BarChartAlignment.spaceAround,
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    getTooltipItem: (group, gi, rod, ri) {
-                      final d = days[group.x.toInt()];
-                      return BarTooltipItem(
-                        '${d['date']}\nOH ${(d['oh'] as double).toStringAsFixed(0)}m\nUG ${(d['ug'] as double).toStringAsFixed(0)}m',
-                        TextStyle(color: textColor(context), fontSize: 11),
+            child: ScatterChart(
+              ScatterChartData(
+                minX: minX, maxX: maxX, minY: 0, maxY: maxY,
+                scatterSpots: spots,
+                scatterTouchData: ScatterTouchData(
+                  enabled: true,
+                  touchTooltipData: ScatterTouchTooltipData(
+                    getTooltipItems: (spot) {
+                      final d = DateTime.fromMillisecondsSinceEpoch(spot.x.toInt() * 1000).toLocal();
+                      final hh = d.hour.toString().padLeft(2, '0');
+                      final mm = d.minute.toString().padLeft(2, '0');
+                      return ScatterTooltipItem(
+                        '${d.day}/${d.month} $hh:$mm\n${spot.y.toStringAsFixed(1)} min',
+                        textStyle: TextStyle(color: textColor(context), fontSize: 11),
                       );
                     },
                   ),
                 ),
                 titlesData: FlTitlesData(
                   leftTitles: AxisTitles(
+                    axisNameWidget: Text('min', style: TextStyle(color: labelColor(context), fontSize: 9)),
+                    axisNameSize: 14,
                     sideTitles: SideTitles(
-                      showTitles: true, reservedSize: 32, interval: (maxY / 4).ceilToDouble(),
+                      showTitles: true, reservedSize: 30, interval: (maxY / 4).ceilToDouble(),
                       getTitlesWidget: (v, _) => Text(v.toInt().toString(),
                           style: TextStyle(color: labelColor(context), fontSize: 9)),
                     ),
@@ -263,37 +281,24 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                   topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true, reservedSize: 28,
+                      showTitles: true, reservedSize: multiDay ? 34 : 24,
+                      interval: (maxX - minX) / 4,
                       getTitlesWidget: (v, _) {
-                        final i = v.toInt();
-                        if (i < 0 || i >= days.length) return const SizedBox();
+                        if (v <= minX || v >= maxX) return const SizedBox();
                         return Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: Text(days[i]['date'] as String,
+                          child: Text(_fmtAxisTime(v, multiDay: multiDay),
+                              textAlign: TextAlign.center,
                               style: TextStyle(color: labelColor(context), fontSize: 8)),
                         );
                       },
                     ),
                   ),
                 ),
-                gridData: FlGridData(show: true, drawVerticalLine: false,
-                    getDrawingHorizontalLine: (_) => FlLine(color: cardBd(context), strokeWidth: 0.5)),
+                gridData: FlGridData(show: true,
+                    getDrawingHorizontalLine: (_) => FlLine(color: cardBd(context), strokeWidth: 0.5),
+                    getDrawingVerticalLine: (_) => FlLine(color: cardBd(context), strokeWidth: 0.3)),
                 borderData: FlBorderData(show: false),
-                barGroups: List.generate(days.length, (i) {
-                  final oh = days[i]['oh'] as double;
-                  final ug = days[i]['ug'] as double;
-                  return BarChartGroupData(x: i, barRods: [
-                    BarChartRodData(
-                      toY: oh + ug,
-                      width: 14,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(3)),
-                      rodStackItems: [
-                        BarChartRodStackItem(0, oh, accentGreen(context)),
-                        BarChartRodStackItem(oh, oh + ug, const Color(0xFF7c4dff)),
-                      ],
-                    ),
-                  ]);
-                }),
               ),
             ),
           ),
