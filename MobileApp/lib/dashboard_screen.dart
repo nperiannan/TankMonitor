@@ -720,20 +720,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('OH Motor Start Level', style: TextStyle(color: textColor(context), fontSize: 13)),
-                              DropdownButton<int>(
+                              Text('Start Level', style: TextStyle(color: textColor(context), fontSize: 13)),
+                              _SegSelector<int>(
                                 value: s?.ohStartLevel ?? 1,
-                                isDense: true,
-                                dropdownColor: cardBg(context),
-                                style: TextStyle(color: textColor(context), fontSize: 13),
-                                underline: const SizedBox(),
-                                items: const [
-                                  DropdownMenuItem(value: 1, child: Text('EMPTY')),
-                                  DropdownMenuItem(value: 2, child: Text('LOW')),
-                                  DropdownMenuItem(value: 3, child: Text('HALF')),
-                                ],
+                                options: const {'EMPTY': 1, 'LOW': 2, 'HALF': 3},
                                 onChanged: s != null
-                                  ? (v) { if (v != null) svc.sendControl({'cmd': 'set_setting', 'key': 'oh_start_level', 'value': v}); }
+                                  ? (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_start_level', 'value': v})
                                   : null,
                               ),
                             ],
@@ -745,20 +737,12 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('OH Motor Stop Level', style: TextStyle(color: textColor(context), fontSize: 13)),
-                              DropdownButton<int>(
+                              Text('Stop Level', style: TextStyle(color: textColor(context), fontSize: 13)),
+                              _SegSelector<int>(
                                 value: s?.ohStopLevel ?? 4,
-                                isDense: true,
-                                dropdownColor: cardBg(context),
-                                style: TextStyle(color: textColor(context), fontSize: 13),
-                                underline: const SizedBox(),
-                                items: const [
-                                  DropdownMenuItem(value: 2, child: Text('LOW')),
-                                  DropdownMenuItem(value: 3, child: Text('HALF')),
-                                  DropdownMenuItem(value: 4, child: Text('FULL')),
-                                ],
+                                options: const {'LOW': 2, 'HALF': 3, 'FULL': 4},
                                 onChanged: s != null
-                                  ? (v) { if (v != null) svc.sendControl({'cmd': 'set_setting', 'key': 'oh_stop_level', 'value': v}); }
+                                  ? (v) => svc.sendControl({'cmd': 'set_setting', 'key': 'oh_stop_level', 'value': v})
                                   : null,
                               ),
                             ],
@@ -770,7 +754,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('OH Max Runtime (min)', style: TextStyle(color: textColor(context), fontSize: 13)),
+                              Text('Max Runtime (min)', style: TextStyle(color: textColor(context), fontSize: 13)),
                               SizedBox(
                                 width: 70,
                                 child: TextField(
@@ -804,20 +788,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text('LCD Backlight', style: TextStyle(color: textColor(context), fontSize: 13)),
-                              DropdownButton<int>(
+                              _SegSelector<int>(
                                 value: s?.lcdBlMode ?? 0,
-                                isDense: true,
-                                dropdownColor: cardBg(context),
-                                style: TextStyle(color: textColor(context), fontSize: 13),
-                                underline: const SizedBox(),
-                                items: const [
-                                  DropdownMenuItem(value: 0, child: Text('Auto')),
-                                  DropdownMenuItem(value: 1, child: Text('On')),
-                                  DropdownMenuItem(value: 2, child: Text('Off')),
-                                ],
-                                onChanged: s != null
-                                  ? (v) { if (v != null) svc.setLcdMode(v); }
-                                  : null,
+                                options: const {'Auto': 0, 'On': 1, 'Off': 2},
+                                onChanged: s != null ? (v) => svc.setLcdMode(v) : null,
                               ),
                             ],
                           ),
@@ -844,9 +818,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                       ]),
                     ),
                     const SizedBox(height: 10),
-                    // ── Device Management (single column: Sync NTP, WiFi, Reboot, Factory Reset) ──
+                    // ── Quick Actions (2×2 grid) ──
                     _SectionCard(
-                      title: 'DEVICE MANAGEMENT',
+                      title: 'QUICK ACTIONS',
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Column(children: [
@@ -857,9 +831,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                               enabled: s != null,
                               onTap: () => svc.sendControl({'cmd': 'sync_ntp'}),
                             ),
-                          ]),
-                          const SizedBox(height: 8),
-                          Row(children: [
+                            const SizedBox(width: 10),
                             _ActionButton(
                               label: 'WiFi',
                               icon: Icons.wifi,
@@ -869,18 +841,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                               ),
                             ),
                           ]),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Row(children: [
                             _ActionButton(
                               label: 'Reboot',
                               icon: Icons.power_settings_new,
-                              danger: true,
+                              accent: _orange,
                               enabled: s != null,
                               onTap: () => _confirmReboot(context, svc),
                             ),
-                          ]),
-                          const SizedBox(height: 8),
-                          Row(children: [
+                            const SizedBox(width: 10),
                             _ActionButton(
                               label: 'Factory Reset',
                               icon: Icons.restore,
@@ -891,13 +861,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ]),
                           if (!svc.directMode && svc.directService != null)
                             Padding(
-                              padding: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.only(top: 8),
                               child: Text('Using device IP: ${s?.mgmtIp ?? "—"}',
                                   style: TextStyle(color: labelColor(context), fontSize: 10)),
                             ),
                           if (svc.directService == null)
                             Padding(
-                              padding: const EdgeInsets.only(top: 6),
+                              padding: const EdgeInsets.only(top: 8),
                               child: Text('Waiting for device IP…',
                                   style: TextStyle(color: labelColor(context), fontSize: 10)),
                             ),
@@ -1993,21 +1963,64 @@ class _ActionButton extends StatelessWidget {
   final bool danger;
   final bool enabled;
   final VoidCallback onTap;
+  final Color? accent;
   const _ActionButton({required this.label, required this.icon, required this.onTap,
-    this.danger = false, this.enabled = true});
+    this.danger = false, this.enabled = true, this.accent});
 
   @override
-  Widget build(BuildContext context) => Expanded(
-    child: OutlinedButton.icon(
-      onPressed: enabled ? () { AppHaptics.tap(); onTap(); } : null,
-      icon: Icon(icon, size: 16),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: danger ? _red : textColor(context).withOpacity(0.7),
-        side: BorderSide(color: danger ? _red : cardBd(context)),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+  Widget build(BuildContext context) {
+    final Color? ac = accent ?? (danger ? _red : null);
+    return Expanded(
+      child: SizedBox(
+        height: 46,
+        child: FilledButton.tonalIcon(
+          onPressed: enabled ? () { AppHaptics.tap(); onTap(); } : null,
+          icon: Icon(icon, size: 16),
+          label: Text(label, overflow: TextOverflow.ellipsis, maxLines: 1),
+          style: FilledButton.styleFrom(
+            backgroundColor: ac != null ? ac.withValues(alpha: 0.12) : subtleBg(context),
+            foregroundColor: ac ?? textColor(context),
+            disabledBackgroundColor: subtleBg(context).withValues(alpha: 0.4),
+            disabledForegroundColor: labelColor(context).withValues(alpha: 0.5),
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: ac != null ? ac.withValues(alpha: 0.45) : cardBd(context)),
+            ),
+          ),
+        ),
       ),
-    ),
+    );
+  }
+}
+
+// ─── Segmented pill selector (Settings level / LCD choices) ──────────────────
+class _SegSelector<T> extends StatelessWidget {
+  final T value;
+  final Map<String, T> options; // label -> value
+  final ValueChanged<T>? onChanged;
+  const _SegSelector({required this.value, required this.options, this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(3),
+    decoration: BoxDecoration(color: subtleBg(context), borderRadius: BorderRadius.circular(9)),
+    child: Row(mainAxisSize: MainAxisSize.min, children: options.entries.map((e) {
+      final on = e.value == value;
+      return GestureDetector(
+        onTap: onChanged == null ? null : () { AppHaptics.tap(); onChanged!(e.value); },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: on ? accentBlue(context) : Colors.transparent,
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Text(e.key, style: TextStyle(
+            color: on ? Colors.white : labelColor(context),
+            fontSize: 11, fontWeight: on ? FontWeight.w600 : FontWeight.w400)),
+        ),
+      );
+    }).toList()),
   );
 }
 
