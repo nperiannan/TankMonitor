@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.9.2';
+const mobileAppVersion = '2.9.3';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -276,6 +276,8 @@ class TankService extends ChangeNotifier {
           status = Status.fromJson(_applyPending(Map<String, dynamic>.from(raw)));
           connected = true; // backend reachable + has device data
           connecting = false;
+          fetchVersion(); // web app version (WS handler would otherwise skip it)
+          fetchMe();      // isAdmin + username
           notifyListeners();
         }
       }
