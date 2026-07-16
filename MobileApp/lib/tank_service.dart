@@ -19,7 +19,7 @@ const _kDirectIp   = 'direct_ip';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.9.3';
+const mobileAppVersion = '2.9.4';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -793,6 +793,13 @@ class TankService extends ChangeNotifier {
   Map<String, dynamic> _applyPending(Map<String, dynamic> json) {
     final now = DateTime.now();
     _pendingSettings.removeWhere((_, v) => now.isAfter(v.expiresAt));
+    // Hand control back to the device as soon as it confirms a change:
+    // drop any override whose value the raw status already matches.
+    _pendingSettings.removeWhere((k, v) => json.containsKey(k) && json[k] == v.value);
+    // Once the motor is actually running, the buzzer/countdown phase is over —
+    // drop a lingering buzzer override so it doesn't keep showing CANCEL.
+    if (json['oh_motor'] == true) _pendingSettings.remove('oh_buzzer');
+    if (json['ug_motor'] == true) _pendingSettings.remove('ug_buzzer');
     if (_pendingSettings.isEmpty) return json;
     final patched = Map<String, dynamic>.from(json);
     for (final entry in _pendingSettings.entries) {
@@ -1084,7 +1091,13 @@ class TankService extends ChangeNotifier {
     final buzzerMode = status?.buzzerDelay == true;
     switch (cmd['cmd'] as String? ?? '') {
       case 'oh_on':
-        if (!buzzerMode) setPendingSetting('oh_motor', true, seconds: 10);
+        // Instant feedback: in buzzer mode show CANCEL (buzzer countdown),
+        // otherwise show the motor running.
+        if (buzzerMode) {
+          setPendingSetting('oh_buzzer', true, seconds: 8);
+        } else {
+          setPendingSetting('oh_motor', true, seconds: 10);
+        }
         break;
       case 'oh_off':
         setPendingSetting('oh_motor', false, seconds: 8);
@@ -1094,7 +1107,11 @@ class TankService extends ChangeNotifier {
         if (!(status?.ugBuzzer ?? false)) setPendingSetting('buzzer_active', false, seconds: 8);
         break;
       case 'ug_on':
-        if (!buzzerMode) setPendingSetting('ug_motor', true, seconds: 10);
+        if (buzzerMode) {
+          setPendingSetting('ug_buzzer', true, seconds: 8);
+        } else {
+          setPendingSetting('ug_motor', true, seconds: 10);
+        }
         break;
       case 'ug_off':
         setPendingSetting('ug_motor', false, seconds: 8);
