@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const webVersion = "2.3.0"
+const webVersion = "2.4.0"
 
 func main() {
 	// Init subsystems in order
@@ -84,6 +84,7 @@ func main() {
 	mux.HandleFunc("/api/ota/trigger", requireAuth(handleLegacyOtaTrigger))
 	mux.HandleFunc("/api/ota/rollback", requireAuth(handleLegacyOtaRollback))
 	mux.HandleFunc("/api/logs", requireAuth(handleLegacyLogs))
+	mux.HandleFunc("/api/history", requireAuth(handleLegacyHistory))
 
 	// ---------------------------------------------------------------------------
 	// Admin
@@ -143,6 +144,10 @@ func deviceRouter(w http.ResponseWriter, r *http.Request) {
 		handleDeviceLogs(w, r)
 	case sub == "wifi":
 		handleDeviceWifi(w, r)
+	case sub == "heartbeat":
+		handleDeviceHeartbeat(w, r)
+	case sub == "delivery-issues":
+		handleDeviceDeliveryIssues(w, r)
 	case sub == "history":
 		handleDeviceHistory(w, r)
 	case sub == "ota/status":

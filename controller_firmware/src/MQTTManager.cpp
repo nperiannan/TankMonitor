@@ -34,10 +34,19 @@ static char s_topicStatus[64];
 static char s_topicControl[64];
 static char s_topicLogs[64];
 static char s_topicWifi[64];
+static char s_topicHeartbeat[64];
 static char s_clientId[32];
 
 static unsigned long s_lastPublishMs    = 0;
 static unsigned long s_lastReconnectMs  = 0;
+
+// Heartbeat round-trip health check state (see publishHeartbeatRequest() /
+// "ping" cmd handling below). Detects a broken backend<->broker<->device
+// command path even while status messages keep flowing normally.
+static unsigned long s_lastHeartbeatMs   = 0;
+static uint32_t      s_hbSeq             = 0;
+static uint32_t      s_hbAwaitingSeq     = 0;   // 0 = no request outstanding
+static unsigned long s_hbSentAtMs        = 0;
 static unsigned long s_lastLogPublishMs = 0;
 
 static int  s_portFallback    = MQTT_PORT_FALLBACK;
@@ -97,10 +106,11 @@ static void buildTopicsFromMAC() {
     String macNoDash = macStr;
     macNoDash.replace(":", "");             // "AABBCCDDEEFF"
 
-    snprintf(s_topicStatus,  sizeof(s_topicStatus),  "tm/%s/status",  macStr.c_str());
-    snprintf(s_topicControl, sizeof(s_topicControl), "tm/%s/control", macStr.c_str());
-    snprintf(s_topicLogs,    sizeof(s_topicLogs),    "tm/%s/logs",    macStr.c_str());
-    snprintf(s_topicWifi,    sizeof(s_topicWifi),    "tm/%s/wifi",    macStr.c_str());
+    snprintf(s_topicStatus,    sizeof(s_topicStatus),    "tm/%s/status",  macStr.c_str());
+    snprintf(s_topicControl,   sizeof(s_topicControl),   "tm/%s/control", macStr.c_str());
+    snprintf(s_topicLogs,      sizeof(s_topicLogs),      "tm/%s/logs",    macStr.c_str());
+    snprintf(s_topicWifi,      sizeof(s_topicWifi),      "tm/%s/wifi",    macStr.c_str());
+    snprintf(s_topicHeartbeat, sizeof(s_topicHeartbeat), "tm/%s/hb",      macStr.c_str());
     // Use last 6 hex chars of MAC as a short unique suffix
     snprintf(s_clientId,     sizeof(s_clientId),     "esp32_%s",      macNoDash.substring(6).c_str());
 }
@@ -150,6 +160,20 @@ static void processPendingMQTT() {
     else if (strcmp(cmd, "oh_off") == 0) { turnOffOHMotor(REASON_MANUAL_APP); publishMQTTStatus(); }
     else if (strcmp(cmd, "ug_on")  == 0) { turnOnUGMotor(REASON_MANUAL_APP);  publishMQTTStatus(); }
     else if (strcmp(cmd, "ug_off") == 0) { turnOffUGMotor(REASON_MANUAL_APP); publishMQTTStatus(); }
+    else if (strcmp(cmd, "ping") == 0) {
+        // Reply to the backend's heartbeat ping — completes the round trip
+        // started by publishHeartbeatRequest() below. Acked immediately on
+        // the /hb topic (not /control) so it can't be confused with a normal
+        // command echo.
+        uint32_t seq = doc["seq"] | 0;
+        char ack[48];
+        snprintf(ack, sizeof(ack), "{\"mac\":\"%s\",\"ack_seq\":%u}", WiFi.macAddress().c_str(), (unsigned)seq);
+        s_mqtt.publish(s_topicHeartbeat, ack, false);
+        if (seq != 0 && seq == s_hbAwaitingSeq) {
+            Log(INFO, "[HB] ping acked seq=" + String(seq) + " rtt=" + String(millis() - s_hbSentAtMs) + "ms");
+            s_hbAwaitingSeq = 0;
+        }
+    }
     else if (strcmp(cmd, "sched_add") == 0) {
         int slot = -1;
         for (int i = 0; i < MAX_SCHEDULES; i++) {
@@ -513,6 +537,35 @@ void initMQTT() {
     Log(INFO, "[MQTT] Init. Broker=" + String(s_broker) + ":" + String(s_port) + " (topics built from MAC on first connect)");
 }
 
+// ---------------------------------------------------------------------------
+// Heartbeat — controller-initiated round-trip health check.
+// Publishes a small request on tm/{mac}/hb; the backend replies with a
+// "ping" control command (handled in processPendingMQTT() above), which we
+// ack straight back on the same /hb topic. A completed round trip proves the
+// full backend<->broker<->device command path is alive, not just that this
+// device is publishing status. See web/backend/heartbeat.go for the backend
+// side and CHANGELOG.md for the 2026-07-19 incident that motivated this.
+// ---------------------------------------------------------------------------
+static void publishHeartbeatRequest() {
+    if (!s_mqtt.connected()) return;
+
+    // Warn locally (visible via get_logs) if the previous request never got
+    // a "ping" back within the timeout — mirrors the backend-side check in
+    // checkHeartbeatTimeouts() so either end can catch a broken path.
+    if (s_hbAwaitingSeq != 0 && (millis() - s_hbSentAtMs) > MQTT_HEARTBEAT_ACK_TIMEOUT_MS) {
+        Log(WARN, "[HB] no ping received for seq=" + String(s_hbAwaitingSeq) + " within " + String(MQTT_HEARTBEAT_ACK_TIMEOUT_MS / 1000) + "s");
+        s_hbAwaitingSeq = 0;
+    }
+
+    s_hbSeq++;
+    s_hbAwaitingSeq = s_hbSeq;
+    s_hbSentAtMs    = millis();
+
+    char req[48];
+    snprintf(req, sizeof(req), "{\"mac\":\"%s\",\"seq\":%u}", WiFi.macAddress().c_str(), (unsigned)s_hbSeq);
+    s_mqtt.publish(s_topicHeartbeat, req, false);
+}
+
 void mqttLoop() {
     if (WiFi.status() != WL_CONNECTED || isAPMode) return;
 
@@ -547,6 +600,12 @@ void mqttLoop() {
     if (now - s_lastLogPublishMs >= 60000UL) {
         s_lastLogPublishMs = now;
         publishMQTTLogs();
+    }
+
+    // Heartbeat round-trip health check — every MQTT_HEARTBEAT_MS
+    if (now - s_lastHeartbeatMs >= MQTT_HEARTBEAT_MS) {
+        s_lastHeartbeatMs = now;
+        publishHeartbeatRequest();
     }
 }
 

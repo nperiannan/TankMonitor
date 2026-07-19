@@ -2,23 +2,23 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import {
-  Alert, Badge, Button, Card, Col, ConfigProvider, Form, Input, InputNumber,
+  Alert, Badge, Button, Card, Col, ConfigProvider, DatePicker, Form, Input, InputNumber,
   Modal, Popconfirm, Progress, Row, Select, Space, Switch, Table, Tag, TimePicker,
   Typography, Upload, theme as antTheme, type TableColumnsType,
 } from 'antd'
 import {
-  WifiOutlined, ClockCircleOutlined,
+  WifiOutlined, ClockCircleOutlined, HistoryOutlined,
   PlusOutlined, DeleteOutlined, ClearOutlined, EditOutlined,
   BulbOutlined, BulbFilled, SyncOutlined, PoweroffOutlined,
   UserOutlined, LockOutlined, LogoutOutlined,
   UploadOutlined, ThunderboltOutlined, RollbackOutlined,
 } from '@ant-design/icons'
 import type { Schedule, Status, ControlCmd, OtaStatus } from './types'
-import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, triggerRollback, fetchDeviceLogs } from './api'
+import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, triggerRollback, fetchDeviceLogs, fetchDeviceHistory, clearDeviceHistory } from './api'
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.2.3'
+const WEB_APP_VERSION = '2.4.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -284,6 +284,10 @@ export default function App() {
   const [deviceLogs,   setDeviceLogs]   = useState<string[]>([])
   const [logsAt,       setLogsAt]       = useState<string | null>(null)
   const [logsLoading,  setLogsLoading]  = useState(false)
+  // History (date-range) state
+  const [historyRecords, setHistoryRecords] = useState<Record<string, unknown>[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyRange,   setHistoryRange]   = useState<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day').startOf('day'), dayjs().endOf('day')])
   // MQTT credential change
   const [mqttPassInput, setMqttPassInput] = useState('')
   const [mqttPassBusy,  setMqttPassBusy]  = useState(false)
@@ -320,6 +324,23 @@ export default function App() {
       .catch((e: Error) => { if (e.message !== 'SESSION_EXPIRED') console.warn('Logs:', e) })
       .finally(() => setLogsLoading(false))
   }, [token])
+
+  const loadHistory = useCallback(() => {
+    if (!token) return
+    setHistoryLoading(true)
+    const [from, to] = historyRange
+    fetchDeviceHistory(token, from.unix(), to.unix())
+      .then((data) => {
+        const parsed = (data.records ?? []).map((r) => {
+          try { return JSON.parse(r) as Record<string, unknown> } catch { return null }
+        }).filter((r): r is Record<string, unknown> => r !== null)
+        setHistoryRecords(parsed)
+      })
+      .catch((e: Error) => { if (e.message !== 'SESSION_EXPIRED') console.warn('History:', e) })
+      .finally(() => setHistoryLoading(false))
+  }, [token, historyRange])
+
+  useEffect(() => { loadHistory() }, [loadHistory])
 
   // ── WebSocket connection ──────────────────────────────────────────────────
   useEffect(() => {
@@ -942,6 +963,47 @@ export default function App() {
             Current firmware: <strong>{s?.fw ?? '—'}</strong>
             {' · '}Rollback reverts to the previous OTA partition on the ESP32.
           </div>
+        </Card>
+
+        {/* ── History (date-range: day / week / month) ── */}
+        <Card
+          size="small"
+          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}><HistoryOutlined style={{ marginRight: 6 }} />History</span>}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          extra={
+            <Popconfirm
+              title="Clear history?"
+              description="Records are archived, not deleted — still retrievable by date range."
+              onConfirm={() => { if (token) clearDeviceHistory(token).then(loadHistory).catch(() => {}) }}
+            >
+              <Button size="small" danger icon={<ClearOutlined />}>Clear</Button>
+            </Popconfirm>
+          }
+        >
+          <Space wrap style={{ marginBottom: 10 }}>
+            <DatePicker.RangePicker
+              size="small"
+              value={historyRange}
+              onChange={(v) => { if (v && v[0] && v[1]) setHistoryRange([v[0], v[1]]) }}
+              allowClear={false}
+            />
+            <Button size="small" onClick={() => setHistoryRange([dayjs().startOf('day'), dayjs().endOf('day')])}>Today</Button>
+            <Button size="small" onClick={() => setHistoryRange([dayjs().subtract(7, 'day').startOf('day'), dayjs().endOf('day')])}>This Week</Button>
+            <Button size="small" onClick={() => setHistoryRange([dayjs().subtract(30, 'day').startOf('day'), dayjs().endOf('day')])}>This Month</Button>
+            <Button size="small" icon={<SyncOutlined spin={historyLoading} />} onClick={loadHistory}>Refresh</Button>
+          </Space>
+          <Table
+            size="small"
+            rowKey={(r) => `${r.ts}-${r.ev}`}
+            loading={historyLoading}
+            dataSource={historyRecords}
+            pagination={{ pageSize: 10, size: 'small' }}
+            columns={[
+              { title: 'Time', dataIndex: 'time', key: 'time', width: 200 },
+              { title: 'Event', dataIndex: 'ev', key: 'ev' },
+              { title: 'Reason', dataIndex: 'rsnStr', key: 'rsnStr' },
+            ]}
+          />
         </Card>
 
         {/* ── Device Logs ── */}

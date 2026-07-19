@@ -4,6 +4,16 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.7.0] — 2026-07-19
+
+### Added
+- **MQTT heartbeat round-trip health check** — the controller now publishes a small request on `tm/{mac}/hb` every `MQTT_HEARTBEAT_MS` (2 min). The backend replies with a `ping` control command, which the controller acks straight back on the same topic. A completed round trip proves the full backend↔broker↔device command path is alive — not just that this device is publishing status, which is the passive signal that failed to catch a ~11 min backend-side MQTT outage on 2026-07-19 (see `web/backend` CHANGELOG / incident notes). If no `ping` arrives within `MQTT_HEARTBEAT_ACK_TIMEOUT_MS` (20 s) of a request, a `[HB]` WARN is logged locally (visible via `get_logs`).
+
+### Changed
+- **WiFi network deletion is now refused for the currently-connected network and for the last remaining saved network** — previously `wifi_delete` (mobile/web/BLE) could remove the SSID currently providing internet/remote access, forcibly disconnecting the device with no way to fix it remotely. `handleRemoveNetwork()` in `WiFiManager.cpp` now logs a WARN and no-ops instead.
+
+---
+
 ## [2.6.2] — 2026-07-16
 
 ### Fixed

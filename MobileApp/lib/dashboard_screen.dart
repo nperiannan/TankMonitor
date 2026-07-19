@@ -8,6 +8,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import 'models.dart';
 import 'tank_service.dart';
 import 'schedule_sheet.dart';
@@ -691,6 +692,45 @@ class _DashboardScreenState extends State<DashboardScreen>
                               ),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                    // ── History (moved here from Settings — Table or Trend Graph) ──
+                    _SectionCard(
+                      title: 'HISTORY',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('Motor & tank event history',
+                                  style: TextStyle(color: labelColor(context), fontSize: 12)),
+                            ),
+                          ),
+                          Row(children: [
+                            _ActionButton(
+                              label: 'Table',
+                              icon: Icons.table_rows,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const EventHistoryScreen(initialGraph: false)),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _ActionButton(
+                              label: 'Trend Graph',
+                              icon: Icons.show_chart,
+                              enabled: true,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                    builder: (_) => const EventHistoryScreen(initialGraph: true)),
+                              ),
+                            ),
+                          ]),
+                        ]),
+                      ),
+                    ),
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -879,45 +919,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                               child: Text('Waiting for device IP…',
                                   style: TextStyle(color: labelColor(context), fontSize: 10)),
                             ),
-                        ]),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // ── History (separate card: Table or Trend Graph) ──
-                    _SectionCard(
-                      title: 'HISTORY',
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text('Motor & tank event history',
-                                  style: TextStyle(color: labelColor(context), fontSize: 12)),
-                            ),
-                          ),
-                          Row(children: [
-                            _ActionButton(
-                              label: 'Table',
-                              icon: Icons.table_rows,
-                              enabled: true,
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                    builder: (_) => const EventHistoryScreen(initialGraph: false)),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            _ActionButton(
-                              label: 'Trend Graph',
-                              icon: Icons.show_chart,
-                              enabled: true,
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                    builder: (_) => const EventHistoryScreen(initialGraph: true)),
-                              ),
-                            ),
-                          ]),
                         ]),
                       ),
                     ),
@@ -1122,6 +1123,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _InfoRow('Transmitter', s?.txFw.isNotEmpty == true ? s!.txFw : '—'),
                         _InfoRow('Web App',     svc.webAppVersion ?? '—'),
                         _InfoRow('Mobile App',  mobileAppVersion),
+                        _LinkInfoRow('Project Repository', 'https://github.com/nperiannan/TankMonitor/releases'),
                         const Divider(height: 16),
                         _InfoRow('Device MAC',  svc.currentDevice?.mac ?? '—'),
                         _InfoRow('Device IP',   s?.mgmtIp.isNotEmpty == true ? s!.mgmtIp : '—'),
@@ -2318,6 +2320,40 @@ class _InfoRow extends StatelessWidget {
         )
       else
         Text(value ?? '—', style: TextStyle(color: textColor(context), fontWeight: FontWeight.w500, fontSize: 13)),
+    ]),
+  );
+}
+
+class _LinkInfoRow extends StatelessWidget {
+  final String label;
+  final String url;
+  final bool last;
+  const _LinkInfoRow(this.label, this.url, {this.last = false});
+
+  Future<void> _open() => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 7),
+    decoration: BoxDecoration(
+      border: last ? null : Border(bottom: BorderSide(color: cardBd(context)))),
+    child: Row(children: [
+      Text(label, style: TextStyle(color: labelColor(context), fontSize: 13)),
+      const Spacer(),
+      GestureDetector(
+        onTap: _open,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('GitHub Releases',
+              style: TextStyle(
+                color: accentBlue(context),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                decoration: TextDecoration.underline,
+              )),
+          const SizedBox(width: 4),
+          Icon(Icons.open_in_new, size: 13, color: accentBlue(context)),
+        ]),
+      ),
     ]),
   );
 }

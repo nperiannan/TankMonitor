@@ -124,3 +124,12 @@ func handleLegacyLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	handleDeviceLogs(w, rewritePath(r, "/api/devices/"+mac+"/logs"))
 }
+
+// handleLegacyHistory  GET/DELETE /api/history[?from=&to=]  →  /api/devices/{mac}/history
+func handleLegacyHistory(w http.ResponseWriter, r *http.Request) {
+	mac, ok := legacyDevice(w, r)
+	if !ok {
+		return
+	}
+	handleDeviceHistory(w, rewritePath(r, "/api/devices/"+mac+"/history"))
+}

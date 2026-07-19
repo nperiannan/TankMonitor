@@ -89,3 +89,33 @@ export async function fetchDeviceLogs(token: string): Promise<{ logs: string[], 
   return res.json() as Promise<{ logs: string[], received_at?: string, note?: string }>
 }
 
+// fetchDeviceHistory — omit from/to for the default "live" view (last 1000,
+// non-archived). Pass unix-second from/to to browse any date range, which
+// also includes previously "cleared" (archived) records.
+export async function fetchDeviceHistory(
+  token: string, from?: number, to?: number,
+): Promise<{ count: number; records: string[] }> {
+  const qs = (from != null || to != null)
+    ? `?${from != null ? `from=${from}` : ''}${to != null ? `&to=${to}` : ''}`
+    : ''
+  const res = await fetch(`/api/history${qs}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new Error('SESSION_EXPIRED')
+  if (!res.ok) throw new Error('Failed to fetch history')
+  const body = await res.json() as { data?: { count: number; records: string[] } }
+  return body.data ?? { count: 0, records: [] }
+}
+
+// clearDeviceHistory — archives (no longer deletes) all history for the
+// current device; archived rows remain retrievable via fetchDeviceHistory
+// with an explicit from/to range.
+export async function clearDeviceHistory(token: string): Promise<void> {
+  const res = await fetch('/api/history', {
+    method: 'DELETE',
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new Error('SESSION_EXPIRED')
+  if (!res.ok) throw new Error('Failed to clear history')
+}
+

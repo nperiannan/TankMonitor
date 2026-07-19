@@ -2,8 +2,8 @@
 
 Go backend + React/Ant Design frontend, deployed as a Docker container on Oracle Cloud VM.
 
-- **Backend version**: 2.2.7
-- **Frontend version**: 2.2.7
+- **Backend version**: 2.4.0
+- **Frontend version**: 2.4.0
 - **Docker image**: `tankmonitor-web:2.2.7`
 
 ## Features
@@ -65,7 +65,25 @@ web/
 
 ## Build & Deploy
 
-### On Oracle Cloud VM (primary)
+### GitHub Actions build (recommended — fast)
+
+`.github/workflows/build-web.yml` builds the Docker image on every `web/vX.Y.Z`
+tag push (or manually via workflow_dispatch) and publishes it to
+`ghcr.io/nperiannan/tankmonitor-web:<version>`. On the Oracle VM this collapses
+the ~20 min local `docker build --no-cache` down to just a `docker pull`:
+
+```bash
+ssh -i "~/.ssh/Oracle VMs/rocky/ssh-key-2026-06-06.key" hainatraj@150.230.129.215
+# scp deploy_oracle_ghcr.sh to /tmp first, then:
+bash /tmp/deploy_oracle_ghcr.sh 2.4.0
+```
+
+One-time setup: make the `tankmonitor-web` GHCR package Public (GitHub →
+profile → Packages → tankmonitor-web → Package settings) so the VM can pull
+without authenticating, or `docker login ghcr.io` on the VM with a
+`read:packages` PAT if it must stay private.
+
+### On Oracle Cloud VM (manual local build — slower, no GitHub Actions needed)
 
 ```bash
 ssh -i "~/.ssh/Oracle VMs/rocky/ssh-key-2026-06-06.key" hainatraj@150.230.129.215

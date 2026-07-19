@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.12.1';
+const mobileAppVersion = '2.13.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -960,6 +960,29 @@ class TankService extends ChangeNotifier {
   }
 
   Future<void> clearDeliveryIssues() async {
+    // Archive to the backend first (best-effort) so these "unacknowledged
+    // incidents" remain available for later debugging instead of being lost
+    // when the local log is cleared. Clearing proceeds even if the archive
+    // call fails (e.g. offline) — it's a courtesy copy, not a precondition.
+    if (!directMode && _deliveryIssues.isNotEmpty) {
+      try {
+        final headers = <String, String>{'Content-Type': 'application/json'};
+        if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
+        final baseUrl = await _resolveUrl();
+        await http.post(
+          Uri.parse('$baseUrl${_devicePath('/api/delivery-issues', 'delivery-issues')}'),
+          headers: headers,
+          body: jsonEncode(_deliveryIssues
+              .map((e) => {
+                    'ts': e.time.millisecondsSinceEpoch ~/ 1000,
+                    'motor': e.motor,
+                    'start': e.start,
+                    'device_name': e.deviceName,
+                  })
+              .toList()),
+        ).timeout(const Duration(seconds: 6));
+      } catch (_) {}
+    }
     _deliveryIssues = [];
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kDeliveryLog);

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 
 	_ "modernc.org/sqlite"
@@ -70,12 +71,58 @@ func migrate() {
 			PRIMARY KEY (mac, ts, ev)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_history_mac_ts ON history_events(mac, ts)`,
+		// Delivery issues ("unacknowledged incidents" — motor commands the
+		// controller never acked) are archived here by the app before it clears
+		// its local SharedPreferences log, so they remain available for later
+		// debugging instead of being lost forever.
+		`CREATE TABLE IF NOT EXISTS delivery_issues_archive (
+			id          INTEGER PRIMARY KEY AUTOINCREMENT,
+			mac         TEXT    NOT NULL,
+			ts          INTEGER NOT NULL,
+			motor       TEXT    NOT NULL,
+			start       INTEGER NOT NULL,
+			device_name TEXT,
+			archived_at TEXT    DEFAULT (datetime('now'))
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_delivery_issues_mac_ts ON delivery_issues_archive(mac, ts)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
 			log.Fatalf("[DB] migrate: %v\nSQL: %s", err, s)
 		}
 	}
+
+	// history_events predates the archive feature (2026-07-19) — add the
+	// column retroactively for existing databases instead of a destructive
+	// table rebuild. "Clear history" now sets archived=1 instead of deleting
+	// rows, so historical records stay queryable by date range afterwards.
+	addColumnIfMissing("history_events", "archived", "INTEGER NOT NULL DEFAULT 0")
+}
+
+// addColumnIfMissing runs `ALTER TABLE ... ADD COLUMN` only if the column
+// doesn't already exist, so it's safe to call on every startup.
+func addColumnIfMissing(table, column, def string) {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		log.Fatalf("[DB] pragma table_info %s: %v", table, err)
+	}
+	exists := false
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == column {
+			exists = true
+		}
+	}
+	rows.Close()
+	if exists {
+		return
+	}
+	if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, def)); err != nil {
+		log.Fatalf("[DB] add column %s.%s: %v", table, column, err)
+	}
+	log.Printf("[DB] migrated: added column %s.%s", table, column)
 }
 
 func seedDeviceTypes() {

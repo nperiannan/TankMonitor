@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"net/http"
 	"strconv"
 	"strings"
@@ -75,6 +76,16 @@ func handleDeviceWifi(w http.ResponseWriter, r *http.Request) {
 
 // handleDeviceHistory serves GET /api/devices/{mac}/history
 // Serves persisted history events from the DB (fast, survives restarts).
+//
+// Optional query params ?from=<unix>&to=<unix> return the full date range
+// (including archived rows, for daily/weekly/monthly browsing of records that
+// were previously "cleared"). Without them, the default "live" view returns
+// only non-archived rows (most recent 1000), matching prior behaviour.
+//
+// DELETE archives all of this device's rows (archived=1) instead of deleting
+// them — "Clear history" in the app no longer destroys the data; archived
+// records remain queryable via the date-range params above for later
+// debugging/troubleshooting.
 func handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 	cors(w)
 	if r.Method == http.MethodOptions {
@@ -91,14 +102,30 @@ func handleDeviceHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodDelete {
-		db.Exec(`DELETE FROM history_events WHERE UPPER(mac)=UPPER(?)`, mac) //nolint:errcheck
+		db.Exec(`UPDATE history_events SET archived=1 WHERE UPPER(mac)=UPPER(?) AND archived=0`, mac) //nolint:errcheck
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"ok":true}`)) //nolint:errcheck
 		return
 	}
 
-	rows, err := db.Query(
-		`SELECT record FROM history_events WHERE UPPER(mac)=UPPER(?) ORDER BY ts DESC LIMIT 1000`, mac)
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+
+	var rows *sql.Rows
+	var err error
+	if fromStr != "" || toStr != "" {
+		from, _ := strconv.ParseInt(fromStr, 10, 64)
+		to, _ := strconv.ParseInt(toStr, 10, 64)
+		if to == 0 {
+			to = time.Now().Unix()
+		}
+		rows, err = db.Query(
+			`SELECT record FROM history_events WHERE UPPER(mac)=UPPER(?) AND ts>=? AND ts<=? ORDER BY ts ASC LIMIT 20000`,
+			mac, from, to)
+	} else {
+		rows, err = db.Query(
+			`SELECT record FROM history_events WHERE UPPER(mac)=UPPER(?) AND archived=0 ORDER BY ts DESC LIMIT 1000`, mac)
+	}
 	if err != nil {
 		jsonError(w, "db error", http.StatusInternalServerError)
 		return

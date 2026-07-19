@@ -252,8 +252,13 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
                           constraints: const BoxConstraints(minWidth: 32),
                         ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: kRed, size: 18),
-                        onPressed: () => _deleteNetwork(ssid),
+                        icon: Icon(Icons.delete_outline,
+                            color: (isConn || _savedNetworks.length <= 1) ? labelColor(context).withValues(alpha: 0.35) : kRed,
+                            size: 18),
+                        onPressed: (isConn || _savedNetworks.length <= 1) ? null : () => _deleteNetwork(ssid),
+                        tooltip: isConn
+                            ? "Can't remove — currently providing internet access"
+                            : (_savedNetworks.length <= 1 ? "Can't remove the last saved network" : null),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(minWidth: 32),
                       ),

@@ -224,17 +224,24 @@ static void handleRemoveNetwork(const char* ssid) {
     for (int i = 0; i < networkCount; i++) {
         if (networks[i].ssid == ssid) {
             bool wasConn = (WiFi.status() == WL_CONNECTED && WiFi.SSID() == String(ssid));
+            // Refuse to remove the network currently providing internet/remote
+            // access, and refuse to remove the last remaining saved network —
+            // either would strand the device with no way to reconnect and no
+            // remote (app/web) access to fix it. The web/app UI already hides
+            // the delete action for these cases; this is the authoritative
+            // backstop in case a stale command slips through.
+            if (wasConn) {
+                Log(WARN, "[WiFi] Refused to remove active network: " + String(ssid));
+                return;
+            }
+            if (networkCount <= 1) {
+                Log(WARN, "[WiFi] Refused to remove last saved network: " + String(ssid));
+                return;
+            }
             for (int j = i; j < networkCount - 1; j++) networks[j] = networks[j+1];
             networkCount--;
             saveNetworks();
             Log(INFO, "[WiFi] Removed: " + String(ssid));
-            if (wasConn) {
-                WiFi.disconnect(false);
-                smTryIdx       = 0;
-                smTryAttempts  = 0;
-                smInCooldown   = false;
-                smNextActionMs = millis() + 2000;
-            }
             return;
         }
     }

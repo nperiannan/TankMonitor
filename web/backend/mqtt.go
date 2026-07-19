@@ -29,6 +29,47 @@ var allowedCmds = map[string]bool{
 	"wifi_list": true, "wifi_scan": true,
 	"wifi_add": true, "wifi_delete": true, "wifi_set_priority": true,
 	"history_list": true, "history_clear": true,
+	"ping": true, // heartbeat round-trip check (see heartbeat.go)
+}
+
+// mqttLostAt records when the platform's own MQTT connection dropped, so the
+// reconnect log can report the outage duration (helps diagnose incidents like
+// 2026-07-19 where a slow reconnect silently dropped a motor command).
+var mqttLostAt time.Time
+
+// pubStore is an explicit handle to the client's QoS1 outbound message store.
+// paho normally creates one of these internally and hides it — we supply our
+// own MemoryStore via SetStore() below purely so publishControl() can purge a
+// specific un-acked message (see dropPendingPublish). Without this, a QoS1
+// publish that doesn't get PUBACK'd before we give up would otherwise sit in
+// paho's store and get silently RESENT whenever the client next reconnects —
+// even minutes later — which is exactly the kind of stale/late motor command
+// this timeout is meant to prevent.
+var pubStore = mqtt.NewMemoryStore()
+
+// commandTimeout returns how long publishControl() should wait for the
+// broker to PUBACK a command before giving up and dropping it. Motor ON
+// commands get a short leash (better to fail fast and let the user retry than
+// have a stale ON fire late); OFF commands get a bit longer since a delayed
+// OFF is safer than a delayed ON but still shouldn't hang around indefinitely.
+func commandTimeout(cmd string) time.Duration {
+	switch cmd {
+	case "oh_on", "ug_on":
+		return 5 * time.Second
+	case "oh_off", "ug_off":
+		return 10 * time.Second
+	default:
+		return 10 * time.Second
+	}
+}
+
+// dropPendingPublish removes a QoS1 publish from the store so paho won't
+// resend it after a future reconnect. Replicates paho.mqtt.golang v1.4.3's
+// internal outbound key format (store.go: outboundKeyFromMID → "o.<mid>") —
+// pinned go.mod version, so this is stable; re-verify if the paho version is
+// ever bumped.
+func dropPendingPublish(mid uint16) {
+	pubStore.Del(fmt.Sprintf("o.%d", mid))
 }
 
 func startMQTT() {
@@ -44,21 +85,35 @@ func startMQTT() {
 		SetPassword(pass).
 		SetKeepAlive(60 * time.Second).
 		SetAutoReconnect(true).
+		// Paho defaults to a 10-MINUTE max backoff between reconnect attempts.
+		// On 2026-07-19 that caused an ~11 min gap where this backend's own MQTT
+		// client was disconnected from the broker (root cause of a dropped motor
+		// ON command) — cap it much lower so we recover within seconds.
+		SetMaxReconnectInterval(10 * time.Second).
+		SetStore(pubStore).
 		SetOnConnectHandler(func(c mqtt.Client) {
 			// Subscribe to ALL device namespaces using + wildcard
-			// New topic scheme: tm/+/status, tm/+/logs
+			// New topic scheme: tm/+/status, tm/+/logs, tm/+/hb (heartbeat)
 			// Legacy topic scheme: tankmonitor/+/status, tankmonitor/+/logs (backward compat)
 			subs := map[string]byte{
 				"tm/+/status":          1,
 				"tm/+/logs":            0,
 				"tm/+/wifi":            0,
+				"tm/+/hb":              1,
 				"tankmonitor/+/status": 1,
 				"tankmonitor/+/logs":   0,
 			}
-			log.Printf("[MQTT] Connected — subscribing to %d wildcard topics", len(subs))
+			if !mqttLostAt.IsZero() {
+				log.Printf("[MQTT] Connected — subscribing to %d wildcard topics (was disconnected for %s)",
+					len(subs), time.Since(mqttLostAt).Round(time.Second))
+				mqttLostAt = time.Time{}
+			} else {
+				log.Printf("[MQTT] Connected — subscribing to %d wildcard topics", len(subs))
+			}
 			c.SubscribeMultiple(subs, onMessage)
 		}).
 		SetConnectionLostHandler(func(_ mqtt.Client, err error) {
+			mqttLostAt = time.Now()
 			log.Printf("[MQTT] Connection lost: %v", err)
 		})
 
@@ -70,6 +125,8 @@ func startMQTT() {
 		log.Println("[MQTT] Connect failed — retrying in 5s…")
 		time.Sleep(5 * time.Second)
 	}
+
+	go startHeartbeatMonitor()
 }
 
 // onMessage handles all incoming MQTT messages from all subscribed topics.
@@ -84,6 +141,8 @@ func onMessage(_ mqtt.Client, msg mqtt.Message) {
 		onLogsMsg(topic, raw)
 	} else if strings.HasSuffix(topic, "/wifi") {
 		onWifiMsg(topic, raw)
+	} else if strings.HasSuffix(topic, "/hb") {
+		onHeartbeatMsg(topic, raw)
 	}
 }
 
@@ -139,6 +198,10 @@ func onLogsMsg(topic string, raw []byte) {
 }
 
 // publishControl publishes a control command to the correct device topic.
+// Waits at most commandTimeout(cmd) for the broker to PUBACK; on timeout the
+// message is purged from the store (dropPendingPublish) instead of being left
+// for paho to resend on a later reconnect, and an error is returned so the
+// caller/app sees "not delivered" rather than a silent late action.
 func publishControl(mac string, body []byte) error {
 	if mqttCli == nil || !mqttCli.IsConnected() {
 		return fmt.Errorf("MQTT not connected")
@@ -154,8 +217,22 @@ func publishControl(mac string, body []byte) error {
 		// Legacy: mac field holds the location string
 		topic = fmt.Sprintf("tankmonitor/%s/control", mac)
 	}
+
+	var cmdFields struct {
+		Cmd string `json:"cmd"`
+	}
+	json.Unmarshal(body, &cmdFields) //nolint:errcheck
+	timeout := commandTimeout(cmdFields.Cmd)
+
 	tok := mqttCli.Publish(topic, 1, false, body)
-	tok.Wait()
+	if !tok.WaitTimeout(timeout) {
+		if pt, ok := tok.(*mqtt.PublishToken); ok {
+			dropPendingPublish(pt.MessageID())
+		}
+		log.Printf("[MQTT] %s command to %s not acked by broker within %s — dropped, not queued for later delivery",
+			cmdFields.Cmd, mac, timeout)
+		return fmt.Errorf("command not delivered within %s", timeout)
+	}
 	return tok.Error()
 }
 
