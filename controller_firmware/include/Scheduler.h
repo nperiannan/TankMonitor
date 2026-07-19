@@ -12,6 +12,7 @@ struct Schedule {
     uint16_t duration;   // minutes
     bool     isRunning;
     unsigned long startTime; // millis() when started
+    bool     preBuzzing;     // true while the pre-start warning buzzer (before `time`) is sounding
 };
 
 extern Schedule schedules[MAX_SCHEDULES];

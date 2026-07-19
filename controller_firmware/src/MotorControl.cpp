@@ -465,6 +465,35 @@ void turnOffUGMotor(uint8_t reason) {
     // else: pending start cancelled (or already off) — nothing energised, no OFF record
 }
 
+// ---------------------------------------------------------------------------
+//  Scheduled starts — buzzer pre-warned BEFORE the scheduled time by the
+//  caller (Scheduler.cpp), so the relay energises immediately here with no
+//  further delay. This keeps the motor's actual run time equal to the
+//  configured schedule duration (previously the shared buzzer-delay pending
+//  flow ran the 30 s warning AFTER the trigger, so the relay energised late
+//  and the motor ran ~30 s short of the configured duration).
+// ---------------------------------------------------------------------------
+
+void preWarnBuzzer() {
+    startBuzzer(BUZZER_COUNTDOWN);
+}
+
+void startScheduledOHMotor(uint8_t reason) {
+    if (ohMotorRunning) return;
+    ohMotorStartPending = false;   // any unrelated auto/manual pending start is superseded
+    ohMotorSource = MOTOR_SRC_SCHEDULED;
+    stopMotorBuzzer();
+    energiseOHRelay(true, reason);
+}
+
+void startScheduledUGMotor(uint8_t reason) {
+    if (ugMotorRunning) return;
+    ugMotorStartPending = false;
+    ugMotorSource = MOTOR_SRC_SCHEDULED;
+    stopMotorBuzzer();
+    energiseUGRelay(true, reason);
+}
+
 bool isOHBuzzerPending() { return ohMotorStartPending; }
 bool isUGBuzzerPending() { return ugMotorStartPending; }
 

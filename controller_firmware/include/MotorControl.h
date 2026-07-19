@@ -28,6 +28,19 @@ void turnOffOHMotor(uint8_t reason = REASON_MANUAL_WEB);
 void turnOnUGMotor(uint8_t reason = REASON_MANUAL_WEB);
 void turnOffUGMotor(uint8_t reason = REASON_MANUAL_WEB);
 
+// Sound the pre-start warning buzzer ahead of time, without changing any motor
+// state. Used by the scheduler to warn MOTOR_START_BUZZER_DELAY_MS *before*
+// the scheduled time, so the relay can energise exactly on time and run for
+// the full configured duration (previously the buzzer ran AFTER the trigger,
+// delaying the relay and silently shortening the scheduled run by 30 s).
+void preWarnBuzzer();
+
+// Energise the OH/UG relay for a scheduled start immediately, bypassing the
+// buzzer-delay pending-start flow — the scheduler already sounded the warning
+// via preWarnBuzzer() before the scheduled time arrived.
+void startScheduledOHMotor(uint8_t reason = REASON_SCHEDULED);
+void startScheduledUGMotor(uint8_t reason = REASON_SCHEDULED);
+
 // Check and handle pending motor starts (after buzzer delay).
 void processPendingMotorStarts();
 

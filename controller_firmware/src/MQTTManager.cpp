@@ -188,6 +188,7 @@ static void processPendingMQTT() {
             schedules[slot].duration  = (uint16_t)(doc["duration"] | 2);
             schedules[slot].isRunning = false;
             schedules[slot].startTime = 0;
+            schedules[slot].preBuzzing = false;
             saveSchedules();
             Log(INFO, "[MQTT] sched_add slot=" + String(slot) + " " + schedules[slot].time);
         }
@@ -198,6 +199,7 @@ static void processPendingMQTT() {
             schedules[idx].enabled   = false;
             schedules[idx].isRunning = false;
             schedules[idx].time      = "00:00";
+            schedules[idx].preBuzzing = false;
             saveSchedules();
             Log(INFO, "[MQTT] sched_remove index=" + String(idx));
         } else {

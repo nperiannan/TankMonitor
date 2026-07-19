@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "Globals.h"
 #include "MotorControl.h"
+#include "Buzzer.h"
 #include "Config.h"
 #include <Preferences.h>
 #include <time.h>
@@ -25,6 +26,7 @@ void initScheduler() {
         schedules[i].duration  = prefs.getUShort ((prefix + "d").c_str(),    2);
         schedules[i].isRunning = false;
         schedules[i].startTime = 0;
+        schedules[i].preBuzzing = false;
     }
     prefs.end();
     Log(INFO, "[Sched] Loaded " + String(MAX_SCHEDULES) + " schedules");
@@ -45,8 +47,9 @@ void saveSchedules() {
 }
 
 void clearAllSchedules() {
+    stopBuzzer();   // in case a schedule's pre-start warning was sounding
     for (int i = 0; i < MAX_SCHEDULES; i++) {
-        schedules[i] = {false, 0, "00:00", 2, false, 0};
+        schedules[i] = {false, 0, "00:00", 2, false, 0, false};
     }
     saveSchedules();
     Log(INFO, "[Sched] All cleared");
@@ -58,7 +61,10 @@ void clearAllSchedules() {
 
 void checkSchedules() {
     if (millis() < BOOT_GRACE_PERIOD_MS) return;   // suppress scheduler during boot
-    if (millis() - lastScheduleCheck < 10000UL) return;
+    // 1 s granularity so the pre-start buzzer warning and the actual start
+    // land on the exact seconds we intend (a coarser 10 s poll made both the
+    // warning timing and the start-of-run timestamp sloppy by up to 10 s).
+    if (millis() - lastScheduleCheck < 1000UL) return;
     lastScheduleCheck = millis();
 
     struct tm ti;
@@ -67,6 +73,8 @@ void checkSchedules() {
     char nowBuf[6];
     snprintf(nowBuf, sizeof(nowBuf), "%02d:%02d", ti.tm_hour, ti.tm_min);
     String nowStr = String(nowBuf);
+    const int nowSec = ti.tm_hour * 3600 + ti.tm_min * 60 + ti.tm_sec;
+    const int buzzerLeadSec = (int)(MOTOR_START_BUZZER_DELAY_MS / 1000UL);
 
     for (int i = 0; i < MAX_SCHEDULES; i++) {
         Schedule& s = schedules[i];
@@ -74,6 +82,10 @@ void checkSchedules() {
 
         // Disabled but was running – stop
         if (!s.enabled) {
+            if (s.preBuzzing) {
+                s.preBuzzing = false;
+                stopBuzzer();
+            }
             if (s.isRunning) {
                 s.isRunning = false;
                 bool anyRunning = false;
@@ -90,13 +102,29 @@ void checkSchedules() {
             continue;
         }
 
-        // Start trigger
-        if (!s.isRunning && nowStr == s.time) {
+        // Target time-of-day in seconds since midnight (schedule times are "HH:MM")
+        const int targetSec = s.time.substring(0, 2).toInt() * 3600
+                             + s.time.substring(3, 5).toInt() * 60;
+
+        // Pre-start warning — sound the buzzer buzzerLeadSec BEFORE the
+        // scheduled time so it finishes exactly as the schedule hits, instead
+        // of after (which used to delay the relay and shorten the run).
+        if (!s.isRunning && !s.preBuzzing && buzzerDelayEnabled
+            && nowSec == targetSec - buzzerLeadSec) {
+            preWarnBuzzer();
+            s.preBuzzing = true;
+            Log(INFO, "[Sched] " + String(i) + " (" + (isUG?"UG":"OH") + ") pre-start buzzer — motor at " + s.time);
+        }
+
+        // Start trigger — fires on the exact scheduled second; the nowStr
+        // guard is a safety net so a missed tick still starts before the
+        // scheduled minute rolls over.
+        if (!s.isRunning && nowSec >= targetSec && nowStr == s.time) {
             Log(INFO, "[Sched] " + String(i) + " (" + (isUG?"UG":"OH") + ") starting at " + s.time
                 + " for " + String(s.duration) + " min");
-            // Set motor source BEFORE calling turnOn so auto-control won't interfere
-            if (isUG) { ugMotorSource = MOTOR_SRC_SCHEDULED; turnOnUGMotor(REASON_SCHEDULED); }
-            else      { ohMotorSource = MOTOR_SRC_SCHEDULED; turnOnOHMotor(REASON_SCHEDULED); }
+            s.preBuzzing = false;
+            if (isUG) startScheduledUGMotor(REASON_SCHEDULED);
+            else      startScheduledOHMotor(REASON_SCHEDULED);
             s.isRunning = true;
             s.startTime = millis();
         }

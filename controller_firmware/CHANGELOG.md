@@ -4,6 +4,13 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.7.1] — 2026-07-19
+
+### Fixed
+- **Scheduled motor runs were ~30 s shorter than configured** — a scheduled start (e.g. 10:00 PM) called `turnOnOHMotor()`/`turnOnUGMotor()`, which (when the pre-motor buzzer is enabled) queues a 30 s buzzer-delay countdown *before* energising the relay. The scheduler stamped `startTime` at the moment the schedule fired (10:00:00), not when the relay actually energised (10:00:30), so the stop check — measured from `startTime` — cut the run 30 s early (e.g. a 2 min schedule only pumped for 1:30). Fixed by moving the buzzer warning to run *before* the scheduled time instead of after: `checkSchedules()` now polls every 1 s (was 10 s) and sounds the buzzer `MOTOR_START_BUZZER_DELAY_MS` (30 s) ahead of the scheduled time (`Schedule.preBuzzing`), then energises the relay immediately and bypasses the buzzer-delay queue at the exact scheduled second via new `startScheduledOHMotor()`/`startScheduledUGMotor()` (`MotorControl.cpp`). The motor now starts exactly on schedule and runs the full configured duration; the buzzer still gives the same 30 s heads-up, just earlier.
+
+---
+
 ## [2.7.0] — 2026-07-19
 
 ### Added
