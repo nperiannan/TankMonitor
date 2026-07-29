@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.13.0';
+const mobileAppVersion = '2.14.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -1371,12 +1371,13 @@ class TankService extends ChangeNotifier {
           case 'reboot':   ok = await _directService!.reboot(); break;
           case 'sched_clear': ok = await _directService!.clearSchedules(); break;
           case 'get_logs': break; // logs fetched separately in direct mode
+          case 'sync': break;     // direct mode already polls the controller directly below
           default:
             // sched_add / sched_remove not easily mapped to bulk API;
             // handled separately by WiFi/History screens.
             break;
         }
-        if (!ok && c != 'get_logs' && !isMotorCmd) {
+        if (!ok && c != 'get_logs' && c != 'sync' && !isMotorCmd) {
           error = 'Command failed';
           notifyListeners();
           Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
@@ -1421,6 +1422,11 @@ class TankService extends ChangeNotifier {
       }
     }
   }
+
+  /// Manual "pull to refresh" — requests an immediate full status snapshot
+  /// from the controller instead of waiting for the periodic keep-alive
+  /// publish. Used by the sync button, app-open, and RF icon tap.
+  Future<void> syncNow() => sendControl({'cmd': 'sync'});
 }
 
 // Internal helper — holds an optimistic setting value until it expires.

@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'models.dart';
+import 'tank_service.dart';
 import 'theme_data.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -668,7 +670,12 @@ class _RfAntennaIcon extends StatelessWidget {
         ? (isDark ? const Color(0xFF66bb6a) : const Color(0xFF43a047))
         : kRed;
     return GestureDetector(
-      onTap: () => _showRfModal(context, isDark),
+      onTap: () {
+        // RF data is otherwise event/keep-alive driven — request a fresh
+        // snapshot on tap instead of showing a potentially stale reading.
+        context.read<TankService>().syncNow();
+        _showRfModal(context, isDark);
+      },
       child: Icon(Icons.cell_tower, color: color, size: size),
     );
   }

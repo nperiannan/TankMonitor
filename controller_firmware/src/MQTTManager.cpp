@@ -253,6 +253,14 @@ static void processPendingMQTT() {
         publishMQTTLogs();
         Log(INFO, "[MQTT] get_logs: log snapshot published");
     }
+    else if (strcmp(cmd, "sync") == 0) {
+        // Manual "pull to refresh" — app open / RF icon tap / sync button.
+        // Full status is otherwise event-driven (motor/tank change) plus a
+        // slow keep-alive tick, so give the app an immediate on-demand
+        // snapshot instead of waiting for the next tick.
+        publishMQTTStatus();
+        Log(INFO, "[MQTT] sync: status published on demand");
+    }
     else if (strcmp(cmd, "ota_start") == 0) {
         const char* url = doc["url"] | "";
         if (strlen(url) == 0) {

@@ -74,6 +74,9 @@ class _DashboardScreenState extends State<DashboardScreen>
   // Bottom nav tab
   int _tabIndex = 0;
 
+  // Manual sync button state
+  bool _syncing = false;
+
   @override
   void initState() {
     super.initState();
@@ -83,6 +86,9 @@ class _DashboardScreenState extends State<DashboardScreen>
       _loadOtaStatus();
       // Register (and keep refreshed) the FCM push token with the backend.
       PushService.onToken((t) => context.read<TankService>().registerPushToken(t));
+      // Status is now event/keep-alive driven on the controller side — grab a
+      // fresh snapshot as soon as the dashboard opens instead of waiting.
+      context.read<TankService>().syncNow();
     });
   }
 
@@ -99,7 +105,16 @@ class _DashboardScreenState extends State<DashboardScreen>
     if (state == AppLifecycleState.resumed) {
       // Reconnect when app comes back from background
       context.read<TankService>().reconnectIfNeeded();
+      context.read<TankService>().syncNow();
     }
+  }
+
+  Future<void> _handleSyncNow() async {
+    setState(() => _syncing = true);
+    AppHaptics.motor();
+    await context.read<TankService>().syncNow();
+    if (!mounted) return;
+    setState(() => _syncing = false);
   }
 
   // ── OTA helpers ───────────────────────────────────────────────────────────
@@ -477,6 +492,16 @@ class _DashboardScreenState extends State<DashboardScreen>
                 MaterialPageRoute(builder: (_) => const DeviceListScreen(autoNavigate: false)),
               ),
             ),
+          IconButton(
+            icon: _syncing
+                ? SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: labelColor(context)),
+                  )
+                : Icon(Icons.sync, color: labelColor(context), size: 20),
+            tooltip: 'Sync now',
+            onPressed: _syncing ? null : _handleSyncNow,
+          ),
           IconButton(
             icon: Icon(Icons.settings_ethernet, color: labelColor(context), size: 20),
             tooltip: 'Change server',

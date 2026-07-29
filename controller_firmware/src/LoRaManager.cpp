@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "Config.h"
 #include "History.h"
+#include "MQTTManager.h"
 #include <RadioLib.h>
 #include <SPI.h>
 
@@ -88,6 +89,7 @@ void pollLoRa() {
             Log(WARN, "[LoRa] Transmitter lost – " + String(missedPackets) + " packets missed, marking UNKNOWN");
             ohLastKnownState = ohTankState;
             ohTankState = TANK_STATE_UNKNOWN;
+            publishMQTTStatus();   // don't wait for the next keep-alive tick
         }
     }
 
@@ -149,6 +151,7 @@ void pollLoRa() {
                 ohLastKnownState = newState;
             }
             addHistoryRecord(HIST_OH_STATE_CHG, ohTankState, ugTankState);
+            publishMQTTStatus();   // don't wait for the next keep-alive tick
         } else {
             ohTankState = newState;
         }

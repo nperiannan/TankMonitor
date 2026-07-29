@@ -4,6 +4,27 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.8.0] — 2026-07-29
+
+### Changed
+- **MQTT traffic streamlining** — cut mobile-data usage for controllers on metered SIM/router
+  connections (~12.2 GB/yr → ~1.7 GB/yr estimated). `MQTT_PUBLISH_MS` relaxed from 5 s to
+  **60 s**: the periodic `status` publish is now mainly a keep-alive (so the backend's
+  `last_seen`/online indicator stays fresh) rather than the primary update path.
+  `MQTT_HEARTBEAT_MS` relaxed from 2 min to **5 min**.
+
+### Added
+- **Event-driven status publish on tank-state change** — OH tank-state changes (LoRa float
+  packets, `LoRaManager.cpp`) and UG tank-state changes (`Sensors.cpp`) now trigger an
+  immediate `publishMQTTStatus()`, same pattern already used for motor on/off — so real
+  changes are never delayed by the new 60 s keep-alive interval. Transmitter-lost transitions
+  also publish immediately.
+- **New `"sync"` MQTT command** — manual "pull to refresh" from the app (sync button, app
+  open, or RF icon tap) forces an immediate full status publish on demand
+  (`MQTTManager.cpp processPendingMQTT()`).
+
+---
+
 ## [2.7.1] — 2026-07-19
 
 ### Fixed

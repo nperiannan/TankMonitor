@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "Config.h"
 #include "History.h"
+#include "MQTTManager.h"
 
 // ---------------------------------------------------------------------------
 //  UG tank float switch – single-pin, debounced state machine
@@ -43,6 +44,9 @@ void readUGFloatSwitch() {
     if (millis() - pendingStart >= FLOAT_DEBOUNCE_MS) {
         if (sampled != ugTankState) {
             ugTankState = sampled;
-            Log(INFO, "[Sensors] UG tank state → " + String(tankStateStr(ugTankState)));            addHistoryRecord(HIST_UG_STATE_CHG, ohTankState, ugTankState);        }
+            Log(INFO, "[Sensors] UG tank state → " + String(tankStateStr(ugTankState)));
+            addHistoryRecord(HIST_UG_STATE_CHG, ohTankState, ugTankState);
+            publishMQTTStatus();   // don't wait for the next keep-alive tick
+        }
     }
 }

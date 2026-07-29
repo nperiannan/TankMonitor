@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "2.7.1"
+#define FW_VERSION "2.8.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "2.0.0"
@@ -216,10 +216,17 @@
 #define MQTT_LOCATION_DEFAULT "home"          // Legacy NVS key — no longer used for topics (topics now use MAC)
 
 #define MQTT_NVS_NS           "mqtt_cfg"
-#define MQTT_PUBLISH_MS       5000UL          // Publish status every 5 s
+// Periodic status publish now mainly exists as a keep-alive so `last_seen`/
+// online status stays fresh and slow-changing fields (uptime, wifi rssi,
+// wifi ssid) eventually reach the backend even with no discrete event.
+// Motor changes, tank-state changes, and the app's manual "sync" command all
+// still trigger an immediate out-of-band publish (see publishMQTTStatus()
+// call sites in MotorControl.cpp / LoRaManager.cpp / Sensors.cpp / the
+// "sync" cmd handler below) — so real changes are never delayed by this.
+#define MQTT_PUBLISH_MS       60000UL         // Keep-alive status publish every 60 s
 #define MQTT_RECONNECT_MS     15000UL         // Retry connection every 15 s
 #define MQTT_PORT_FAIL_LIMIT  3               // Switch to fallback port after N consecutive failures
-#define MQTT_HEARTBEAT_MS     120000UL        // Controller-initiated round-trip health check (tm/{mac}/hb) every 2 min
+#define MQTT_HEARTBEAT_MS     300000UL        // Controller-initiated round-trip health check (tm/{mac}/hb) every 5 min
 #define MQTT_HEARTBEAT_ACK_TIMEOUT_MS 20000UL  // Warn locally if backend doesn't ping back within this window
 
 // HTTP OTA poll — ESP32 checks server for staged firmware over HTTP,
