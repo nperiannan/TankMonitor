@@ -38,6 +38,8 @@ static char s_topicHeartbeat[64];
 static char s_clientId[32];
 
 static unsigned long s_lastPublishMs    = 0;
+// s_lastLogPublishMs removed 2026-07-30 — logs are now published on-demand
+// only (get_logs cmd / OTA events), not on a periodic timer (data-usage cut).
 static unsigned long s_lastReconnectMs  = 0;
 
 // Heartbeat round-trip health check state (see publishHeartbeatRequest() /
@@ -47,7 +49,6 @@ static unsigned long s_lastHeartbeatMs   = 0;
 static uint32_t      s_hbSeq             = 0;
 static uint32_t      s_hbAwaitingSeq     = 0;   // 0 = no request outstanding
 static unsigned long s_hbSentAtMs        = 0;
-static unsigned long s_lastLogPublishMs = 0;
 
 static int  s_portFallback    = MQTT_PORT_FALLBACK;
 static int  s_connectFailures = 0;            // consecutive failures on current port
@@ -606,11 +607,10 @@ void mqttLoop() {
         publishMQTTStatus();
     }
 
-    // Publish logs every 60 s (independent of status interval)
-    if (now - s_lastLogPublishMs >= 60000UL) {
-        s_lastLogPublishMs = now;
-        publishMQTTLogs();
-    }
+    // Logs are published on-demand only (get_logs cmd / OTA events) — no
+    // periodic auto-publish, since resending the same ~30-entry snapshot
+    // every 60 s regardless of activity was the single biggest contributor
+    // to controller MQTT data usage (2026-07-30 data-usage cut).
 
     // Heartbeat round-trip health check — every MQTT_HEARTBEAT_MS
     if (now - s_lastHeartbeatMs >= MQTT_HEARTBEAT_MS) {

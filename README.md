@@ -10,7 +10,7 @@ Monorepo for the TankMonitor system — ESP32-S3 firmware, Go+React web app, and
 flowchart TD
     subgraph Field["Field Hardware"]
         TX["Transmitter Node\nATmega328P + LoRa\nOH Tank Level Sensor\nFW v2.1.0"]
-        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.8.0"]
+        CTRL["Controller\nESP32-S3 Nebula S3\nFW v2.8.1"]
         TX -- "LoRa 865 MHz · level packets" --> CTRL
     end
 
@@ -49,7 +49,7 @@ flowchart LR
         RXlora["LoRa RFM95\nHSPI CS=10 IRQ=14 RST=21"]
         F_UG["UG Float Switch\nGPIO 47"]
         TOUCH["Touch Switches\nGPIO 17 / 18"]
-        MCU["ESP32-S3\nFW v2.8.0"]
+        MCU["ESP32-S3\nFW v2.8.1"]
         R_OH["OH Relay\nGPIO 1"]
         R_UG["UG Relay\nGPIO 2"]
         BUZ["Buzzer\nGPIO 3"]
@@ -136,7 +136,7 @@ TankMonitor/
 
 | Component | Latest |
 | --- | --- |
-| Controller Firmware | v2.8.0 |
+| Controller Firmware | v2.8.1 |
 | Transmitter Firmware | v2.1.0 |
 | Web App | v2.5.0 |
 | Mobile App | v2.14.0 |

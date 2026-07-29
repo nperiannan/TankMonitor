@@ -114,8 +114,13 @@ Published by `publishMQTTStatus()`:
 
 ### 2.2 `tm/{mac}/logs` — log snapshot
 
-Published by `publishMQTTLogs()`: every 60 s, and immediately on `get_logs`
-command or right before an OTA download starts.
+Published by `publishMQTTLogs()`: **on-demand only** — on the `get_logs`
+command, or immediately before an OTA download starts (so the backend/app
+have a log ack of the command being received). No periodic auto-publish
+(removed 2026-07-30 — resending the same ~30-entry snapshot every 60 s
+regardless of activity was the single biggest contributor to controller
+MQTT data usage; cut ~0.75 GB/yr with no loss of functionality since the
+log UI already calls `get_logs` explicitly on demand).
 
 ```json
 { "logs": [ { "t": "14:32:01", "lvl": "INFO", "msg": "[MQTT] Connected..." }, ... ] }

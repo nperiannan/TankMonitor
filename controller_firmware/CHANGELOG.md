@@ -4,6 +4,18 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.8.1] — 2026-07-30
+
+### Changed
+- **Removed periodic log-snapshot publish** — `tm/{mac}/logs` was being republished
+  unconditionally every 60 s regardless of whether anything new was logged, making it the
+  single biggest contributor to controller MQTT data usage (est. ~0.75 GB/yr on its own).
+  Logs are now published **on-demand only**: the `get_logs` command (already used by the
+  app/web log viewer) and the existing OTA-start/OTA-poll log acks. No functional change to
+  the logs UI — it already requests a fresh snapshot explicitly.
+
+---
+
 ## [2.8.0] — 2026-07-29
 
 ### Changed

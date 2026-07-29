@@ -24,7 +24,7 @@ var allowedCmds = map[string]bool{
 	"sched_add": true, "sched_remove": true, "sched_clear": true,
 	"set_setting": true, "sync_ntp": true, "reboot": true,
 	"set_lcd_mode": true, "set_log_level": true, "get_logs": true,
-	"sync": true, // manual "pull to refresh" — forces an immediate status publish
+	"sync":           true, // manual "pull to refresh" — forces an immediate status publish
 	"set_mqtt_creds": true,
 	"ota_start":      true, "ota_rollback": true,
 	"wifi_list": true, "wifi_scan": true,
