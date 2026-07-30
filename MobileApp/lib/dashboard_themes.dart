@@ -235,8 +235,12 @@ class ConceptFDashboard extends StatelessWidget {
 
 // ─── State → colour / percentage / label ─────────────────────────────────────
 // Eye-pleasing Material palette colors — same meaning on both themes.
+// "Full" is green on dark, but blue on light: Green 600 washes out against the
+// pale #F0F4F8 background and clashes with the blue the rest of the light theme
+// already uses (gear icon, running dot, POWER ON). HALF/LOW/EMPTY keep their
+// amber → orange → red ramp on both themes so "needs attention" still stands out.
 const _kFullDark  = Color(0xFF66bb6a); // Green 400
-const _kFullLight = Color(0xFF43a047); // Green 600
+const _kFullLight = Color(0xFF1976D2); // Blue 700
 const _kHalfDark  = Color(0xFFfdd835); // Yellow 600
 const _kHalfLight = Color(0xFFF9A825); // Yellow 800
 const _kLowDark   = Color(0xFFffa726); // Orange 400
@@ -2536,6 +2540,483 @@ class _ConsoleRow extends StatelessWidget {
           ),
         ]),
         if (buzzer && !sending) ...[
+          const SizedBox(height: 9),
+          _CountdownBar(seconds: cd, color: kOrange),
+        ],
+      ]),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Concept Glance — one look, one decision
+//   The overhead tank is the hero (it is the only tank you draw water from),
+//   the app says in plain words what that means, and there is exactly ONE big
+//   button that does the right thing right now. The underground tank drops to a
+//   single supporting row, because it only matters as "can I refill?".
+// ═══════════════════════════════════════════════════════════════════════════════
+class ConceptGlanceDashboard extends StatelessWidget {
+  final DashboardData d;
+  const ConceptGlanceDashboard({super.key, required this.d});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = d.status;
+    return Column(children: [
+      if (s?.txLost == true) ...[
+        _LostBanner(lastKnown: s?.ohLastKnown ?? '', context: context),
+        const SizedBox(height: 10),
+      ],
+      _GlanceHero(d: d),
+      const SizedBox(height: 10),
+      _GlanceSourceCard(d: d),
+    ]);
+  }
+}
+
+// ─── Glance: hero card for the overhead tank + the single action ────────────
+class _GlanceHero extends StatelessWidget {
+  final DashboardData d;
+  const _GlanceHero({required this.d});
+
+  @override
+  Widget build(BuildContext context) {
+    final s       = d.status;
+    final ohState = s?.ohState ?? '';
+    final ugState = s?.ugState ?? '';
+    final ohOn    = s?.ohMotor ?? false;
+    final ugOn    = s?.ugMotor ?? false;
+    final txLost  = s?.txLost ?? false;
+    final isDark  = Theme.of(context).brightness == Brightness.dark;
+
+    // ── Headline ────────────────────────────────────────────────────────────
+    final String headline;
+    final Color  headlineClr;
+    final String subline;
+    if (ohOn) {
+      headline    = 'FILLING';
+      headlineClr = accentBlue(context);
+      subline     = '${d.ohMotorName.toUpperCase()} IS RUNNING';
+    } else {
+      headline    = _stateLabel(ohState);
+      headlineClr = _stateColor(ohState, context);
+      subline     = switch (ohState) {
+        'FULL'  => 'OVERHEAD TANK IS FULL',
+        'HALF'  => 'ABOUT HALF FULL',
+        'LOW'   => 'RUNNING LOW',
+        'EMPTY' => 'OVERHEAD TANK IS EMPTY',
+        _       => 'WAITING FOR A READING',
+      };
+    }
+
+    // ── Plain-English advice ────────────────────────────────────────────────
+    final String adviceMain;
+    final String adviceDim;
+    if (txLost) {
+      adviceMain = 'No signal from the transmitter.';
+      adviceDim  = 'Showing the last level it reported.';
+    } else if (ohOn) {
+      adviceMain = 'Filling from the underground tank.';
+      adviceDim  = 'You can stop it any time.';
+    } else if (ugOn) {
+      adviceMain = 'Borewell is filling the underground tank.';
+      adviceDim  = 'Refill the overhead tank once it has water.';
+    } else if (ohState == 'FULL') {
+      adviceMain = 'Plenty of water upstairs.';
+      adviceDim  = 'Nothing needs your attention.';
+    } else if (ohState.isEmpty || ohState == 'UNKNOWN') {
+      adviceMain = 'No level reading yet.';
+      adviceDim  = 'Waiting for the transmitter to report.';
+    } else if (ugState == 'EMPTY') {
+      adviceMain = 'Overhead is ${ohState == 'EMPTY' ? 'empty' : 'running low'} '
+                   'and underground is empty.';
+      adviceDim  = 'Run the borewell first, then refill overhead.';
+    } else {
+      adviceMain = 'Overhead tank is ${ohState == 'EMPTY' ? 'empty' : 'running low'}.';
+      adviceDim  = 'Underground has water — safe to refill now.';
+    }
+
+    // ── The single contextual action ────────────────────────────────────────
+    final _GlanceAction act = _resolveAction(context);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: cardBg(context),
+        border: Border.all(color: cardBd(context)),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // header
+        SizedBox(
+          height: 20,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('OVERHEAD TANK',
+                style: TextStyle(
+                  color: labelColor(context), fontSize: 10,
+                  letterSpacing: 1.3, fontWeight: FontWeight.w800)),
+              _RfAntennaIcon(
+                loraOk: d.loraOk, loraRssi: d.loraRssi,
+                loraSNR: d.loraSNR, lastLoraReceived: d.lastLoraReceived,
+                size: 16, context: context,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        // tank + headline
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          _GlanceTank(state: ohState, context: context),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(headline,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: headlineClr, fontSize: 30,
+                  fontWeight: FontWeight.w900, height: 1.0, letterSpacing: -0.6)),
+              const SizedBox(height: 6),
+              Text(subline,
+                style: TextStyle(
+                  color: labelColor(context), fontSize: 10.5,
+                  fontWeight: FontWeight.w700, letterSpacing: 0.5)),
+              const SizedBox(height: 11),
+              Text(adviceMain,
+                style: TextStyle(
+                  color: textColor(context), fontSize: 13, height: 1.35)),
+              Text(adviceDim,
+                style: TextStyle(
+                  color: labelColor(context), fontSize: 13, height: 1.35)),
+            ]),
+          ),
+        ]),
+        // failed-delivery notice for whichever motor the action targets
+        if (act.failed && !act.sending) ...[
+          const SizedBox(height: 12),
+          _NotDeliveredBanner(onDismiss: act.onClearFailed),
+        ],
+        const SizedBox(height: 13),
+        _GlanceCta(action: act),
+        if (act.sub.isNotEmpty) ...[
+          const SizedBox(height: 7),
+          Text(act.sub,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: labelColor(context), fontSize: 10.5)),
+        ],
+        if (act.cd > 0) ...[
+          const SizedBox(height: 10),
+          _CountdownBar(seconds: act.cd, color: kOrange),
+        ],
+      ]),
+    );
+  }
+
+  /// Works out the one thing the user most likely wants to do right now.
+  _GlanceAction _resolveAction(BuildContext context) {
+    final s       = d.status;
+    final ohState = s?.ohState ?? '';
+    final ugState = s?.ugState ?? '';
+    final ohOn    = s?.ohMotor ?? false;
+    final ugOn    = s?.ugMotor ?? false;
+    final oh      = d.ohMotorName.toUpperCase();
+    final ug      = d.ugMotorName.toUpperCase();
+
+    if (d.ohCmdSending || d.ugCmdSending) {
+      return const _GlanceAction(
+        kind: _CtaKind.sending, label: 'Sending…', icon: Icons.sync, sending: true);
+    }
+    if (d.ohBuzzer) {
+      return _GlanceAction(
+        kind: _CtaKind.cancel, label: 'CANCEL $oh', icon: Icons.cancel_outlined,
+        onTap: d.onOhOff, cd: s?.ohCd ?? 0,
+        sub: 'the buzzer is warning before the pump starts');
+    }
+    if (d.ugBuzzer) {
+      return _GlanceAction(
+        kind: _CtaKind.cancel, label: 'CANCEL $ug', icon: Icons.cancel_outlined,
+        onTap: d.onUgOff, cd: s?.ugCd ?? 0,
+        sub: 'the buzzer is warning before the pump starts');
+    }
+    if (ohOn) {
+      return _GlanceAction(
+        kind: _CtaKind.stop, label: 'STOP $oh', icon: Icons.power_settings_new,
+        onTap: d.onOhOff, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed);
+    }
+    if (ugOn) {
+      return _GlanceAction(
+        kind: _CtaKind.stop, label: 'STOP $ug', icon: Icons.power_settings_new,
+        onTap: d.onUgOff, failed: d.ugCmdFailed, onClearFailed: d.onUgClearFailed,
+        sub: 'the underground tank is filling');
+    }
+    if (ohState == 'FULL') {
+      return _GlanceAction(
+        kind: _CtaKind.calm, label: 'ALL GOOD', icon: Icons.check_rounded,
+        onLongPress: d.onOhOn, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed,
+        sub: 'press and hold to run the ${d.ohMotorName} anyway');
+    }
+    if (ugState == 'EMPTY') {
+      return _GlanceAction(
+        kind: _CtaKind.go, label: 'START $ug', icon: Icons.play_arrow_rounded,
+        onTap: d.onUgOn, failed: d.ugCmdFailed, onClearFailed: d.onUgClearFailed,
+        sub: 'fills the underground tank first');
+    }
+    return _GlanceAction(
+      kind: _CtaKind.go, label: 'START $oh', icon: Icons.play_arrow_rounded,
+      onTap: d.onOhOn, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed,
+      sub: 'fills the overhead tank from underground');
+  }
+}
+
+enum _CtaKind { go, stop, cancel, sending, calm }
+
+/// Everything the hero button needs to render and behave.
+class _GlanceAction {
+  final _CtaKind kind;
+  final String label;
+  final IconData icon;
+  final String sub;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool sending;
+  final bool failed;
+  final VoidCallback? onClearFailed;
+  final int cd;
+
+  const _GlanceAction({
+    required this.kind, required this.label, required this.icon,
+    this.sub = '', this.onTap, this.onLongPress,
+    this.sending = false, this.failed = false, this.onClearFailed, this.cd = 0,
+  });
+}
+
+// ─── Glance: the one big button ─────────────────────────────────────────────
+class _GlanceCta extends StatelessWidget {
+  final _GlanceAction action;
+  const _GlanceCta({required this.action});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // "Calm" is an outlined button — nothing to do, so nothing shouts.
+    // Tapping deliberately does nothing; a long press starts the pump anyway.
+    if (action.kind == _CtaKind.calm) {
+      final clr = accentGreen(context); // green on dark, blue on light
+      return GestureDetector(
+        onLongPress: action.onLongPress,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: clr.withOpacity(isDark ? 0.14 : 0.12),
+            border: Border.all(color: clr.withOpacity(isDark ? 0.35 : 0.40)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: _label(clr),
+        ),
+      );
+    }
+
+    final Color base = switch (action.kind) {
+      _CtaKind.stop    => accentRed(context),
+      _CtaKind.cancel  => accentOrange(context),
+      _CtaKind.sending => isDark ? const Color(0xFF455A64) : const Color(0xFF78909C),
+      _             => accentBlue(context),
+    };
+
+    return _PressableScale(
+      onTap: action.onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter, end: Alignment.bottomCenter,
+            colors: [
+              Color.lerp(base, Colors.white, 0.14)!,
+              base,
+              Color.lerp(base, Colors.black, 0.10)!,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(0.2), width: 0.5),
+          boxShadow: [
+            BoxShadow(color: base.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
+          ],
+        ),
+        child: _label(Colors.white),
+      ),
+    );
+  }
+
+  Widget _label(Color fg) => Row(
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      if (action.sending)
+        SizedBox(
+          width: 15, height: 15,
+          child: CircularProgressIndicator(
+            strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(fg)),
+        )
+      else
+        Icon(action.icon, color: fg, size: 18),
+      const SizedBox(width: 8),
+      Flexible(
+        child: Text(action.label,
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: fg, fontSize: 14,
+            fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+      ),
+    ],
+  );
+}
+
+// ─── Glance: physical-looking overhead tank ─────────────────────────────────
+class _GlanceTank extends StatelessWidget {
+  final String state;
+  final BuildContext context;
+  const _GlanceTank({required this.state, required this.context});
+
+  @override
+  Widget build(BuildContext _) {
+    final pct   = _statePct(state);
+    final color = _stateColor(state, context);
+    final line  = labelColor(context).withOpacity(0.35);
+
+    return Container(
+      width: 82, height: 132,
+      decoration: BoxDecoration(
+        color: subtleBg(context),
+        border: Border.all(color: cardBd(context), width: 2),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(10), bottom: Radius.circular(14)),
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(8), bottom: Radius.circular(12)),
+        child: Stack(children: [
+          // quarter markings
+          Positioned.fill(
+            child: Column(children: [
+              for (int i = 0; i < 3; i++) ...[
+                const Spacer(),
+                Container(height: 1, color: line),
+              ],
+              const Spacer(),
+            ]),
+          ),
+          // water
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: FractionallySizedBox(
+              widthFactor: 1,
+              heightFactor: pct == 0 ? 0.0001 : pct,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [color.withOpacity(0.78), color],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // level %
+          Center(
+            child: Text('${(pct * 100).round()}%',
+              style: TextStyle(
+                color: pct >= 0.5 ? Colors.white : textColor(context),
+                fontSize: 18, fontWeight: FontWeight.w900,
+                shadows: pct >= 0.5
+                    ? const [Shadow(color: Colors.black38, blurRadius: 3, offset: Offset(0, 1))]
+                    : null,
+              )),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─── Glance: the underground tank, demoted to one supporting row ────────────
+class _GlanceSourceCard extends StatelessWidget {
+  final DashboardData d;
+  const _GlanceSourceCard({required this.d});
+
+  @override
+  Widget build(BuildContext context) {
+    final s      = d.status;
+    final state  = s?.ugState ?? '';
+    final motorOn = s?.ugMotor ?? false;
+    final cd     = s?.ugCd ?? 0;
+    final pct    = _statePct(state);
+    final color  = _stateColor(state, context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final String sub = motorOn
+        ? '${d.ugMotorName} running'
+        : d.ugBuzzer ? '${d.ugMotorName} starting…' : '${d.ugMotorName} idle';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardBg(context),
+        border: Border.all(color: cardBd(context)),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(children: [
+        if (d.ugCmdFailed && !d.ugCmdSending) ...[
+          _NotDeliveredBanner(onDismiss: d.onUgClearFailed),
+          const SizedBox(height: 10),
+        ],
+        Row(children: [
+          Icon(Icons.water_drop_outlined, color: color, size: 22),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Underground · ${_stateLabel(state)}',
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor(context), fontSize: 12.5, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 1),
+              Text(sub,
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: labelColor(context), fontSize: 10.5)),
+              const SizedBox(height: 7),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: pct, minHeight: 5,
+                  backgroundColor: subtleBg(context),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 11),
+          _PowerButton(
+            motorOn: motorOn, onOn: d.onUgOn, onOff: d.onUgOff,
+            buzzer: d.ugBuzzer, sending: d.ugCmdSending, cd: cd, compact: true,
+          ),
+        ]),
+        if (d.ugBuzzer && !d.ugCmdSending) ...[
           const SizedBox(height: 9),
           _CountdownBar(seconds: cd, color: kOrange),
         ],
