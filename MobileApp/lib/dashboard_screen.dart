@@ -517,9 +517,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           ),
         ],
       ),
-      body: svc.error != null
-          ? _ErrorBanner(svc.error!)
-          : IndexedStack(
+      body: IndexedStack(
               index: _tabIndex,
               children: [
                 // ── Tab 0: Dashboard ──────────────────────────────────────
@@ -534,6 +532,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         progress: _downloadProgress,
                         onUpdate: _downloadAndInstall,
                       ),
+                    if (svc.error != null)
+                      _Banner(svc.error!, isError: true),
                     if (!svc.connected)
                       const _Banner('Connecting to device…', isError: false),
                     if (s?.txLost == true)
@@ -1790,15 +1790,6 @@ class _Banner extends StatelessWidget {
     ),
     child: Text(msg, style: TextStyle(color: isError ? _red : _orange, fontSize: 13)),
   );
-}
-
-class _ErrorBanner extends StatelessWidget {
-  final String msg;
-  const _ErrorBanner(this.msg);
-
-  @override
-  Widget build(BuildContext context) =>
-    Padding(padding: const EdgeInsets.all(16), child: _Banner(msg));
 }
 
 class _SummaryLine extends StatelessWidget {

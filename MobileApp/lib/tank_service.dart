@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.15.1';
+const mobileAppVersion = '2.15.2';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -1418,13 +1418,13 @@ class TankService extends ChangeNotifier {
         notifyListeners();
         return;
       }
-      if (res.statusCode != 200 && !isMotorCmd) {
+      if (res.statusCode != 200 && cmdStr != 'get_logs' && cmdStr != 'sync' && !isMotorCmd) {
         error = 'Control failed (${res.statusCode}): ${res.body}';
         notifyListeners();
         Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
       }
     } catch (e) {
-      if (!isMotorCmd) {
+      if (cmdStr != 'get_logs' && cmdStr != 'sync' && !isMotorCmd) {
         error = e.toString();
         notifyListeners();
         Future.delayed(const Duration(seconds: 4), () { error = null; notifyListeners(); });
