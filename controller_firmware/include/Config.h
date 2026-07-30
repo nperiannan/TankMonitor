@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "2.8.1"
+#define FW_VERSION "2.9.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "2.0.0"
@@ -138,6 +138,15 @@
 #define MOTOR_START_BUZZER_DELAY_MS 30000UL   // Buzz 30 s before motor starts
 #define BOOT_GRACE_PERIOD_MS        20000UL   // Auto-control & scheduler suppressed for 20 s after boot
 #define MOTOR_MIN_RUN_MS            60000UL   // Hysteresis: motor stays on for at least 60 s once started
+
+// -----------------------------------------------------------------------------
+// Motor start rejection codes — published as "oh_rej"/"ug_rej" in the status
+// JSON. A refused start produces no motor/buzzer state change, so without this
+// the app can only time out and show a misleading "command not delivered".
+// The code is cleared on the next manual command for that motor.
+// -----------------------------------------------------------------------------
+#define MOTOR_REJ_NONE        0
+#define MOTOR_REJ_TANK_FULL   1   // Start refused — tank already FULL (auto-stop would fire at once)
 
 // =============================================================================
 //                              BLE CONFIGURATION

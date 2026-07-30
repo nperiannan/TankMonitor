@@ -557,6 +557,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                         ohCmdSending: svc.ohCmdSending,
                         ugCmdFailed: svc.ugCmdFailed,
                         ohCmdFailed: svc.ohCmdFailed,
+                        ugCmdRejection: svc.ugCmdRejection,
+                        ohCmdRejection: svc.ohCmdRejection,
                         ugCd: s?.ugCd ?? 0,
                         ohCd: s?.ohCd ?? 0,
                         onUgClearFailed: () => svc.clearCmdFailed(false),

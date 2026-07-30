@@ -69,4 +69,11 @@ int getUGStartCountdown();
 uint8_t getOHLastReason();
 uint8_t getUGLastReason();
 
+// MOTOR_REJ_* code explaining why the last manual start request for that motor
+// did nothing (MOTOR_REJ_NONE when the last request was honoured). Published in
+// the status JSON so the app can say "tank already full" instead of timing out
+// with a generic "command not delivered".
+uint8_t getOHRejectCode();
+uint8_t getUGRejectCode();
+
 #endif // MOTOR_CONTROL_H

@@ -48,6 +48,8 @@ class Status {
   final bool ugBuzzer;    // buzzer countdown running for UG motor
   final int  ohCd;        // buzzer countdown remaining seconds for OH (0 when idle)
   final int  ugCd;        // buzzer countdown remaining seconds for UG (0 when idle)
+  final int  ohRej;       // MOTOR_REJ_* — why the last OH manual start did nothing (0 = honoured)
+  final int  ugRej;       // MOTOR_REJ_* — why the last UG manual start did nothing (0 = honoured)
   final String txFw;      // transmitter firmware version
   final String mgmtIp;    // ESP32 management IP (WiFi STA IP)
   final String wifiSsid;  // connected SSID, empty when in AP mode
@@ -83,6 +85,8 @@ class Status {
     required this.ugBuzzer,
     required this.ohCd,
     required this.ugCd,
+    required this.ohRej,
+    required this.ugRej,
     required this.txFw,
     required this.mgmtIp,
     required this.wifiSsid,
@@ -121,6 +125,8 @@ class Status {
         ugBuzzer:   j['ug_buzzer']    as bool? ?? false,
         ohCd:       j['oh_cd']         as int?  ?? 0,
         ugCd:       j['ug_cd']         as int?  ?? 0,
+        ohRej:      j['oh_rej']        as int?  ?? 0,
+        ugRej:      j['ug_rej']        as int?  ?? 0,
         txFw:       j['tx_fw']        as String? ?? '',
         mgmtIp:     j['ip']           as String? ?? '',
         wifiSsid:   j['wifi_ssid']    as String? ?? '',

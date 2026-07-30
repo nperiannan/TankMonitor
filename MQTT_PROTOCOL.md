@@ -90,6 +90,8 @@ Published by `publishMQTTStatus()`:
   "ug_cd": 0,
   "oh_rsn": 5,                    // HistReason code of last OH motor change
   "ug_rsn": 1,
+  "oh_rej": 0,                    // MotorReject code — why the last OH manual start did nothing
+  "ug_rej": 0,
 
   "tx_fw": "2.1.0",               // transmitter node firmware version
 
@@ -104,6 +106,12 @@ Published by `publishMQTTStatus()`:
 `HistReason` codes (`oh_rsn`/`ug_rsn`): `1 Auto, 2 ManualApp, 3 ManualWeb,
 4 ManualTouch, 5 Scheduled, 6 AutoFull, 7 MaxRuntime, 8 LoRaLost, 9 PowerCut,
 10 PowerRestore, 11 BootPower`.
+
+`MotorReject` codes (`oh_rej`/`ug_rej`, `MOTOR_REJ_*` in `Config.h`):
+`0 None, 1 TankFull`. A refused start changes neither the relay nor the buzzer,
+so the app has no state change to acknowledge — without this field it can only
+time out and show a misleading "command not delivered". Cleared on the next
+manual command for that motor.
 
 **Backend handling** (`onStatusMsg` in mqtt.go):
 1. Extract `mac`, `device_type`, `fw`; auto-register/update device row in SQLite (`upsertDevice`).

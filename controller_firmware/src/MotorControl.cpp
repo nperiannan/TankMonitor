@@ -19,6 +19,13 @@ static uint8_t       ugPendingReason = REASON_NONE;
 static uint8_t       ohLastReason = REASON_NONE;
 static uint8_t       ugLastReason = REASON_NONE;
 
+// Why the last manual start request for this motor did nothing (MOTOR_REJ_*).
+// A refused start changes neither the relay nor the buzzer, so the app has no
+// observable ack to wait for — it would otherwise time out after ~12 s and show
+// a misleading "command not delivered". Cleared on the next manual command.
+static uint8_t       ohRejectCode = MOTOR_REJ_NONE;
+static uint8_t       ugRejectCode = MOTOR_REJ_NONE;
+
 // Pending motor start state (for buzzer-delay feature)
 static bool          ohMotorStartPending = false;
 static unsigned long ohMotorPendingStart = 0;
@@ -324,6 +331,7 @@ void processPendingMotorStarts() {
             if (ohMotorSource == MOTOR_SRC_MANUAL && manualAutoStop
                 && ohTankState == TANK_STATE_FULL) {
                 Log(INFO, "[Motor] OH MANUAL start cancelled – tank already FULL");
+                ohRejectCode  = MOTOR_REJ_TANK_FULL;
                 ohMotorSource = MOTOR_SRC_NONE;
             } else {
                 energiseOHRelay(true, ohPendingReason);
@@ -416,7 +424,16 @@ void processPendingMotorStarts() {
 // ---------------------------------------------------------------------------
 
 void turnOnOHMotor(uint8_t reason) {
+    ohRejectCode = MOTOR_REJ_NONE;
     if (ohMotorRunning || ohMotorStartPending) return;
+    // Refuse up-front rather than buzzing for 30 s and cancelling later (or
+    // energising for a single loop before the FULL safety stop fires). The
+    // reject code is published so the app can explain the no-op.
+    if (manualAutoStop && ohTankState == TANK_STATE_FULL) {
+        ohRejectCode = MOTOR_REJ_TANK_FULL;
+        Log(INFO, "[Motor] OH MANUAL start refused – tank already FULL");
+        return;
+    }
     if (ohMotorSource == MOTOR_SRC_NONE) ohMotorSource = MOTOR_SRC_MANUAL;
     ohPendingReason = reason;
     if (buzzerDelayEnabled) {
@@ -430,6 +447,7 @@ void turnOnOHMotor(uint8_t reason) {
 }
 
 void turnOffOHMotor(uint8_t reason) {
+    ohRejectCode = MOTOR_REJ_NONE;
     const bool wasRunning = ohMotorRunning;
     ohMotorStartPending   = false;
     ohMotorSource         = MOTOR_SRC_NONE;
@@ -441,7 +459,15 @@ void turnOffOHMotor(uint8_t reason) {
 }
 
 void turnOnUGMotor(uint8_t reason) {
+    ugRejectCode = MOTOR_REJ_NONE;
     if (ugMotorRunning || ugMotorStartPending) return;
+    // Same rationale as turnOnOHMotor() — the FULL stop at the top of
+    // updateUGMotorControl() would cut it short immediately.
+    if (manualAutoStop && ugTankState == TANK_STATE_FULL) {
+        ugRejectCode = MOTOR_REJ_TANK_FULL;
+        Log(INFO, "[Motor] UG MANUAL start refused – tank already FULL");
+        return;
+    }
     if (ugMotorSource == MOTOR_SRC_NONE) ugMotorSource = MOTOR_SRC_MANUAL;
     ugPendingReason = reason;
     if (buzzerDelayEnabled) {
@@ -455,6 +481,7 @@ void turnOnUGMotor(uint8_t reason) {
 }
 
 void turnOffUGMotor(uint8_t reason) {
+    ugRejectCode = MOTOR_REJ_NONE;
     const bool wasRunning = ugMotorRunning;
     ugMotorStartPending   = false;
     ugMotorSource         = MOTOR_SRC_NONE;
@@ -526,6 +553,9 @@ int getUGStartCountdown() {
 
 uint8_t getOHLastReason() { return ohLastReason; }
 uint8_t getUGLastReason() { return ugLastReason; }
+
+uint8_t getOHRejectCode() { return ohRejectCode; }
+uint8_t getUGRejectCode() { return ugRejectCode; }
 
 // ---------------------------------------------------------------------------
 //  Power-cut recovery + heartbeat

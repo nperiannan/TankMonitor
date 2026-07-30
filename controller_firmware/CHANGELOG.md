@@ -4,6 +4,27 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.9.0] — 2026-07-30
+
+### Added
+- **Motor start rejection codes** (`oh_rej` / `ug_rej` in the status JSON, `MOTOR_REJ_*` in
+  `Config.h`). A manual start into an already-full tank changes neither the relay nor the
+  buzzer, so the app had nothing to acknowledge and fell back to a misleading
+  *"command not delivered — no ack from controller"* after ~12 s. The controller now reports
+  **why** the request was a no-op, and the app shows *"Not started — the overhead tank is
+  already full."* instead. The code is cleared on the next manual command for that motor.
+
+### Changed
+- **Manual starts into a FULL tank are now refused up-front** in `turnOnOHMotor()` /
+  `turnOnUGMotor()`. Previously the request was accepted and then undone moments later —
+  either cancelled after the full 30 s buzzer delay, or energised for a single loop before
+  the FULL safety stop fired. Both wasted the user's time and produced confusing UI. Only
+  applies when `manualAutoStop` is enabled; with it off, manual override still works as
+  before. The existing post-buzzer-delay cancel is kept as a safety net for the case where
+  the tank fills *during* the countdown.
+
+---
+
 ## [2.8.1] — 2026-07-30
 
 ### Changed

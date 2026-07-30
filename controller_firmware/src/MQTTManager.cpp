@@ -673,7 +673,7 @@ void publishMQTTStatus() {
         strcpy(loraLastStr, "Never");
     }
 
-    char payload[1750];
+    char payload[1800];
     snprintf(payload, sizeof(payload),
         "{\"mac\":\"%s\",\"ip\":\"%s\",\"device_type\":\"tank_monitor\","
         "\"oh_state\":\"%s\",\"ug_state\":\"%s\","
@@ -692,6 +692,7 @@ void publishMQTTStatus() {
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
         "\"oh_cd\":%d,\"ug_cd\":%d,"
         "\"oh_rsn\":%u,\"ug_rsn\":%u,"
+        "\"oh_rej\":%u,\"ug_rej\":%u,"
         "\"tx_fw\":\"%s\","
         "\"schedules\":%s}",
         macStr.c_str(),
@@ -726,6 +727,8 @@ void publishMQTTStatus() {
         getUGStartCountdown(),
         (unsigned)getOHLastReason(),
         (unsigned)getUGLastReason(),
+        (unsigned)getOHRejectCode(),
+        (unsigned)getUGRejectCode(),
         TRANSMITTER_FW_VERSION,
         schedJson
     );

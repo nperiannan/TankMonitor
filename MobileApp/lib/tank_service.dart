@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.17.0';
+const mobileAppVersion = '2.18.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -72,6 +72,11 @@ class TankService extends ChangeNotifier {
   bool ugCmdSending = false;
   bool ohCmdFailed  = false;
   bool ugCmdFailed  = false;
+  // Set when the controller received the command but deliberately refused it
+  // (e.g. start into an already-full tank). Distinct from ohCmdFailed, which
+  // means "no ack at all" — a rejection proves the command *was* delivered.
+  String? ohCmdRejection;
+  String? ugCmdRejection;
   bool _ohCmdOn = false; // last OH command was a start request
   bool _ugCmdOn = false;
   Timer? _ohAckTimer, _ugAckTimer;
@@ -85,6 +90,9 @@ class TankService extends ChangeNotifier {
   static const _ackTimeout  = Duration(seconds: 12);
   static const _watchWindow = Duration(seconds: 25);
   static const _failClearAfter = Duration(seconds: 10);
+  // Rejections explain a deliberate refusal, so give the user longer to read
+  // them than the generic "not delivered" banner.
+  static const _rejectClearAfter = Duration(seconds: 15);
 
   // Locally-recorded delivery failures (no ack from controller).
   List<DeliveryIssue> _deliveryIssues = [];
@@ -796,6 +804,7 @@ class TankService extends ChangeNotifier {
       _ohAckTimer?.cancel();
       _ohFailTimer?.cancel();
       ohCmdFailed = false;
+      ohCmdRejection = null;
       ohCmdSending = true;
       _ohCmdOn = on;
       _ohWatchUntil = until;
@@ -805,6 +814,7 @@ class TankService extends ChangeNotifier {
       _ugAckTimer?.cancel();
       _ugFailTimer?.cancel();
       ugCmdFailed = false;
+      ugCmdRejection = null;
       ugCmdSending = true;
       _ugCmdOn = on;
       _ugWatchUntil = until;
@@ -820,6 +830,20 @@ class TankService extends ChangeNotifier {
   bool _cmdReachedUg(Status s, bool on) =>
       on ? (s.ugMotor || s.ugBuzzer) : (!s.ugMotor && !s.ugBuzzer);
 
+  /// Human-readable explanation for a MOTOR_REJ_* code reported by the
+  /// controller, or null when the code is unknown/none. Mirrors the
+  /// MOTOR_REJ_* defines in controller_firmware/include/Config.h.
+  static String? _rejectMessage(int code, bool isOH) {
+    switch (code) {
+      case 1: // MOTOR_REJ_TANK_FULL
+        return isOH
+            ? 'Not started — the overhead tank is already full.'
+            : 'Not started — the underground tank is already full.';
+      default:
+        return null;
+    }
+  }
+
   /// Called after every status update. Clears "sending" once the controller
   /// acknowledges, and retracts a false "not delivered" banner (and its logged
   /// issue) if a late status confirms the command actually landed.
@@ -834,10 +858,28 @@ class TankService extends ChangeNotifier {
         final wasFailed = ohCmdFailed;
         ohCmdSending = false;
         ohCmdFailed = false;
+        ohCmdRejection = null;
         _ohWatchUntil = null;
         if (wasFailed && _ohLastIssue != null) {
           _retractDeliveryIssue(_ohLastIssue!);
           _ohLastIssue = null;
+        }
+      } else if (_ohCmdOn && s.ohRej != 0 && ohCmdSending) {
+        // The controller got the command and refused it — a definitive
+        // negative ack, so stop waiting for a state change that will never
+        // come. The watch window stays open so a late "motor on" status can
+        // still retract this if the reject code turned out to be stale.
+        final msg = _rejectMessage(s.ohRej, true);
+        if (msg != null) {
+          _ohAckTimer?.cancel();
+          ohCmdSending = false;
+          ohCmdFailed = false;
+          ohCmdRejection = msg;
+          _ohFailTimer?.cancel();
+          _ohFailTimer = Timer(_rejectClearAfter, () {
+            ohCmdRejection = null;
+            notifyListeners();
+          });
         }
       } else if (now.isAfter(_ohWatchUntil!)) {
         _ohWatchUntil = null;
@@ -850,10 +892,24 @@ class TankService extends ChangeNotifier {
         final wasFailed = ugCmdFailed;
         ugCmdSending = false;
         ugCmdFailed = false;
+        ugCmdRejection = null;
         _ugWatchUntil = null;
         if (wasFailed && _ugLastIssue != null) {
           _retractDeliveryIssue(_ugLastIssue!);
           _ugLastIssue = null;
+        }
+      } else if (_ugCmdOn && s.ugRej != 0 && ugCmdSending) {
+        final msg = _rejectMessage(s.ugRej, false);
+        if (msg != null) {
+          _ugAckTimer?.cancel();
+          ugCmdSending = false;
+          ugCmdFailed = false;
+          ugCmdRejection = msg;
+          _ugFailTimer?.cancel();
+          _ugFailTimer = Timer(_rejectClearAfter, () {
+            ugCmdRejection = null;
+            notifyListeners();
+          });
         }
       } else if (now.isAfter(_ugWatchUntil!)) {
         _ugWatchUntil = null;
@@ -908,9 +964,11 @@ class TankService extends ChangeNotifier {
     if (isOH) {
       _ohFailTimer?.cancel();
       ohCmdFailed = false;
+      ohCmdRejection = null;
     } else {
       _ugFailTimer?.cancel();
       ugCmdFailed = false;
+      ugCmdRejection = null;
     }
     notifyListeners();
   }

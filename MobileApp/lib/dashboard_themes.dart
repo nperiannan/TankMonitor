@@ -26,6 +26,10 @@ class DashboardData {
   final bool ohCmdSending;
   final bool ugCmdFailed;
   final bool ohCmdFailed;
+  // Set when the controller received the command but refused it (e.g. start
+  // into an already-full tank) — shown instead of the "not delivered" banner.
+  final String? ugCmdRejection;
+  final String? ohCmdRejection;
   final int  ugCd;   // buzzer countdown remaining seconds
   final int  ohCd;
   final VoidCallback? onUgClearFailed;
@@ -51,6 +55,8 @@ class DashboardData {
     this.ohCmdSending = false,
     this.ugCmdFailed = false,
     this.ohCmdFailed = false,
+    this.ugCmdRejection,
+    this.ohCmdRejection,
     this.ugCd = 0,
     this.ohCd = 0,
     this.onUgClearFailed,
@@ -121,6 +127,7 @@ class ConceptDDashboard extends StatelessWidget {
           buzzer: d.ugBuzzer,
           sending: d.ugCmdSending,
           failed: d.ugCmdFailed,
+          rejection: d.ugCmdRejection,
           cd: s?.ugCd ?? 0,
           onOn: d.onUgOn,
           onOff: d.onUgOff,
@@ -133,6 +140,7 @@ class ConceptDDashboard extends StatelessWidget {
           buzzer: d.ohBuzzer,
           sending: d.ohCmdSending,
           failed: d.ohCmdFailed,
+          rejection: d.ohCmdRejection,
           cd: s?.ohCd ?? 0,
           onOn: d.onOhOn,
           onOff: d.onOhOff,
@@ -206,6 +214,7 @@ class ConceptFDashboard extends StatelessWidget {
           buzzer: d.ugBuzzer,
           sending: d.ugCmdSending,
           failed: d.ugCmdFailed,
+          rejection: d.ugCmdRejection,
           cd: s?.ugCd ?? 0,
           onOn: d.onUgOn,
           onOff: d.onUgOff,
@@ -218,6 +227,7 @@ class ConceptFDashboard extends StatelessWidget {
           buzzer: d.ohBuzzer,
           sending: d.ohCmdSending,
           failed: d.ohCmdFailed,
+          rejection: d.ohCmdRejection,
           cd: s?.ohCd ?? 0,
           onOn: d.onOhOn,
           onOff: d.onOhOff,
@@ -971,6 +981,7 @@ class _GridMotorButton extends StatelessWidget {
   final bool buzzer;
   final bool sending;
   final bool failed;
+  final String? rejection;
   final int cd;
   final VoidCallback onOn;
   final VoidCallback onOff;
@@ -983,6 +994,7 @@ class _GridMotorButton extends StatelessWidget {
     this.buzzer = false,
     this.sending = false,
     this.failed = false,
+    this.rejection,
     this.cd = 0,
     this.onClearFailed,
   });
@@ -1013,8 +1025,8 @@ class _GridMotorButton extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // Failed-delivery banner (auto-clears after 10s; tap X to dismiss).
-          if (failed && !sending) ...[
-            _NotDeliveredBanner(onDismiss: onClearFailed),
+          if ((failed || rejection != null) && !sending) ...[
+            _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
             const SizedBox(height: 10),
           ],
           _PowerButton(
@@ -1032,34 +1044,39 @@ class _GridMotorButton extends StatelessWidget {
   }
 }
 
-// ─── "Not delivered" banner ──────────────────────────────────────────────────
+// ─── "Not delivered" / "refused" banner ─────────────────────────────────────
 class _NotDeliveredBanner extends StatelessWidget {
   final VoidCallback? onDismiss;
-  const _NotDeliveredBanner({this.onDismiss});
+  /// When set, the controller *received* the command and deliberately refused
+  /// it (e.g. tank already full). Shown in an advisory style, since nothing is
+  /// broken — unlike the red "no ack at all" case.
+  final String? rejection;
+  const _NotDeliveredBanner({this.onDismiss, this.rejection});
 
   @override
   Widget build(BuildContext context) {
-    final red = accentRed(context);
+    final refused = rejection != null;
+    final c = refused ? accentOrange(context) : accentRed(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: red.withOpacity(0.12),
-        border: Border.all(color: red.withOpacity(0.4)),
+        color: c.withOpacity(0.12),
+        border: Border.all(color: c.withOpacity(0.4)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(children: [
-        Icon(Icons.error_outline, color: red, size: 16),
+        Icon(refused ? Icons.info_outline : Icons.error_outline, color: c, size: 16),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
-            'Not delivered — no ack from controller',
-            style: TextStyle(color: red, fontSize: 10.5, fontWeight: FontWeight.w700, height: 1.2),
+            rejection ?? 'Not delivered — no ack from controller',
+            style: TextStyle(color: c, fontSize: 10.5, fontWeight: FontWeight.w700, height: 1.2),
           ),
         ),
         if (onDismiss != null)
           GestureDetector(
             onTap: onDismiss,
-            child: Icon(Icons.close, color: red.withOpacity(0.8), size: 14),
+            child: Icon(Icons.close, color: c.withOpacity(0.8), size: 14),
           ),
       ]),
     );
@@ -1920,6 +1937,7 @@ class ConceptFlowDashboard extends StatelessWidget {
             buzzer: d.ohBuzzer,
             sending: d.ohCmdSending,
             failed: d.ohCmdFailed,
+            rejection: d.ohCmdRejection,
             cd: s?.ohCd ?? 0,
             onOn: d.onOhOn,
             onOff: d.onOhOff,
@@ -1942,6 +1960,7 @@ class ConceptFlowDashboard extends StatelessWidget {
             buzzer: d.ugBuzzer,
             sending: d.ugCmdSending,
             failed: d.ugCmdFailed,
+            rejection: d.ugCmdRejection,
             cd: s?.ugCd ?? 0,
             onOn: d.onUgOn,
             onOff: d.onUgOff,
@@ -2050,6 +2069,7 @@ class _FlowPump extends StatelessWidget {
   final bool buzzer;
   final bool sending;
   final bool failed;
+  final String? rejection;
   final int cd;
   final VoidCallback onOn;
   final VoidCallback onOff;
@@ -2060,6 +2080,7 @@ class _FlowPump extends StatelessWidget {
     required this.name, required this.motorOn, required this.buzzer,
     required this.sending, required this.failed, required this.cd,
     required this.onOn, required this.onOff, required this.context,
+    this.rejection,
     this.onClearFailed,
   });
 
@@ -2077,8 +2098,8 @@ class _FlowPump extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(children: [
-          if (failed && !sending) ...[
-            _NotDeliveredBanner(onDismiss: onClearFailed),
+          if ((failed || rejection != null) && !sending) ...[
+            _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
             const SizedBox(height: 8),
           ],
           Row(children: [
@@ -2149,6 +2170,7 @@ class ConceptCleanDashboard extends StatelessWidget {
         buzzer: d.ohBuzzer,
         sending: d.ohCmdSending,
         failed: d.ohCmdFailed,
+        rejection: d.ohCmdRejection,
         cd: s?.ohCd ?? 0,
         loraOk: d.loraOk,
         loraRssi: d.loraRssi,
@@ -2168,6 +2190,7 @@ class ConceptCleanDashboard extends StatelessWidget {
         buzzer: d.ugBuzzer,
         sending: d.ugCmdSending,
         failed: d.ugCmdFailed,
+        rejection: d.ugCmdRejection,
         cd: s?.ugCd ?? 0,
         onOn: d.onUgOn,
         onOff: d.onUgOff,
@@ -2186,6 +2209,7 @@ class _CleanUnitCard extends StatelessWidget {
   final bool buzzer;
   final bool sending;
   final bool failed;
+  final String? rejection;
   final int cd;
   final bool? loraOk;
   final double? loraRssi;
@@ -2201,6 +2225,7 @@ class _CleanUnitCard extends StatelessWidget {
     required this.motorOn, required this.buzzer, required this.sending,
     required this.failed, required this.cd,
     required this.onOn, required this.onOff, required this.context,
+    this.rejection,
     this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
     this.onClearFailed,
   });
@@ -2275,8 +2300,8 @@ class _CleanUnitCard extends StatelessWidget {
                   const SizedBox(height: 11),
                   Divider(height: 1, color: cardBd(context)),
                   const SizedBox(height: 10),
-                  if (failed && !sending) ...[
-                    _NotDeliveredBanner(onDismiss: onClearFailed),
+                  if ((failed || rejection != null) && !sending) ...[
+                    _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
                     const SizedBox(height: 9),
                   ],
                   Row(children: [
@@ -2407,6 +2432,7 @@ class ConceptConsoleDashboard extends StatelessWidget {
             buzzer: d.ohBuzzer,
             sending: d.ohCmdSending,
             failed: d.ohCmdFailed,
+            rejection: d.ohCmdRejection,
             cd: s?.ohCd ?? 0,
             onOn: d.onOhOn,
             onOff: d.onOhOff,
@@ -2423,6 +2449,7 @@ class ConceptConsoleDashboard extends StatelessWidget {
             buzzer: d.ugBuzzer,
             sending: d.ugCmdSending,
             failed: d.ugCmdFailed,
+            rejection: d.ugCmdRejection,
             cd: s?.ugCd ?? 0,
             onOn: d.onUgOn,
             onOff: d.onUgOff,
@@ -2444,6 +2471,7 @@ class _ConsoleRow extends StatelessWidget {
   final bool buzzer;
   final bool sending;
   final bool failed;
+  final String? rejection;
   final int cd;
   final VoidCallback onOn;
   final VoidCallback onOff;
@@ -2455,6 +2483,7 @@ class _ConsoleRow extends StatelessWidget {
     required this.motorName, required this.motorOn, required this.buzzer,
     required this.sending, required this.failed, required this.cd,
     required this.onOn, required this.onOff, required this.context,
+    this.rejection,
     this.onClearFailed,
   });
 
@@ -2504,8 +2533,8 @@ class _ConsoleRow extends StatelessWidget {
           ),
         ))),
         const SizedBox(height: 9),
-        if (failed && !sending) ...[
-          _NotDeliveredBanner(onDismiss: onClearFailed),
+        if ((failed || rejection != null) && !sending) ...[
+          _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
           const SizedBox(height: 8),
         ],
         Row(children: [
@@ -2596,7 +2625,9 @@ class _GlanceHero extends StatelessWidget {
     if (ohOn) {
       headline    = 'FILLING';
       headlineClr = accentBlue(context);
-      subline     = '${d.ohMotorName.toUpperCase()} IS RUNNING';
+      subline     = ugOn
+          ? '${d.ohMotorName.toUpperCase()} + ${d.ugMotorName.toUpperCase()} RUNNING'
+          : '${d.ohMotorName.toUpperCase()} IS RUNNING';
     } else {
       headline    = _stateLabel(ohState);
       headlineClr = _stateColor(ohState, context);
@@ -2615,6 +2646,14 @@ class _GlanceHero extends StatelessWidget {
     if (txLost) {
       adviceMain = 'No signal from the transmitter.';
       adviceDim  = 'Showing the last level it reported.';
+    } else if (ohOn && ugOn) {
+      // The controller auto-starts the overhead pump as soon as the underground
+      // tank has water and overhead is at/below its start level, so a manual
+      // underground run often ends up with two pumps going. Say so plainly —
+      // otherwise it reads as though one tap started both.
+      adviceMain = 'Both pumps are running.';
+      adviceDim  = 'The ${d.ohMotorName} started automatically because the '
+                   'overhead tank was low.';
     } else if (ohOn) {
       adviceMain = 'Filling from the underground tank.';
       adviceDim  = 'You can stop it any time.';
@@ -2699,10 +2738,10 @@ class _GlanceHero extends StatelessWidget {
             ]),
           ),
         ]),
-        // failed-delivery notice for whichever motor the action targets
-        if (act.failed && !act.sending) ...[
+        // failed-delivery / refused notice for whichever motor the action targets
+        if ((act.failed || act.rejection != null) && !act.sending) ...[
           const SizedBox(height: 12),
-          _NotDeliveredBanner(onDismiss: act.onClearFailed),
+          _NotDeliveredBanner(onDismiss: act.onClearFailed, rejection: act.rejection),
         ],
         const SizedBox(height: 13),
         _GlanceCta(action: act),
@@ -2749,29 +2788,38 @@ class _GlanceHero extends StatelessWidget {
     if (ohOn) {
       return _GlanceAction(
         kind: _CtaKind.stop, label: 'STOP $oh', icon: Icons.power_settings_new,
-        onTap: d.onOhOff, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed);
+        onTap: d.onOhOff, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
+        onClearFailed: d.onOhClearFailed,
+        // The overhead pump can auto-start part-way through a manual
+        // underground run, which silently retargets this button. Spell out
+        // which pump it stops so a reflex tap doesn't kill the wrong one.
+        sub: ugOn ? 'the $ug is also running — stop it on the card below' : '');
     }
     if (ugOn) {
       return _GlanceAction(
         kind: _CtaKind.stop, label: 'STOP $ug', icon: Icons.power_settings_new,
-        onTap: d.onUgOff, failed: d.ugCmdFailed, onClearFailed: d.onUgClearFailed,
+        onTap: d.onUgOff, failed: d.ugCmdFailed, rejection: d.ugCmdRejection,
+        onClearFailed: d.onUgClearFailed,
         sub: 'the underground tank is filling');
     }
     if (ohState == 'FULL') {
       return _GlanceAction(
         kind: _CtaKind.calm, label: 'ALL GOOD', icon: Icons.check_rounded,
-        onLongPress: d.onOhOn, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed,
+        onLongPress: d.onOhOn, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
+        onClearFailed: d.onOhClearFailed,
         sub: 'press and hold to run the ${d.ohMotorName} anyway');
     }
     if (ugState == 'EMPTY') {
       return _GlanceAction(
         kind: _CtaKind.go, label: 'START $ug', icon: Icons.play_arrow_rounded,
-        onTap: d.onUgOn, failed: d.ugCmdFailed, onClearFailed: d.onUgClearFailed,
+        onTap: d.onUgOn, failed: d.ugCmdFailed, rejection: d.ugCmdRejection,
+        onClearFailed: d.onUgClearFailed,
         sub: 'fills the underground tank first');
     }
     return _GlanceAction(
       kind: _CtaKind.go, label: 'START $oh', icon: Icons.play_arrow_rounded,
-      onTap: d.onOhOn, failed: d.ohCmdFailed, onClearFailed: d.onOhClearFailed,
+      onTap: d.onOhOn, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
+      onClearFailed: d.onOhClearFailed,
       sub: 'fills the overhead tank from underground');
   }
 }
@@ -2788,13 +2836,15 @@ class _GlanceAction {
   final VoidCallback? onLongPress;
   final bool sending;
   final bool failed;
+  final String? rejection;
   final VoidCallback? onClearFailed;
   final int cd;
 
   const _GlanceAction({
     required this.kind, required this.label, required this.icon,
     this.sub = '', this.onTap, this.onLongPress,
-    this.sending = false, this.failed = false, this.onClearFailed, this.cd = 0,
+    this.sending = false, this.failed = false, this.rejection,
+    this.onClearFailed, this.cd = 0,
   });
 }
 
@@ -2982,8 +3032,8 @@ class _GlanceSourceCard extends StatelessWidget {
         ],
       ),
       child: Column(children: [
-        if (d.ugCmdFailed && !d.ugCmdSending) ...[
-          _NotDeliveredBanner(onDismiss: d.onUgClearFailed),
+        if ((d.ugCmdFailed || d.ugCmdRejection != null) && !d.ugCmdSending) ...[
+          _NotDeliveredBanner(onDismiss: d.onUgClearFailed, rejection: d.ugCmdRejection),
           const SizedBox(height: 10),
         ],
         Row(children: [

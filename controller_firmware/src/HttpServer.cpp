@@ -904,6 +904,8 @@ static void handleStatus() {
     doc["ugCd"]              = getUGStartCountdown();
     doc["ohRsn"]             = (int)getOHLastReason();
     doc["ugRsn"]             = (int)getUGLastReason();
+    doc["ohRej"]             = (int)getOHRejectCode();
+    doc["ugRej"]             = (int)getUGRejectCode();
     doc["txFw"]              = TRANSMITTER_FW_VERSION;
     doc["ntpSynced"]         = hasNtpSynced();
     doc["ntpDriftSec"]       = getNtpDriftSeconds();

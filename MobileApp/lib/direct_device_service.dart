@@ -87,6 +87,8 @@ class DirectDeviceService {
       'ug_cd': (s['ugCd'] as num?)?.toInt() ?? 0,
       'oh_rsn': (s['ohRsn'] as num?)?.toInt() ?? 0,
       'ug_rsn': (s['ugRsn'] as num?)?.toInt() ?? 0,
+      'oh_rej': (s['ohRej'] as num?)?.toInt() ?? 0,
+      'ug_rej': (s['ugRej'] as num?)?.toInt() ?? 0,
       'tx_fw': s['txFw'] as String? ?? '',
       'ip': s['wifiIP'] as String? ?? '',
       'oh_last_known': s['ohLastKnown'] as String? ?? '',
