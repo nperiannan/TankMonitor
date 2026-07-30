@@ -6,6 +6,9 @@ enum DashboardConcept {
   grid,        // D — 2×3 grid layout (Aqua Grid)
   hybrid,      // F — Arc gauges + grid motors  (default)
   pro,         // G — Pro unified cards
+  flow,        // Vertical schematic of the real plumbing
+  clean,       // Minimal tank+motor unit cards
+  console,     // Dense, everything above the fold
 }
 
 /// App theme mode.

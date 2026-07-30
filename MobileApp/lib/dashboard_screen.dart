@@ -570,6 +570,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                         case DashboardConcept.grid:      return ConceptDDashboard(d: data);
                         case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
                         case DashboardConcept.pro:       return ConceptGDashboard(d: data);
+                        case DashboardConcept.flow:      return ConceptFlowDashboard(d: data);
+                        case DashboardConcept.clean:     return ConceptCleanDashboard(d: data);
+                        case DashboardConcept.console:   return ConceptConsoleDashboard(d: data);
                       }
                     }),
                     const SizedBox(height: 12),
@@ -1425,6 +1428,9 @@ class _DashboardThemePicker extends StatelessWidget {
       (DashboardConcept.grid,      '💧', 'Aqua Grid',   'Semi-circle gauges'),
       (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
       (DashboardConcept.pro,       '✨', 'Pro',          'Unified cards'),
+      (DashboardConcept.flow,      '🚰', 'Flow',        'System schematic'),
+      (DashboardConcept.clean,     '🧊', 'Clean',       'Minimal cards'),
+      (DashboardConcept.console,   '📟', 'Console',     'Dense, no scroll'),
     ];
 
     return _SectionCard(
