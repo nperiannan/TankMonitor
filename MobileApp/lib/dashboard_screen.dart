@@ -567,9 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         lastLoraReceived: s?.lastLoraReceived ?? '',
                       );
                       switch (prefs.concept) {
-                        case DashboardConcept.grid:      return ConceptDDashboard(d: data);
                         case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
-                        case DashboardConcept.pro:       return ConceptGDashboard(d: data);
                         case DashboardConcept.flow:      return ConceptFlowDashboard(d: data);
                         case DashboardConcept.clean:     return ConceptCleanDashboard(d: data);
                         case DashboardConcept.console:   return ConceptConsoleDashboard(d: data);
@@ -1425,9 +1423,7 @@ class _DashboardThemePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final prefs = context.watch<AppPreferences>();
     const items = [
-      (DashboardConcept.grid,      '💧', 'Aqua Grid',   'Semi-circle gauges'),
       (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
-      (DashboardConcept.pro,       '✨', 'Pro',          'Unified cards'),
       (DashboardConcept.flow,      '🚰', 'Flow',        'System schematic'),
       (DashboardConcept.clean,     '🧊', 'Clean',       'Minimal cards'),
       (DashboardConcept.console,   '📟', 'Console',     'Dense, no scroll'),
@@ -1436,11 +1432,11 @@ class _DashboardThemePicker extends StatelessWidget {
     return _SectionCard(
       title: 'DASHBOARD THEME',
       child: GridView.count(
-        crossAxisCount: 3,
+        crossAxisCount: 2,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 8, crossAxisSpacing: 8,
-        childAspectRatio: 0.85,
+        childAspectRatio: 1.5,
         children: items.map((item) {
           final selected = prefs.concept == item.$1;
           return GestureDetector(
