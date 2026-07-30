@@ -274,7 +274,16 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   // ── Pair ON/OFF events into runs (newest-first), scoped to the period ────
   List<_Run> _runs() {
-    final chrono = _records.reversed.toList(); // oldest-first
+    // Sort ascending by timestamp explicitly rather than assuming a fixed
+    // order from the source: the backend returns DESC (newest-first) when
+    // no from/to is given, but ASC (oldest-first) when a date range is
+    // requested (see web/backend handleDeviceHistory) — and direct mode's
+    // order isn't guaranteed either. Blindly reversing here previously broke
+    // ON/OFF pairing whenever the range-scoped ASC order was returned,
+    // producing negative durations (shown as "0s"), swapped start/stop
+    // times, and runs stuck showing as still "running".
+    final chrono = List<Map<String, dynamic>>.from(_records)
+      ..sort((a, b) => ((a['ts'] as int?) ?? 0).compareTo((b['ts'] as int?) ?? 0));
     Map<String, dynamic>? openOH, openUG;
     final runs = <_Run>[];
     for (final r in chrono) {
