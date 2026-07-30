@@ -3,10 +3,14 @@ import 'package:provider/provider.dart';
 import 'tank_service.dart';
 import 'models.dart';
 import 'theme_data.dart';
+import 'app_preferences.dart';
 
 // Accent colours are theme-independent (they read well on light & dark).
 const _purple = Color(0xFF7C4DFF);
 const _runFg = Color(0xFF08130A);
+
+/// How many days back history can be selected — 2 years.
+const _kMaxHistoryDays = 730;
 
 /// A single motor run built from an ON event and its following OFF (or null if
 /// the motor is still running).
@@ -24,9 +28,23 @@ class _Run {
     final d = end - onTs;
     return d < 0 ? 0 : d;
   }
+
+  /// Duration clipped to [periodFrom, periodTo) — used for period-scoped
+  /// stats/water-volume so a run that started before (or is still running
+  /// past) the selected window only counts the portion actually inside it.
+  int clippedDurSec(int nowTs, int periodFrom, int periodTo) {
+    final start = onTs < periodFrom ? periodFrom : onTs;
+    final rawEnd = offTs ?? nowTs;
+    final end = rawEnd > periodTo ? periodTo : rawEnd;
+    final d = end - start;
+    return d < 0 ? 0 : d;
+  }
 }
 
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/// Selectable history time periods.
+enum HistoryPeriod { today, day, week, month, year }
 
 class EventHistoryScreen extends StatefulWidget {
   final bool initialGraph;
@@ -41,6 +59,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   int _totalCount = 0;
   bool _loading = true;
   bool _showGraph = false;
+
+  HistoryPeriod _period = HistoryPeriod.today;
+  DateTime _anchor = DateTime.now(); // normalized per-period (see _normalize)
 
   // Theme-aware colour accessors (match the rest of the app, follow light/dark).
   Color get _bg => scaffoldBg(context);
@@ -61,19 +82,173 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     _load();
   }
 
+  // ── Period range helpers ──────────────────────────────────────────────────
+
+  DateTime get _earliestAllowed =>
+      DateTime.now().subtract(const Duration(days: _kMaxHistoryDays));
+
+  DateTime _startOfWeek(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    return day.subtract(Duration(days: day.weekday - 1)); // Monday-start
+  }
+
+  DateTime _normalize(DateTime d, HistoryPeriod p) {
+    switch (p) {
+      case HistoryPeriod.today:
+        return DateTime.now();
+      case HistoryPeriod.day:
+        return DateTime(d.year, d.month, d.day);
+      case HistoryPeriod.week:
+        return _startOfWeek(d);
+      case HistoryPeriod.month:
+        return DateTime(d.year, d.month, 1);
+      case HistoryPeriod.year:
+        return DateTime(d.year, 1, 1);
+    }
+  }
+
+  /// The selected window as [from, to) epoch-seconds, plus a little lead-in
+  /// buffer on the fetch so a run that started just before the window (and
+  /// ends inside it) can still be paired up correctly (see _runs()).
+  ({DateTime start, DateTime end}) _periodBounds() {
+    final now = DateTime.now();
+    DateTime start, end;
+    switch (_period) {
+      case HistoryPeriod.today:
+        start = DateTime(now.year, now.month, now.day);
+        end = now;
+        break;
+      case HistoryPeriod.day:
+        start = DateTime(_anchor.year, _anchor.month, _anchor.day);
+        end = start.add(const Duration(days: 1));
+        break;
+      case HistoryPeriod.week:
+        start = _startOfWeek(_anchor);
+        end = start.add(const Duration(days: 7));
+        break;
+      case HistoryPeriod.month:
+        start = DateTime(_anchor.year, _anchor.month, 1);
+        end = DateTime(_anchor.year, _anchor.month + 1, 1);
+        break;
+      case HistoryPeriod.year:
+        start = DateTime(_anchor.year, 1, 1);
+        end = DateTime(_anchor.year + 1, 1, 1);
+        break;
+    }
+    if (end.isAfter(now)) end = now;
+    return (start: start, end: end);
+  }
+
+  int _epoch(DateTime d) => d.millisecondsSinceEpoch ~/ 1000;
+
+  ({DateTime start, DateTime end}) _periodBoundsFor(HistoryPeriod p, DateTime anchor) {
+    final saved = _anchor;
+    final savedP = _period;
+    _anchor = anchor;
+    _period = p;
+    final b = _periodBounds();
+    _anchor = saved;
+    _period = savedP;
+    return b;
+  }
+
+  bool get _canGoBack {
+    final prevAnchor = _normalize(_shiftAnchorFor(_period, _anchor, -1), _period);
+    final prevBounds = _periodBoundsFor(_period, prevAnchor);
+    return !prevBounds.start.isBefore(_earliestAllowed);
+  }
+
+  bool get _canGoForward => _periodBounds().end.isBefore(DateTime.now());
+
+  void _shiftPeriod(int dir) {
+    if (_period == HistoryPeriod.today) return;
+    final next = _normalize(_shiftAnchorFor(_period, _anchor, dir), _period);
+    final bounds = _periodBoundsFor(_period, next);
+    if (dir < 0 && bounds.start.isBefore(_earliestAllowed)) return; // hit 2-yr limit
+    if (dir > 0 && bounds.start.isAfter(DateTime.now())) return; // don't go to the future
+    setState(() => _anchor = next);
+    _load();
+  }
+
+  DateTime _shiftAnchorFor(HistoryPeriod p, DateTime anchor, int dir) {
+    switch (p) {
+      case HistoryPeriod.today:
+        return anchor;
+      case HistoryPeriod.day:
+        return anchor.add(Duration(days: dir));
+      case HistoryPeriod.week:
+        return anchor.add(Duration(days: 7 * dir));
+      case HistoryPeriod.month:
+        return DateTime(anchor.year, anchor.month + dir, 1);
+      case HistoryPeriod.year:
+        return DateTime(anchor.year + dir, 1, 1);
+    }
+  }
+
+  String _rangeLabel() {
+    final b = _periodBounds();
+    switch (_period) {
+      case HistoryPeriod.today:
+        return 'Today';
+      case HistoryPeriod.day:
+        return '${b.start.day} ${_months[b.start.month - 1]} ${b.start.year}';
+      case HistoryPeriod.week:
+        final endIncl = b.end.subtract(const Duration(days: 1));
+        final sameMonth = b.start.month == endIncl.month;
+        final startStr = sameMonth ? '${b.start.day}' : '${b.start.day} ${_months[b.start.month - 1]}';
+        return '$startStr – ${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
+      case HistoryPeriod.month:
+        return '${_months[b.start.month - 1]} ${b.start.year}';
+      case HistoryPeriod.year:
+        return '${b.start.year}';
+    }
+  }
+
+  String _periodChipLabel(HistoryPeriod p) {
+    switch (p) {
+      case HistoryPeriod.today: return 'Today';
+      case HistoryPeriod.day: return 'Day';
+      case HistoryPeriod.week: return 'Week';
+      case HistoryPeriod.month: return 'Month';
+      case HistoryPeriod.year: return 'Year';
+    }
+  }
+
+  String _runsCountLabel() {
+    switch (_period) {
+      case HistoryPeriod.today: return 'RUNS TODAY';
+      case HistoryPeriod.day: return 'RUNS THAT DAY';
+      case HistoryPeriod.week: return 'RUNS THIS WEEK';
+      case HistoryPeriod.month: return 'RUNS THIS MONTH';
+      case HistoryPeriod.year: return 'RUNS THIS YEAR';
+    }
+  }
+
+  // ── Data loading ──────────────────────────────────────────────────────────
+
   Future<void> _load({bool showSpinner = true}) async {
     final svc = context.read<TankService>();
     if (showSpinner) setState(() => _loading = true);
-    final data = await svc.fetchHistory(triggerRefresh: showSpinner);
+    final bounds = _periodBounds();
+    // Fetch a day of lead-in before the window so a run that started just
+    // before it (and ends inside it) can still be paired with its ON event.
+    final fetchFrom = bounds.start.subtract(const Duration(days: 1));
+    final data = await svc.fetchHistory(
+      triggerRefresh: showSpinner,
+      from: _epoch(fetchFrom),
+      to: _epoch(bounds.end),
+    );
     if (!mounted) return;
     setState(() {
       _records = (data['records'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
       _totalCount = data['count'] as int? ?? _records.length;
       _loading = false;
     });
-    if (showSpinner) {
+    // Only auto-refresh while looking at "Today" (a live view); historical
+    // periods don't change once loaded.
+    if (showSpinner && _period == HistoryPeriod.today) {
       Future.delayed(const Duration(milliseconds: 2800), () {
-        if (mounted) _load(showSpinner: false);
+        if (mounted && _period == HistoryPeriod.today) _load(showSpinner: false);
       });
     }
   }
@@ -97,7 +272,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     if (mounted) await _load();
   }
 
-  // ── Pair ON/OFF events into runs (newest-first) ──────────────────────────
+  // ── Pair ON/OFF events into runs (newest-first), scoped to the period ────
   List<_Run> _runs() {
     final chrono = _records.reversed.toList(); // oldest-first
     Map<String, dynamic>? openOH, openUG;
@@ -122,8 +297,21 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     }
     if (openOH != null) runs.add(_Run(motor: 'OH', on: openOH, off: null));
     if (openUG != null) runs.add(_Run(motor: 'UG', on: openUG, off: null));
-    runs.sort((a, b) => b.onTs.compareTo(a.onTs)); // newest first
-    return runs;
+
+    // Keep only runs that overlap the selected period (the lead-in buffer
+    // fetched in _load() lets a run starting just before the window, but
+    // ending inside it, still show up — clipped for stats via clippedDurSec).
+    final bounds = _periodBounds();
+    final periodFrom = _epoch(bounds.start);
+    final periodTo = _epoch(bounds.end);
+    final nowTs = _nowTs();
+    final filtered = runs.where((r) {
+      final end = r.offTs ?? nowTs;
+      return r.onTs < periodTo && end >= periodFrom;
+    }).toList();
+
+    filtered.sort((a, b) => b.onTs.compareTo(a.onTs)); // newest first
+    return filtered;
   }
 
   int _nowTs() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
@@ -210,6 +398,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(12),
                 children: [
+                  _periodBar(),
+                  const SizedBox(height: 12),
                   if (issues.isNotEmpty) ...[
                     _deliveryIssuesCard(issues),
                     const SizedBox(height: 12),
@@ -230,6 +420,234 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // ── PERIOD SELECTOR (chips + resolved-range subrow) ───────────────────────
+  Widget _periodBar() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        for (final p in HistoryPeriod.values) ...[
+          if (p != HistoryPeriod.values.first) const SizedBox(width: 6),
+          Expanded(child: _periodChip(p)),
+        ],
+      ]),
+      if (_period != HistoryPeriod.today) ...[
+        const SizedBox(height: 10),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          GestureDetector(
+            onTap: () => _openPeriodPicker(initialSegment: _period),
+            child: Text(_rangeLabel(),
+                style: TextStyle(color: _txt, fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ),
+          Row(children: [
+            _navArrow(Icons.chevron_left, _canGoBack ? () => _shiftPeriod(-1) : null),
+            const SizedBox(width: 10),
+            _navArrow(Icons.chevron_right, _canGoForward ? () => _shiftPeriod(1) : null),
+          ]),
+        ]),
+      ],
+    ]);
+  }
+
+  Widget _navArrow(IconData icon, VoidCallback? onTap) => GestureDetector(
+        onTap: onTap,
+        child: Icon(icon, color: onTap != null ? _lbl : _lbl.withValues(alpha: 0.3), size: 20),
+      );
+
+  Widget _periodChip(HistoryPeriod p) {
+    final active = _period == p;
+    return GestureDetector(
+      onTap: () {
+        if (p == HistoryPeriod.today) {
+          setState(() {
+            _period = HistoryPeriod.today;
+            _anchor = DateTime.now();
+          });
+          _load();
+        } else {
+          _openPeriodPicker(initialSegment: p);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? _blue : _card2,
+          border: Border.all(color: active ? _blue : _bd),
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Text(_periodChipLabel(p),
+            style: TextStyle(
+                color: active ? Colors.white : _lbl, fontSize: 11.5, fontWeight: FontWeight.w700)),
+      ),
+    );
+  }
+
+  // ── Period picker bottom sheet ─────────────────────────────────────────────
+  Future<void> _openPeriodPicker({required HistoryPeriod initialSegment}) async {
+    HistoryPeriod segment = initialSegment;
+    DateTime tempAnchor = _normalize(
+      _period == initialSegment ? _anchor : DateTime.now(),
+      segment,
+    );
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: _card,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setSheetState) {
+          final bounds = _periodBoundsFor(segment, tempAnchor);
+          final backBounds = _periodBoundsFor(segment, _normalize(_shiftAnchorFor(segment, tempAnchor, -1), segment));
+          final backOk = !backBounds.start.isBefore(_earliestAllowed);
+          final fwdOk = bounds.end.isBefore(DateTime.now());
+
+          String label;
+          switch (segment) {
+            case HistoryPeriod.today:
+              label = 'Today';
+              break;
+            case HistoryPeriod.day:
+              label = '${bounds.start.day} ${_months[bounds.start.month - 1]} ${bounds.start.year}';
+              break;
+            case HistoryPeriod.week:
+              final endIncl = bounds.end.subtract(const Duration(days: 1));
+              label = '${bounds.start.day} ${_months[bounds.start.month - 1]} – '
+                  '${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
+              break;
+            case HistoryPeriod.month:
+              label = '${_months[bounds.start.month - 1]} ${bounds.start.year}';
+              break;
+            case HistoryPeriod.year:
+              label = '${bounds.start.year}';
+              break;
+          }
+
+          void shift(int dir) {
+            final next = _normalize(_shiftAnchorFor(segment, tempAnchor, dir), segment);
+            final b = _periodBoundsFor(segment, next);
+            if (dir < 0 && b.start.isBefore(_earliestAllowed)) return;
+            if (dir > 0 && b.start.isAfter(DateTime.now())) return;
+            setSheetState(() => tempAnchor = next);
+          }
+
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Container(width: 36, height: 4, decoration: BoxDecoration(color: _bd, borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 14),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Select ${_periodChipLabel(segment).toLowerCase()}',
+                    style: TextStyle(color: _txt, fontSize: 15, fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(height: 12),
+              Row(children: [
+                for (final seg in [HistoryPeriod.day, HistoryPeriod.week, HistoryPeriod.month, HistoryPeriod.year]) ...[
+                  if (seg != HistoryPeriod.day) const SizedBox(width: 6),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setSheetState(() {
+                        segment = seg;
+                        tempAnchor = _normalize(DateTime.now(), seg);
+                      }),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: segment == seg ? _blue : _card2,
+                          border: Border.all(color: segment == seg ? _blue : _bd),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(_periodChipLabel(seg),
+                            style: TextStyle(
+                                color: segment == seg ? Colors.white : _lbl,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 16),
+              if (segment == HistoryPeriod.day)
+                _dayPickerRow(ctx, tempAnchor, (d) => setSheetState(() => tempAnchor = _normalize(d, segment)))
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(12)),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    _navArrow(Icons.chevron_left, backOk ? () => shift(-1) : null),
+                    Text(label, style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w600)),
+                    _navArrow(Icons.chevron_right, fwdOk ? () => shift(1) : null),
+                  ]),
+                ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _orange.withValues(alpha: 0.08),
+                  border: Border.all(color: _orange.withValues(alpha: 0.3)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Icon(Icons.info_outline, color: _orange, size: 14),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'History is available for the last 2 years (back to '
+                      '${_months[_earliestAllowed.month - 1]} ${_earliestAllowed.year}).',
+                      style: TextStyle(color: _lbl, fontSize: 10.5, height: 1.4),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _period = segment;
+                    _anchor = tempAnchor;
+                  });
+                  Navigator.pop(ctx);
+                  _load();
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(12)),
+                  child: const Text('Apply',
+                      style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ]),
+          );
+        });
+      },
+    );
+  }
+
+  Widget _dayPickerRow(BuildContext ctx, DateTime selected, ValueChanged<DateTime> onPick) {
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showDatePicker(
+          context: ctx,
+          initialDate: selected,
+          firstDate: _earliestAllowed,
+          lastDate: DateTime.now(),
+        );
+        if (picked != null) onPick(picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(12)),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('${selected.day} ${_months[selected.month - 1]} ${selected.year}',
+              style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w600)),
+          Icon(Icons.calendar_today, color: _lbl, size: 15),
+        ]),
+      ),
     );
   }
 
@@ -354,25 +772,141 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         Text(t, style: TextStyle(color: _lbl, fontSize: 10)),
       ]);
 
+  // ── WATER VOLUME banners (OH pumped / UG drawn, scoped to the period) ────
+  Widget _waterBanners(List<_Run> runs) {
+    final nowTs = _nowTs();
+    final bounds = _periodBounds();
+    final periodFrom = _epoch(bounds.start);
+    final periodTo = _epoch(bounds.end);
+    int ohSec = 0, ugSec = 0;
+    for (final r in runs) {
+      final d = r.clippedDurSec(nowTs, periodFrom, periodTo);
+      if (r.motor == 'OH') {
+        ohSec += d;
+      } else {
+        ugSec += d;
+      }
+    }
+    if (ohSec == 0 && ugSec == 0) return const SizedBox.shrink();
+    final prefs = context.watch<AppPreferences>();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Column(children: [
+        if (ohSec > 0) _waterBanner('OH', ohSec, prefs.ohFlowLPM, _blue),
+        if (ohSec > 0 && ugSec > 0) const SizedBox(height: 8),
+        if (ugSec > 0) _waterBanner('UG', ugSec, prefs.ugFlowLPM, _purple),
+      ]),
+    );
+  }
+
+  Widget _waterBanner(String motor, int sec, double lpm, Color color) {
+    final minutes = sec / 60.0;
+    final litres = (minutes * lpm).round();
+    final label = motor == 'OH' ? 'OH WATER PUMPED (EST.)' : 'UG WATER DRAWN (EST.)';
+    return GestureDetector(
+      onTap: () => _calibrateDialog(motor, lpm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.09),
+          border: Border.all(color: color.withValues(alpha: 0.28)),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(children: [
+          const Text('💧', style: TextStyle(fontSize: 17)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+                Text(_litresStr(litres), style: TextStyle(color: _txt, fontSize: 14.5, fontWeight: FontWeight.w800)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(label,
+                      style: TextStyle(color: _lbl, fontSize: 9.5, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ]),
+              const SizedBox(height: 1),
+              Text('${_durShort(sec)} runtime × ${lpm.toStringAsFixed(0)} L/min (est.)',
+                  style: TextStyle(color: _lbl, fontSize: 9.5)),
+            ]),
+          ),
+          const SizedBox(width: 6),
+          Text('CALIBRATE ›', style: TextStyle(color: color, fontSize: 9.5, fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    );
+  }
+
+  String _litresStr(int litres) {
+    if (litres >= 1000) {
+      final thousands = litres / 1000.0;
+      return '~${thousands.toStringAsFixed(thousands >= 10 ? 0 : 1)}k L';
+    }
+    return '~$litres L';
+  }
+
+  Future<void> _calibrateDialog(String motor, double currentLpm) async {
+    final ctrl = TextEditingController(text: currentLpm.toStringAsFixed(0));
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _card,
+        title: Text('Calibrate $motor pump rate', style: TextStyle(color: _txt, fontSize: 15)),
+        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+            "Enter your pump's real-world flow rate for a more accurate "
+            'estimate. Tip: time how long it takes to fill a known volume '
+            '(e.g. a 20 L bucket) and divide to get L/min.',
+            style: TextStyle(color: _lbl, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: _txt),
+            decoration: InputDecoration(
+              suffixText: 'L/min',
+              suffixStyle: TextStyle(color: _lbl),
+              filled: true,
+              fillColor: _card2,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text.trim());
+              Navigator.pop(ctx, v);
+            },
+            child: Text('Save', style: TextStyle(color: _blue)),
+          ),
+        ],
+      ),
+    );
+    if (result != null && result > 0 && mounted) {
+      await context.read<AppPreferences>().setFlowLPM(motor, result);
+    }
+  }
+
   // ── TABLE (T1★ Enhanced) ─────────────────────────────────────────────────
   Widget _tableView(List<_Run> runs) {
-    if (runs.isEmpty) return _empty('No motor runs yet');
+    if (runs.isEmpty) return _empty('No motor runs in this period');
     final nowTs = _nowTs();
-    final now = DateTime.now();
-    final t0 = DateTime(now.year, now.month, now.day);
+    final bounds = _periodBounds();
+    final periodFrom = _epoch(bounds.start);
+    final periodTo = _epoch(bounds.end);
 
-    int runsToday = 0, ohSec = 0, ugSec = 0, maxDur = 1;
+    int ohSec = 0, ugSec = 0, maxDur = 1;
     for (final r in runs) {
-      final d = DateTime.fromMillisecondsSinceEpoch(r.onTs * 1000).toLocal();
-      final dur = r.durSec(nowTs);
+      final dur = r.clippedDurSec(nowTs, periodFrom, periodTo);
       if (dur > maxDur) maxDur = dur;
-      if (DateTime(d.year, d.month, d.day) == t0) {
-        runsToday++;
-        if (r.motor == 'OH') {
-          ohSec += dur;
-        } else {
-          ugSec += dur;
-        }
+      if (r.motor == 'OH') {
+        ohSec += dur;
+      } else {
+        ugSec += dur;
       }
     }
 
@@ -389,12 +923,14 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
-        _stat('$runsToday', 'RUNS TODAY', null),
+        _stat('${runs.length}', _runsCountLabel(), null),
         const SizedBox(width: 8),
         _stat(_durLong(ohSec + ugSec), 'TOTAL RUN', null),
         const SizedBox(width: 8),
         _stat(_durShort(ohSec), 'OH · UG ${_durShort(ugSec)}', _green),
       ]),
+      const SizedBox(height: 10),
+      _waterBanners(runs),
       for (final k in order) ...[
         _dateHeader(groups[k]!, nowTs),
         for (final r in groups[k]!) _runRow(r, maxDur, nowTs),
@@ -479,9 +1015,18 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 color: solid ? _runFg : color, fontSize: 9, fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
       );
 
-  // ── GRAPH (G2★ Enhanced) ─────────────────────────────────────────────────
+  // ── GRAPH (per-run for Today/Day, aggregated per day/month otherwise) ────
   Widget _graphView(List<_Run> runs) {
     if (runs.isEmpty) return _empty('No motor runs to chart yet');
+    if (_period == HistoryPeriod.today || _period == HistoryPeriod.day) {
+      return _perRunGraph(runs);
+    }
+    return _aggregatedGraph(runs);
+  }
+
+  // Original per-run bar chart (kept for Today/Day where individual runs
+  // are still meaningful at a glance).
+  Widget _perRunGraph(List<_Run> runs) {
     final nowTs = _nowTs();
     final chrono = runs.reversed.toList(); // oldest-first
     final show = chrono.length > 12 ? chrono.sublist(chrono.length - 12) : chrono;
@@ -514,7 +1059,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         const SizedBox(width: 8),
         _stat('${avgMin.round()}m', 'AVG', null),
       ]),
-      const SizedBox(height: 12),
+      const SizedBox(height: 10),
+      _waterBanners(runs),
       Row(children: [
         _legend(_green, 'OH'),
         const SizedBox(width: 14),
@@ -587,6 +1133,130 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               ),
           ]),
         ),
+      ]),
+    ]);
+  }
+
+  /// Aggregated bar chart used for Week/Month (per-day buckets) and Year
+  /// (per-month buckets) — plotting every individual run would be unreadable
+  /// at those scales.
+  Widget _aggregatedGraph(List<_Run> runs) {
+    final nowTs = _nowTs();
+    final bounds = _periodBounds();
+    final periodFrom = _epoch(bounds.start);
+    final periodTo = _epoch(bounds.end);
+    final byMonth = _period == HistoryPeriod.year;
+
+    // Build ordered bucket start-dates spanning the whole period (so empty
+    // days/months still get a zero-height slot instead of being skipped).
+    final buckets = <DateTime>[];
+    if (byMonth) {
+      for (var d = bounds.start; d.isBefore(bounds.end); d = DateTime(d.year, d.month + 1, 1)) {
+        buckets.add(d);
+      }
+    } else {
+      for (var d = bounds.start; d.isBefore(bounds.end); d = d.add(const Duration(days: 1))) {
+        buckets.add(d);
+      }
+    }
+
+    final ohMin = List<double>.filled(buckets.length, 0);
+    final ugMin = List<double>.filled(buckets.length, 0);
+    for (final r in runs) {
+      final dur = r.clippedDurSec(nowTs, periodFrom, periodTo);
+      if (dur <= 0) continue;
+      final d = DateTime.fromMillisecondsSinceEpoch(r.onTs * 1000).toLocal();
+      final idx = byMonth
+          ? (d.year - bounds.start.year) * 12 + (d.month - bounds.start.month)
+          : d.difference(bounds.start).inDays;
+      if (idx < 0 || idx >= buckets.length) continue;
+      if (r.motor == 'OH') {
+        ohMin[idx] += dur / 60.0;
+      } else {
+        ugMin[idx] += dur / 60.0;
+      }
+    }
+
+    int totalSec = 0, longestSec = 0;
+    for (final r in runs) {
+      final dur = r.clippedDurSec(nowTs, periodFrom, periodTo);
+      totalSec += dur;
+      if (dur > longestSec) longestSec = dur;
+    }
+    final activeBuckets = List.generate(buckets.length, (i) => ohMin[i] + ugMin[i]).where((v) => v > 0).length;
+    final avgMinPerBucket = activeBuckets == 0 ? 0.0 : (totalSec / 60.0) / activeBuckets;
+
+    double maxDurMin = 0;
+    for (var i = 0; i < buckets.length; i++) {
+      if (ohMin[i] > maxDurMin) maxDurMin = ohMin[i];
+      if (ugMin[i] > maxDurMin) maxDurMin = ugMin[i];
+    }
+    final maxY = maxDurMin <= 0 ? 20.0 : maxDurMin;
+    const plotH = 150.0;
+
+    // Thin out x-axis labels so they don't overlap on wide (month/year) charts.
+    final labelEvery = buckets.length <= 8 ? 1 : (buckets.length / 6).ceil();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        _stat(_durLong(totalSec), 'TOTAL', null),
+        const SizedBox(width: 8),
+        _stat(_durShort(longestSec), 'LONGEST', null),
+        const SizedBox(width: 8),
+        _stat('${avgMinPerBucket.round()}m', byMonth ? 'AVG/MONTH' : 'AVG/DAY', null),
+      ]),
+      const SizedBox(height: 10),
+      _waterBanners(runs),
+      Row(children: [
+        _legend(_green, 'OH'),
+        const SizedBox(width: 14),
+        _legend(_purple, 'UG'),
+        const Spacer(),
+        Text(byMonth ? 'minutes/month' : 'minutes/day', style: TextStyle(color: _lbl, fontSize: 10)),
+      ]),
+      const SizedBox(height: 10),
+      SizedBox(
+        height: plotH,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            for (var i = 0; i < buckets.length; i++)
+              Expanded(
+                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    height: (plotH * (ohMin[i] / maxY)).clamp(0.0, plotH),
+                    decoration: BoxDecoration(
+                      color: _green,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                    height: (plotH * (ugMin[i] / maxY)).clamp(0.0, plotH),
+                    decoration: BoxDecoration(
+                      color: _purple,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                    ),
+                  ),
+                ]),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 4),
+      Row(children: [
+        for (var i = 0; i < buckets.length; i++)
+          Expanded(
+            child: Text(
+              i % labelEvery == 0 ? (byMonth ? _months[buckets[i].month - 1] : '${buckets[i].day}') : '',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: _lbl, fontSize: 8),
+            ),
+          ),
       ]),
     ]);
   }

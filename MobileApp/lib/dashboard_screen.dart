@@ -630,94 +630,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       );
                     }),
                     const SizedBox(height: 12),
-                    // ── WiFi status preview card ──
-                    _SectionCard(
-                      title: s != null && s.wifiSsid.isNotEmpty ? 'WiFi Connected' : 'AP Hotspot',
-                      titleMixed: true,
-                      trailing: _SmallButton(
-                        label: 'Expand',
-                        onTap: () => showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: cardBg(context),
-                          shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
-                          builder: (_) => const _FullScreenModal(
-                            title: 'WiFi Management',
-                            child: WifiManagementScreen(),
-                          ),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: s != null
-                            ? Row(
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          s.wifiSsid.isNotEmpty ? s.wifiSsid : 'TankMonitor',
-                                          style: TextStyle(
-                                            color: textColor(context),
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          s.wifiSsid.isNotEmpty ? s.mgmtIp : '192.168.4.1',
-                                          style: TextStyle(color: labelColor(context), fontSize: 12),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Column(
-                                    children: [
-                                      Icon(
-                                        s.wifiSsid.isNotEmpty
-                                            ? (s.wifiRssi > -60
-                                                ? Icons.wifi
-                                                : s.wifiRssi > -75
-                                                    ? Icons.wifi_2_bar
-                                                    : Icons.wifi_1_bar)
-                                            : Icons.router,
-                                        color: s.wifiSsid.isNotEmpty
-                                            ? (s.wifiRssi > -60
-                                                ? accentGreen(context)
-                                                : s.wifiRssi > -75
-                                                    ? accentOrange(context)
-                                                    : Colors.redAccent)
-                                            : accentOrange(context),
-                                        size: 24,
-                                      ),
-                                      if (s.wifiSsid.isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          '${s.wifiRssi} dBm',
-                                          style: TextStyle(
-                                            color: s.wifiRssi > -60
-                                                ? accentGreen(context)
-                                                : s.wifiRssi > -75
-                                                    ? accentOrange(context)
-                                                    : Colors.redAccent,
-                                            fontSize: 10,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ],
-                              )
-                            : Text(
-                                'No data yet',
-                                style: TextStyle(color: labelColor(context), fontSize: 12),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     // ── History (moved here from Settings — Table or Trend Graph) ──
                     _SectionCard(
                       title: 'HISTORY',
@@ -2207,28 +2119,6 @@ class _SchedulerModal extends StatelessWidget {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─── Generic full-screen modal wrapper for bottom sheet ───────────────────────
-// Renders the child screen (which has its own Scaffold/AppBar) in a bottom sheet.
-// The child Scaffold's leading BackButton will close the modal.
-class _FullScreenModal extends StatelessWidget {
-  final String title;
-  final Widget child;
-  const _FullScreenModal({required this.title, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    // Use SizedBox to fill most of screen height; child is a full Scaffold.
-    final screenH = MediaQuery.of(context).size.height;
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-      child: SizedBox(
-        height: screenH * 0.92,
-        child: child,
       ),
     );
   }

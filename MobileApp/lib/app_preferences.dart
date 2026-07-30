@@ -18,11 +18,18 @@ const _kUgMotorName      = 'ug_motor_name';
 const _kOhMotorName      = 'oh_motor_name';
 const _kPrefsVersion     = 'prefs_version';
 const _kMotorNotify      = 'motor_notifications';
+const _kOhFlowLPM        = 'oh_flow_lpm';
+const _kUgFlowLPM        = 'ug_flow_lpm';
 
 /// Current prefs schema version.
 /// Bump this when adding new keys — the migration guard ensures smooth
 /// upgrades without crashing existing installs.
-const _currentPrefsVersion = 2;
+const _currentPrefsVersion = 3;
+
+/// Default estimated pump flow rates (litres/minute), used for the History
+/// screen's water-volume estimate until the user calibrates their own pump.
+const kDefaultOhFlowLPM = 30.0; // ½ HP motor · ¾" pipe, typical domestic rate
+const kDefaultUgFlowLPM = 35.0;
 
 class AppPreferences extends ChangeNotifier {
   DashboardConcept _concept = DashboardConcept.hybrid;
@@ -30,12 +37,16 @@ class AppPreferences extends ChangeNotifier {
   String _ugMotorName = 'UG Motor';
   String _ohMotorName = 'OH Motor';
   bool   _motorNotify = false;
+  double _ohFlowLPM = kDefaultOhFlowLPM;
+  double _ugFlowLPM = kDefaultUgFlowLPM;
 
   DashboardConcept get concept   => _concept;
   AppThemeMode     get themeMode => _themeMode;
   String get ugMotorName => _ugMotorName;
   String get ohMotorName => _ohMotorName;
   bool   get motorNotify => _motorNotify;
+  double get ohFlowLPM => _ohFlowLPM;
+  double get ugFlowLPM => _ugFlowLPM;
 
   /// Load saved preferences with migration guard.
   Future<void> load() async {
@@ -56,6 +67,12 @@ class AppPreferences extends ChangeNotifier {
       if (!prefs.containsKey(_kMotorNotify)) {
         await prefs.setBool(_kMotorNotify, false);
       }
+      if (!prefs.containsKey(_kOhFlowLPM)) {
+        await prefs.setDouble(_kOhFlowLPM, kDefaultOhFlowLPM);
+      }
+      if (!prefs.containsKey(_kUgFlowLPM)) {
+        await prefs.setDouble(_kUgFlowLPM, kDefaultUgFlowLPM);
+      }
       await prefs.setInt(_kPrefsVersion, _currentPrefsVersion);
     }
 
@@ -74,6 +91,8 @@ class AppPreferences extends ChangeNotifier {
     _ugMotorName = prefs.getString(_kUgMotorName) ?? 'UG Motor';
     _ohMotorName = prefs.getString(_kOhMotorName) ?? 'OH Motor';
     _motorNotify = prefs.getBool(_kMotorNotify) ?? false;
+    _ohFlowLPM = prefs.getDouble(_kOhFlowLPM) ?? kDefaultOhFlowLPM;
+    _ugFlowLPM = prefs.getDouble(_kUgFlowLPM) ?? kDefaultUgFlowLPM;
 
     notifyListeners();
   }
@@ -112,6 +131,19 @@ class AppPreferences extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kMotorNotify, v);
+  }
+
+  /// Sets the calibrated pump flow rate (litres/minute) used for the water-
+  /// volume estimate on the History screen. [motor] is 'OH' or 'UG'.
+  Future<void> setFlowLPM(String motor, double lpm) async {
+    if (motor == 'UG') {
+      _ugFlowLPM = lpm;
+    } else {
+      _ohFlowLPM = lpm;
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(motor == 'UG' ? _kUgFlowLPM : _kOhFlowLPM, lpm);
   }
 
   /// Resolve effective ThemeMode for MaterialApp.

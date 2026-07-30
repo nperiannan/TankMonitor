@@ -20,7 +20,7 @@ const _kDeliveryLog = 'delivery_issues';
 const defaultWifiUrl   = 'http://nperiannan-nas.freemyip.com:1880';
 const defaultMobileUrl = 'http://nperiannan-nas.freemyip.com:1880';
 
-const mobileAppVersion = '2.14.0';
+const mobileAppVersion = '2.15.0';
 
 class TankService extends ChangeNotifier {
   // ── Auth ─────────────────────────────────────────────────────────────────
@@ -1237,7 +1237,12 @@ class TankService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<Map<String, dynamic>> fetchHistory({bool triggerRefresh = true}) async {
+  /// Fetches motor-run history records. When [from]/[to] are given (as
+  /// epoch-seconds), the request is scoped to that date range server-side
+  /// (see web/backend `handleDeviceHistory`); otherwise the backend returns
+  /// its default recent-history window. Direct mode has no server-side range
+  /// filtering (small EEPROM-backed dataset) — callers filter client-side.
+  Future<Map<String, dynamic>> fetchHistory({bool triggerRefresh = true, int? from, int? to}) async {
     if (directMode && _directService != null) {
       return _directService!.fetchHistory();
     }
@@ -1246,10 +1251,14 @@ class TankService extends ChangeNotifier {
     try {
       final headers = <String, String>{};
       if (authToken != null) headers['Authorization'] = 'Bearer $authToken';
-      final res = await http.get(
-        Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}'),
-        headers: headers,
-      ).timeout(const Duration(seconds: 6));
+      var uri = Uri.parse('$_activeUrl${_devicePath('/api/history', 'history')}');
+      if (from != null || to != null) {
+        uri = uri.replace(queryParameters: {
+          if (from != null) 'from': '$from',
+          if (to != null) 'to': '$to',
+        });
+      }
+      final res = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body) as Map<String, dynamic>;
         if (body['type'] == 'history_list') {
