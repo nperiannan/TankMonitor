@@ -2578,35 +2578,71 @@ class _ConsoleRow extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Concept Glance — one look, one decision
-//   The overhead tank is the hero (it is the only tank you draw water from),
-//   the app says in plain words what that means, and there is exactly ONE big
-//   button that does the right thing right now. The underground tank drops to a
-//   single supporting row, because it only matters as "can I refill?".
+// Concept Nova — next-gen but elder-friendly: two big glass-tank cards, plain
+// language everywhere, and every action is a visible labelled button. No long
+// presses or hidden gestures — the Glance concept's single hero button used a
+// long-press to "start anyway" and silently retargeted itself when both pumps
+// ran at once; Nova fixes both by giving each pump its own permanent card and
+// spelling out overrides as ordinary buttons.
 // ═══════════════════════════════════════════════════════════════════════════════
-class ConceptGlanceDashboard extends StatelessWidget {
+class ConceptNovaDashboard extends StatelessWidget {
   final DashboardData d;
-  const ConceptGlanceDashboard({super.key, required this.d});
+  const ConceptNovaDashboard({super.key, required this.d});
 
   @override
   Widget build(BuildContext context) {
-    final s = d.status;
+    final s    = d.status;
+    final ohOn = s?.ohMotor ?? false;
+    final ugOn = s?.ugMotor ?? false;
     return Column(children: [
       if (s?.txLost == true) ...[
         _LostBanner(lastKnown: s?.ohLastKnown ?? '', context: context),
         const SizedBox(height: 10),
       ],
-      _GlanceHero(d: d),
-      const SizedBox(height: 10),
-      _GlanceSourceCard(d: d),
+      _NovaStatusBanner(d: d),
+      const SizedBox(height: 12),
+      _NovaTankPumpCard(
+        tankLabel: 'Overhead tank',
+        motorName: d.ohMotorName,
+        state: s?.ohState ?? '',
+        motorOn: ohOn,
+        buzzer: d.ohBuzzer,
+        sending: d.ohCmdSending,
+        failed: d.ohCmdFailed,
+        rejection: d.ohCmdRejection,
+        cd: s?.ohCd ?? 0,
+        onOn: d.onOhOn,
+        onOff: d.onOhOff,
+        onClearFailed: d.onOhClearFailed,
+        autoStartNote: ohOn && ugOn,
+        loraOk: d.loraOk,
+        loraRssi: d.loraRssi,
+        loraSNR: d.loraSNR,
+        lastLoraReceived: d.lastLoraReceived,
+      ),
+      const SizedBox(height: 14),
+      _NovaTankPumpCard(
+        tankLabel: 'Underground tank',
+        motorName: d.ugMotorName,
+        state: s?.ugState ?? '',
+        motorOn: ugOn,
+        buzzer: d.ugBuzzer,
+        sending: d.ugCmdSending,
+        failed: d.ugCmdFailed,
+        rejection: d.ugCmdRejection,
+        cd: s?.ugCd ?? 0,
+        onOn: d.onUgOn,
+        onOff: d.onUgOff,
+        onClearFailed: d.onUgClearFailed,
+      ),
     ]);
   }
 }
 
-// ─── Glance: hero card for the overhead tank + the single action ────────────
-class _GlanceHero extends StatelessWidget {
+// ─── Nova: plain-language status banner (what's happening, right now) ───────
+class _NovaStatusBanner extends StatelessWidget {
   final DashboardData d;
-  const _GlanceHero({required this.d});
+  const _NovaStatusBanner({required this.d});
 
   @override
   Widget build(BuildContext context) {
@@ -2618,459 +2654,362 @@ class _GlanceHero extends StatelessWidget {
     final txLost  = s?.txLost ?? false;
     final isDark  = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Headline ────────────────────────────────────────────────────────────
-    final String headline;
-    final Color  headlineClr;
-    final String subline;
-    if (ohOn) {
-      headline    = 'FILLING';
-      headlineClr = accentBlue(context);
-      subline     = ugOn
-          ? '${d.ohMotorName.toUpperCase()} + ${d.ugMotorName.toUpperCase()} RUNNING'
-          : '${d.ohMotorName.toUpperCase()} IS RUNNING';
-    } else {
-      headline    = _stateLabel(ohState);
-      headlineClr = _stateColor(ohState, context);
-      subline     = switch (ohState) {
-        'FULL'  => 'OVERHEAD TANK IS FULL',
-        'HALF'  => 'ABOUT HALF FULL',
-        'LOW'   => 'RUNNING LOW',
-        'EMPTY' => 'OVERHEAD TANK IS EMPTY',
-        _       => 'WAITING FOR A READING',
-      };
-    }
-
-    // ── Plain-English advice ────────────────────────────────────────────────
-    final String adviceMain;
-    final String adviceDim;
+    final IconData icon;
+    final Color color;
+    final String main;
+    final String sub;
     if (txLost) {
-      adviceMain = 'No signal from the transmitter.';
-      adviceDim  = 'Showing the last level it reported.';
+      icon  = Icons.wifi_off_rounded;
+      color = accentOrange(context);
+      main  = 'No signal from the transmitter.';
+      sub   = 'Showing the last level it reported.';
     } else if (ohOn && ugOn) {
       // The controller auto-starts the overhead pump as soon as the underground
       // tank has water and overhead is at/below its start level, so a manual
       // underground run often ends up with two pumps going. Say so plainly —
-      // otherwise it reads as though one tap started both.
-      adviceMain = 'Both pumps are running.';
-      adviceDim  = 'The ${d.ohMotorName} started automatically because the '
-                   'overhead tank was low.';
+      // each pump card below also explains it and states which button stops it.
+      icon  = Icons.water_drop;
+      color = accentBlue(context);
+      main  = 'Both pumps are running.';
+      sub   = 'The ${d.ohMotorName} started automatically because the overhead '
+              'tank was low.';
     } else if (ohOn) {
-      adviceMain = 'Filling from the underground tank.';
-      adviceDim  = 'You can stop it any time.';
+      icon  = Icons.water_drop;
+      color = accentBlue(context);
+      main  = 'Filling the overhead tank.';
+      sub   = 'You can stop it any time — it will stop by itself once full.';
     } else if (ugOn) {
-      adviceMain = 'Borewell is filling the underground tank.';
-      adviceDim  = 'Refill the overhead tank once it has water.';
+      icon  = Icons.water_drop;
+      color = accentBlue(context);
+      main  = 'Filling the underground tank.';
+      sub   = 'Refill the overhead tank once this one has water.';
     } else if (ohState == 'FULL') {
-      adviceMain = 'Plenty of water upstairs.';
-      adviceDim  = 'Nothing needs your attention.';
+      icon  = Icons.check_circle;
+      color = accentGreen(context);
+      main  = "Everything's fine right now.";
+      sub   = 'No action needed.';
     } else if (ohState.isEmpty || ohState == 'UNKNOWN') {
-      adviceMain = 'No level reading yet.';
-      adviceDim  = 'Waiting for the transmitter to report.';
+      icon  = Icons.help_outline;
+      color = labelColor(context);
+      main  = 'No level reading yet.';
+      sub   = 'Waiting for the transmitter to report.';
     } else if (ugState == 'EMPTY') {
-      adviceMain = 'Overhead is ${ohState == 'EMPTY' ? 'empty' : 'running low'} '
-                   'and underground is empty.';
-      adviceDim  = 'Run the borewell first, then refill overhead.';
+      icon  = Icons.warning_amber_rounded;
+      color = accentOrange(context);
+      main  = 'Overhead is ${ohState == 'EMPTY' ? 'empty' : 'running low'} '
+              'and underground is empty.';
+      sub   = 'Run the underground pump first, then refill overhead.';
     } else {
-      adviceMain = 'Overhead tank is ${ohState == 'EMPTY' ? 'empty' : 'running low'}.';
-      adviceDim  = 'Underground has water — safe to refill now.';
+      icon  = Icons.water_drop_outlined;
+      color = accentOrange(context);
+      main  = 'Overhead tank is ${ohState == 'EMPTY' ? 'empty' : 'running low'}.';
+      sub   = 'Underground has water — safe to refill now.';
     }
 
-    // ── The single contextual action ────────────────────────────────────────
-    final _GlanceAction act = _resolveAction(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg(context),
+        border: Border.all(color: color.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.07),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          width: 42, height: 42,
+          decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 22),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(main,
+              style: TextStyle(color: textColor(context), fontSize: 17,
+                  fontWeight: FontWeight.w800, height: 1.3)),
+            const SizedBox(height: 3),
+            Text(sub,
+              style: TextStyle(color: labelColor(context), fontSize: 13.5, height: 1.35)),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─── Nova: one big card per tank — glass tank visual + a full-size pump
+//     button. Every pump is always visible, so two pumps running is never
+//     ambiguous, and every override is a plain button instead of a gesture ──
+class _NovaTankPumpCard extends StatelessWidget {
+  final String tankLabel;
+  final String motorName;
+  final String state;
+  final bool motorOn;
+  final bool buzzer;
+  final bool sending;
+  final bool failed;
+  final String? rejection;
+  final int cd;
+  final VoidCallback onOn;
+  final VoidCallback onOff;
+  final VoidCallback? onClearFailed;
+  final bool autoStartNote;
+  final bool? loraOk;
+  final double? loraRssi;
+  final double? loraSNR;
+  final String? lastLoraReceived;
+
+  const _NovaTankPumpCard({
+    required this.tankLabel, required this.motorName, required this.state,
+    required this.motorOn, required this.buzzer, required this.sending,
+    required this.failed, required this.cd,
+    required this.onOn, required this.onOff,
+    this.rejection, this.onClearFailed, this.autoStartNote = false,
+    this.loraOk, this.loraRssi, this.loraSNR, this.lastLoraReceived,
+  });
+
+  bool get _showRf => loraOk != null;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color  = _stateColor(state, context);
+    final pct    = _statePct(state);
+    final green  = accentGreen(context);
+
+    final String headline      = motorOn ? 'FILLING' : _stateLabel(state);
+    final Color  headlineColor = motorOn ? accentBlue(context) : color;
+    // Nothing to do, and nothing was just refused — a good moment to offer a
+    // plain "start anyway" button instead of the old hidden long-press.
+    final bool atSafeFull = state == 'FULL' && !motorOn && !buzzer && !sending
+        && rejection == null;
+
+    final String pillText = sending
+        ? 'SENDING…'
+        : (motorOn ? 'RUNNING' : (buzzer ? 'STARTING…' : 'OFF'));
+    final Color pillColor = !sending && (motorOn || buzzer) ? green : labelColor(context);
+    final Color pillBg    = !sending && (motorOn || buzzer) ? green.withOpacity(0.15) : subtleBg(context);
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: cardBg(context),
         border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // header
-        SizedBox(
-          height: 20,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('OVERHEAD TANK',
-                style: TextStyle(
-                  color: labelColor(context), fontSize: 10,
-                  letterSpacing: 1.3, fontWeight: FontWeight.w800)),
-              _RfAntennaIcon(
-                loraOk: d.loraOk, loraRssi: d.loraRssi,
-                loraSNR: d.loraSNR, lastLoraReceived: d.lastLoraReceived,
-                size: 16, context: context,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        // tank + headline
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(tankLabel.toUpperCase(),
+            style: TextStyle(color: labelColor(context), fontSize: 12.5,
+                fontWeight: FontWeight.w800, letterSpacing: 1.1)),
+          if (_showRf)
+            _RfAntennaIcon(
+              loraOk: loraOk!, loraRssi: loraRssi ?? 0, loraSNR: loraSNR ?? 0,
+              lastLoraReceived: lastLoraReceived ?? '', size: 16, context: context,
+            ),
+        ]),
+        const SizedBox(height: 13),
         Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-          _GlanceTank(state: ohState, context: context),
-          const SizedBox(width: 14),
+          _NovaGlassTank(level: pct, color: motorOn ? accentBlue(context) : color),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(headline,
                 maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: headlineClr, fontSize: 30,
-                  fontWeight: FontWeight.w900, height: 1.0, letterSpacing: -0.6)),
-              const SizedBox(height: 6),
-              Text(subline,
-                style: TextStyle(
-                  color: labelColor(context), fontSize: 10.5,
-                  fontWeight: FontWeight.w700, letterSpacing: 0.5)),
-              const SizedBox(height: 11),
-              Text(adviceMain,
-                style: TextStyle(
-                  color: textColor(context), fontSize: 13, height: 1.35)),
-              Text(adviceDim,
-                style: TextStyle(
-                  color: labelColor(context), fontSize: 13, height: 1.35)),
+                style: TextStyle(color: headlineColor, fontSize: 27,
+                    fontWeight: FontWeight.w900, letterSpacing: -0.4)),
+              const SizedBox(height: 5),
+              Text('${(pct * 100).round()}% full',
+                style: TextStyle(color: labelColor(context), fontSize: 14,
+                    fontWeight: FontWeight.w600)),
             ]),
           ),
         ]),
-        // failed-delivery / refused notice for whichever motor the action targets
-        if ((act.failed || act.rejection != null) && !act.sending) ...[
+        const SizedBox(height: 17),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Expanded(
+            child: Text(motorName,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: textColor(context), fontSize: 15.5,
+                  fontWeight: FontWeight.w700)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(color: pillBg, borderRadius: BorderRadius.circular(999)),
+            child: Text(pillText,
+              style: TextStyle(color: pillColor, fontSize: 12,
+                  fontWeight: FontWeight.w800, letterSpacing: 0.4)),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        if ((failed || rejection != null) && !sending) ...[
+          _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
           const SizedBox(height: 12),
-          _NotDeliveredBanner(onDismiss: act.onClearFailed, rejection: act.rejection),
         ],
-        const SizedBox(height: 13),
-        _GlanceCta(action: act),
-        if (act.sub.isNotEmpty) ...[
-          const SizedBox(height: 7),
-          Text(act.sub,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: labelColor(context), fontSize: 10.5)),
+        _PowerButton(
+          motorOn: motorOn, onOn: onOn, onOff: onOff,
+          buzzer: buzzer, sending: sending, cd: cd, expanded: true,
+        ),
+        if (buzzer && !sending) ...[
+          const SizedBox(height: 11),
+          _CountdownBar(seconds: cd, color: kOrange),
         ],
-        if (act.cd > 0) ...[
+        if (autoStartNote) ...[
+          const SizedBox(height: 13),
+          _NovaInlineNote(
+            icon: Icons.info_outline, color: accentBlue(context),
+            text: 'This pump started on its own because the tank was low.'),
+        ],
+        if (atSafeFull) ...[
+          const SizedBox(height: 13),
+          _NovaInlineNote(
+            icon: Icons.check_circle_outline, color: green,
+            text: 'Tank is already full — nothing to do.'),
           const SizedBox(height: 10),
-          _CountdownBar(seconds: act.cd, color: kOrange),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: onOn,
+              icon: Icon(Icons.play_arrow_rounded, size: 19, color: accentOrange(context)),
+              label: Text('Start anyway',
+                style: TextStyle(color: accentOrange(context), fontWeight: FontWeight.w700,
+                    fontSize: 14)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 44),
+              ),
+            ),
+          ),
         ],
       ]),
     );
   }
-
-  /// Works out the one thing the user most likely wants to do right now.
-  _GlanceAction _resolveAction(BuildContext context) {
-    final s       = d.status;
-    final ohState = s?.ohState ?? '';
-    final ugState = s?.ugState ?? '';
-    final ohOn    = s?.ohMotor ?? false;
-    final ugOn    = s?.ugMotor ?? false;
-    final oh      = d.ohMotorName.toUpperCase();
-    final ug      = d.ugMotorName.toUpperCase();
-
-    if (d.ohCmdSending || d.ugCmdSending) {
-      return const _GlanceAction(
-        kind: _CtaKind.sending, label: 'Sending…', icon: Icons.sync, sending: true);
-    }
-    if (d.ohBuzzer) {
-      return _GlanceAction(
-        kind: _CtaKind.cancel, label: 'CANCEL $oh', icon: Icons.cancel_outlined,
-        onTap: d.onOhOff, cd: s?.ohCd ?? 0,
-        sub: 'the buzzer is warning before the pump starts');
-    }
-    if (d.ugBuzzer) {
-      return _GlanceAction(
-        kind: _CtaKind.cancel, label: 'CANCEL $ug', icon: Icons.cancel_outlined,
-        onTap: d.onUgOff, cd: s?.ugCd ?? 0,
-        sub: 'the buzzer is warning before the pump starts');
-    }
-    if (ohOn) {
-      return _GlanceAction(
-        kind: _CtaKind.stop, label: 'STOP $oh', icon: Icons.power_settings_new,
-        onTap: d.onOhOff, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
-        onClearFailed: d.onOhClearFailed,
-        // The overhead pump can auto-start part-way through a manual
-        // underground run, which silently retargets this button. Spell out
-        // which pump it stops so a reflex tap doesn't kill the wrong one.
-        sub: ugOn ? 'the $ug is also running — stop it on the card below' : '');
-    }
-    if (ugOn) {
-      return _GlanceAction(
-        kind: _CtaKind.stop, label: 'STOP $ug', icon: Icons.power_settings_new,
-        onTap: d.onUgOff, failed: d.ugCmdFailed, rejection: d.ugCmdRejection,
-        onClearFailed: d.onUgClearFailed,
-        sub: 'the underground tank is filling');
-    }
-    if (ohState == 'FULL') {
-      return _GlanceAction(
-        kind: _CtaKind.calm, label: 'ALL GOOD', icon: Icons.check_rounded,
-        onLongPress: d.onOhOn, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
-        onClearFailed: d.onOhClearFailed,
-        sub: 'press and hold to run the ${d.ohMotorName} anyway');
-    }
-    if (ugState == 'EMPTY') {
-      return _GlanceAction(
-        kind: _CtaKind.go, label: 'START $ug', icon: Icons.play_arrow_rounded,
-        onTap: d.onUgOn, failed: d.ugCmdFailed, rejection: d.ugCmdRejection,
-        onClearFailed: d.onUgClearFailed,
-        sub: 'fills the underground tank first');
-    }
-    return _GlanceAction(
-      kind: _CtaKind.go, label: 'START $oh', icon: Icons.play_arrow_rounded,
-      onTap: d.onOhOn, failed: d.ohCmdFailed, rejection: d.ohCmdRejection,
-      onClearFailed: d.onOhClearFailed,
-      sub: 'fills the overhead tank from underground');
-  }
 }
 
-enum _CtaKind { go, stop, cancel, sending, calm }
-
-/// Everything the hero button needs to render and behave.
-class _GlanceAction {
-  final _CtaKind kind;
-  final String label;
+// ─── Nova: a short, always-legible explanatory line under the button ────────
+class _NovaInlineNote extends StatelessWidget {
   final IconData icon;
-  final String sub;
-  final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
-  final bool sending;
-  final bool failed;
-  final String? rejection;
-  final VoidCallback? onClearFailed;
-  final int cd;
-
-  const _GlanceAction({
-    required this.kind, required this.label, required this.icon,
-    this.sub = '', this.onTap, this.onLongPress,
-    this.sending = false, this.failed = false, this.rejection,
-    this.onClearFailed, this.cd = 0,
-  });
-}
-
-// ─── Glance: the one big button ─────────────────────────────────────────────
-class _GlanceCta extends StatelessWidget {
-  final _GlanceAction action;
-  const _GlanceCta({required this.action});
+  final Color color;
+  final String text;
+  const _NovaInlineNote({required this.icon, required this.color, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // "Calm" is an outlined button — nothing to do, so nothing shouts.
-    // Tapping deliberately does nothing; a long press starts the pump anyway.
-    if (action.kind == _CtaKind.calm) {
-      final clr = accentGreen(context); // green on dark, blue on light
-      return GestureDetector(
-        onLongPress: action.onLongPress,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: clr.withOpacity(isDark ? 0.14 : 0.12),
-            border: Border.all(color: clr.withOpacity(isDark ? 0.35 : 0.40)),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: _label(clr),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(color: color.withOpacity(0.10), borderRadius: BorderRadius.circular(13)),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(text,
+            style: TextStyle(color: textColor(context), fontSize: 13.5,
+                fontWeight: FontWeight.w600, height: 1.3)),
         ),
-      );
-    }
-
-    final Color base = switch (action.kind) {
-      _CtaKind.stop    => accentRed(context),
-      _CtaKind.cancel  => accentOrange(context),
-      _CtaKind.sending => isDark ? const Color(0xFF455A64) : const Color(0xFF78909C),
-      _             => accentBlue(context),
-    };
-
-    return _PressableScale(
-      onTap: action.onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter, end: Alignment.bottomCenter,
-            colors: [
-              Color.lerp(base, Colors.white, 0.14)!,
-              base,
-              Color.lerp(base, Colors.black, 0.10)!,
-            ],
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withOpacity(0.2), width: 0.5),
-          boxShadow: [
-            BoxShadow(color: base.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
-          ],
-        ),
-        child: _label(Colors.white),
-      ),
+      ]),
     );
   }
-
-  Widget _label(Color fg) => Row(
-    mainAxisAlignment: MainAxisAlignment.center,
-    children: [
-      if (action.sending)
-        SizedBox(
-          width: 15, height: 15,
-          child: CircularProgressIndicator(
-            strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(fg)),
-        )
-      else
-        Icon(action.icon, color: fg, size: 18),
-      const SizedBox(width: 8),
-      Flexible(
-        child: Text(action.label,
-          maxLines: 1, overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: fg, fontSize: 14,
-            fontWeight: FontWeight.w800, letterSpacing: 0.4)),
-      ),
-    ],
-  );
 }
 
-// ─── Glance: physical-looking overhead tank ─────────────────────────────────
-class _GlanceTank extends StatelessWidget {
-  final String state;
-  final BuildContext context;
-  const _GlanceTank({required this.state, required this.context});
+// ─── Nova: an animated glass tank — the fill level reads instantly without
+//     needing to interpret a percentage, and the gentle wave gives it a
+//     "next-gen" feel without becoming distracting. ─────────────────────────
+class _NovaGlassTank extends StatefulWidget {
+  final double level; // 0..1
+  final Color color;
+  const _NovaGlassTank({required this.level, required this.color});
 
   @override
-  Widget build(BuildContext _) {
-    final pct   = _statePct(state);
-    final color = _stateColor(state, context);
-    final line  = labelColor(context).withOpacity(0.35);
+  State<_NovaGlassTank> createState() => _NovaGlassTankState();
+}
 
+class _NovaGlassTankState extends State<_NovaGlassTank> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 82, height: 132,
+      width: 76, height: 108,
       decoration: BoxDecoration(
         color: subtleBg(context),
-        border: Border.all(color: cardBd(context), width: 2),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(10), bottom: Radius.circular(14)),
+        border: Border.all(color: cardBd(context), width: 2.5),
+        borderRadius: BorderRadius.circular(18),
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(8), bottom: Radius.circular(12)),
+        borderRadius: BorderRadius.circular(15.5),
         child: Stack(children: [
-          // quarter markings
-          Positioned.fill(
-            child: Column(children: [
-              for (int i = 0; i < 3; i++) ...[
-                const Spacer(),
-                Container(height: 1, color: line),
-              ],
-              const Spacer(),
-            ]),
+          AnimatedBuilder(
+            animation: _ctrl,
+            builder: (_, __) => CustomPaint(
+              size: Size.infinite,
+              painter: _NovaWavePainter(level: widget.level, color: widget.color, phase: _ctrl.value),
+            ),
           ),
-          // water
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: FractionallySizedBox(
-              widthFactor: 1,
-              heightFactor: pct == 0 ? 0.0001 : pct,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                    colors: [color.withOpacity(0.78), color],
-                  ),
+          Positioned(
+            top: 7, left: 9, width: 11, height: 62,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                  colors: [Colors.white.withOpacity(0.32), Colors.white.withOpacity(0.0)],
                 ),
               ),
             ),
           ),
-          // level %
-          Center(
-            child: Text('${(pct * 100).round()}%',
-              style: TextStyle(
-                color: pct >= 0.5 ? Colors.white : textColor(context),
-                fontSize: 18, fontWeight: FontWeight.w900,
-                shadows: pct >= 0.5
-                    ? const [Shadow(color: Colors.black38, blurRadius: 3, offset: Offset(0, 1))]
-                    : null,
-              )),
-          ),
         ]),
       ),
     );
   }
 }
 
-// ─── Glance: the underground tank, demoted to one supporting row ────────────
-class _GlanceSourceCard extends StatelessWidget {
-  final DashboardData d;
-  const _GlanceSourceCard({required this.d});
+class _NovaWavePainter extends CustomPainter {
+  final double level; // 0..1
+  final Color color;
+  final double phase;  // 0..1, animated
+  _NovaWavePainter({required this.level, required this.color, required this.phase});
 
   @override
-  Widget build(BuildContext context) {
-    final s      = d.status;
-    final state  = s?.ugState ?? '';
-    final motorOn = s?.ugMotor ?? false;
-    final cd     = s?.ugCd ?? 0;
-    final pct    = _statePct(state);
-    final color  = _stateColor(state, context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final String sub = motorOn
-        ? '${d.ugMotorName} running'
-        : d.ugBuzzer ? '${d.ugMotorName} starting…' : '${d.ugMotorName} idle';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardBg(context),
-        border: Border.all(color: cardBd(context)),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(children: [
-        if ((d.ugCmdFailed || d.ugCmdRejection != null) && !d.ugCmdSending) ...[
-          _NotDeliveredBanner(onDismiss: d.onUgClearFailed, rejection: d.ugCmdRejection),
-          const SizedBox(height: 10),
-        ],
-        Row(children: [
-          Icon(Icons.water_drop_outlined, color: color, size: 22),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Underground · ${_stateLabel(state)}',
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: textColor(context), fontSize: 12.5, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 1),
-              Text(sub,
-                maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: labelColor(context), fontSize: 10.5)),
-              const SizedBox(height: 7),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(3),
-                child: LinearProgressIndicator(
-                  value: pct, minHeight: 5,
-                  backgroundColor: subtleBg(context),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-            ]),
-          ),
-          const SizedBox(width: 11),
-          _PowerButton(
-            motorOn: motorOn, onOn: d.onUgOn, onOff: d.onUgOff,
-            buzzer: d.ugBuzzer, sending: d.ugCmdSending, cd: cd, compact: true,
-          ),
-        ]),
-        if (d.ugBuzzer && !d.ugCmdSending) ...[
-          const SizedBox(height: 9),
-          _CountdownBar(seconds: cd, color: kOrange),
-        ],
-      ]),
-    );
+  void paint(Canvas canvas, Size size) {
+    final waterTop = size.height * (1 - level.clamp(0.0, 1.0));
+    const waveHeight = 3.5;
+    final path = Path()..moveTo(0, waterTop);
+    for (double x = 0; x <= size.width; x += 4) {
+      final y = waterTop + sin((x / size.width * 2 * pi) + phase * 2 * pi) * waveHeight;
+      path.lineTo(x, y);
+    }
+    path
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color.withOpacity(0.82));
   }
+
+  @override
+  bool shouldRepaint(covariant _NovaWavePainter oldDelegate) =>
+      oldDelegate.phase != phase || oldDelegate.level != level || oldDelegate.color != color;
 }

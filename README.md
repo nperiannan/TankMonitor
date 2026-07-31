@@ -25,7 +25,7 @@ flowchart TD
     CTRL -. "HTTP OTA poll · every 5 min" .-> WEB
 
     BROWSER["Web Browser"]
-    APP["Mobile App\nFlutter Android · v2.18.0"]
+    APP["Mobile App\nFlutter Android · v2.19.0"]
 
     BROWSER <-- "HTTP + WebSocket · :1880" --> WEB
     APP <-- "HTTP + WebSocket · :1880" --> WEB
@@ -139,7 +139,7 @@ TankMonitor/
 | Controller Firmware | v2.9.0 |
 | Transmitter Firmware | v2.1.0 |
 | Web App | v2.5.0 |
-| Mobile App | v2.18.0 |
+| Mobile App | v2.19.0 |
 
 ---
 

@@ -570,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                       );
                       switch (prefs.concept) {
                         case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
-                        case DashboardConcept.glance:    return ConceptGlanceDashboard(d: data);
+                        case DashboardConcept.nova:      return ConceptNovaDashboard(d: data);
                         case DashboardConcept.flow:      return ConceptFlowDashboard(d: data);
                         case DashboardConcept.clean:     return ConceptCleanDashboard(d: data);
                         case DashboardConcept.console:   return ConceptConsoleDashboard(d: data);
@@ -1427,7 +1427,7 @@ class _DashboardThemePicker extends StatelessWidget {
     final prefs = context.watch<AppPreferences>();
     const items = [
       (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
-      (DashboardConcept.glance,    '👁️', 'Glance',      'One look, one action'),
+      (DashboardConcept.nova,      '✨', 'Nova',        'Big & simple, for everyone'),
       (DashboardConcept.flow,      '🚰', 'Flow',        'System schematic'),
       (DashboardConcept.clean,     '🧊', 'Clean',       'Minimal cards'),
       (DashboardConcept.console,   '📟', 'Console',     'Dense, no scroll'),
