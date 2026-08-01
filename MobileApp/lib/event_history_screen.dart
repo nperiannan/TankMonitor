@@ -332,13 +332,16 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   String _durLong(int sec) {
     if (sec < 60) return '${sec}s';
-    final m = sec ~/ 60, h = m ~/ 60, mm = m % 60;
+    // Round (not truncate) to the nearest minute so e.g. a 118s run shows
+    // "2m" — matching the minute-rounded HH:MM start/stop labels shown next
+    // to it — instead of truncating down to "1m".
+    final m = (sec + 30) ~/ 60, h = m ~/ 60, mm = m % 60;
     return h > 0 ? '${h}h ${_two(mm)}m' : '${m}m';
   }
 
   String _durShort(int sec) {
     if (sec < 60) return '${sec}s';
-    final m = sec ~/ 60, h = m ~/ 60, mm = m % 60;
+    final m = (sec + 30) ~/ 60, h = m ~/ 60, mm = m % 60;
     return h > 0 ? '${h}h ${mm}m' : '${m}m';
   }
 
@@ -1289,12 +1292,19 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         Text('${durMin.round()}',
             style: TextStyle(color: isOH ? _green : _purple, fontSize: 9, fontWeight: FontWeight.w800)),
         const SizedBox(height: 3),
-        FractionallySizedBox(
-          widthFactor: 0.62,
-          child: Container(
-            height: barH,
-            decoration: BoxDecoration(gradient: grad, borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
-          ),
+        // Cap the bar's width so a chart with only one or two runs (whose
+        // Expanded slot spans most/all of the plot area) doesn't stretch
+        // into one huge column — width scales with the slot but never
+        // exceeds a sensible max, matching the slim bars seen with many runs.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final w = (constraints.maxWidth * 0.62).clamp(8.0, 34.0);
+            return Container(
+              width: w,
+              height: barH,
+              decoration: BoxDecoration(gradient: grad, borderRadius: const BorderRadius.vertical(top: Radius.circular(6))),
+            );
+          },
         ),
       ]),
     );
