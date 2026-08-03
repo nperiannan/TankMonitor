@@ -245,12 +245,10 @@ class ConceptFDashboard extends StatelessWidget {
 
 // ─── State → colour / percentage / label ─────────────────────────────────────
 // Eye-pleasing Material palette colors — same meaning on both themes.
-// "Full" is green on dark, but blue on light: Green 600 washes out against the
-// pale #F0F4F8 background and clashes with the blue the rest of the light theme
-// already uses (gear icon, running dot, POWER ON). HALF/LOW/EMPTY keep their
-// amber → orange → red ramp on both themes so "needs attention" still stands out.
-const _kFullDark  = Color(0xFF66bb6a); // Green 400
-const _kFullLight = Color(0xFF1976D2); // Blue 700
+// "Full" is blue on both themes (matches the rest of the app's blue accent —
+// running dot, POWER ON in light theme, OH identity color in History).
+// HALF/LOW/EMPTY keep their amber → orange → red ramp on both themes so
+// "needs attention" still stands out.
 const _kHalfDark  = Color(0xFFfdd835); // Yellow 600
 const _kHalfLight = Color(0xFFF9A825); // Yellow 800
 const _kLowDark   = Color(0xFFffa726); // Orange 400
@@ -262,7 +260,7 @@ const _kUnknown   = Color(0xFF9e9e9e); // Grey 500
 Color _stateColor(String state, BuildContext context) {
   final isDark = Theme.of(context).brightness == Brightness.dark;
   switch (state) {
-    case 'FULL':  return isDark ? _kFullDark  : _kFullLight;
+    case 'FULL':  return accentBlue(context);
     case 'HALF':  return isDark ? _kHalfDark  : _kHalfLight;
     case 'LOW':   return isDark ? _kLowDark   : _kLowLight;
     case 'EMPTY': return isDark ? _kEmptyDark : _kEmptyLight;
@@ -2784,10 +2782,6 @@ class _NovaTankPumpCard extends StatelessWidget {
 
     final String headline      = motorOn ? 'FILLING' : _stateLabel(state);
     final Color  headlineColor = motorOn ? accentBlue(context) : color;
-    // Nothing to do, and nothing was just refused — a good moment to offer a
-    // plain "start anyway" button instead of the old hidden long-press.
-    final bool atSafeFull = state == 'FULL' && !motorOn && !buzzer && !sending
-        && rejection == null;
 
     final String pillText = sending
         ? 'SENDING…'
@@ -2871,27 +2865,6 @@ class _NovaTankPumpCard extends StatelessWidget {
           _NovaInlineNote(
             icon: Icons.info_outline, color: accentBlue(context),
             text: 'This pump started on its own because the tank was low.'),
-        ],
-        if (atSafeFull) ...[
-          const SizedBox(height: 13),
-          _NovaInlineNote(
-            icon: Icons.check_circle_outline, color: green,
-            text: 'Tank is already full — nothing to do.'),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: onOn,
-              icon: Icon(Icons.play_arrow_rounded, size: 19, color: accentOrange(context)),
-              label: Text('Start anyway',
-                style: TextStyle(color: accentOrange(context), fontWeight: FontWeight.w700,
-                    fontSize: 14)),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                minimumSize: const Size(0, 44),
-              ),
-            ),
-          ),
         ],
       ]),
     );

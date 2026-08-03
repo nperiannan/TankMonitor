@@ -90,7 +90,6 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   DateTime _normalize(DateTime d, HistoryPeriod p) {
     switch (p) {
       case HistoryPeriod.today:
-        return DateTime.now();
       case HistoryPeriod.week:
       case HistoryPeriod.month:
       case HistoryPeriod.year:
@@ -105,9 +104,13 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     final now = DateTime.now();
     DateTime start, end;
     switch (_period) {
+      // Today behaves like a single-day window anchored on `_anchor` (which
+      // defaults to today) so it can be paged backward/forward one day at a
+      // time — when the anchor IS today, the end is capped to "now" below so
+      // it stays a live view; a past anchor gets the full historical day.
       case HistoryPeriod.today:
-        start = DateTime(now.year, now.month, now.day);
-        end = now;
+        start = DateTime(_anchor.year, _anchor.month, _anchor.day);
+        end = DateTime(_anchor.year, _anchor.month, _anchor.day + 1);
         break;
       // Week/Month/Year are rolling windows ending on (and including) the
       // anchor date — e.g. Week = the 7 days up to and including the anchor —
@@ -150,8 +153,14 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   bool get _canGoForward => _periodBounds().end.isBefore(DateTime.now());
 
+  /// True when the current anchor date is today (vs. a past day reached via
+  /// the arrows or the date picker while still on the "Today" chip).
+  bool get _anchorIsToday {
+    final now = DateTime.now();
+    return _anchor.year == now.year && _anchor.month == now.month && _anchor.day == now.day;
+  }
+
   void _shiftPeriod(int dir) {
-    if (_period == HistoryPeriod.today) return;
     final next = _normalize(_shiftAnchorFor(_period, _anchor, dir), _period);
     final bounds = _periodBoundsFor(_period, next);
     if (dir < 0 && bounds.start.isBefore(_earliestAllowed)) return; // hit 2-yr limit
@@ -160,12 +169,27 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     _load();
   }
 
+  /// Jump straight to a chosen date via the native calendar picker —
+  /// available for every period (including Today) as an alternative to
+  /// tapping the arrows repeatedly.
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _anchor,
+      firstDate: _earliestAllowed,
+      lastDate: DateTime.now(),
+    );
+    if (picked == null) return;
+    setState(() => _anchor = _normalize(picked, _period));
+    _load();
+  }
+
   // Each arrow tap pages the whole rolling window by exactly one window
-  // size — 7 days for Week, 1 month for Month, 1 year for Year.
+  // size — 1 day for Today, 7 days for Week, 1 month for Month, 1 year for Year.
   DateTime _shiftAnchorFor(HistoryPeriod p, DateTime anchor, int dir) {
     switch (p) {
       case HistoryPeriod.today:
-        return anchor;
+        return anchor.add(Duration(days: dir));
       case HistoryPeriod.week:
         return anchor.add(Duration(days: 7 * dir));
       case HistoryPeriod.month:
@@ -179,7 +203,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     final b = _periodBounds();
     switch (_period) {
       case HistoryPeriod.today:
-        return 'Today';
+        if (_anchorIsToday) return 'Today';
+        return '${_anchor.day} ${_months[_anchor.month - 1]} ${_anchor.year}';
       case HistoryPeriod.week:
       case HistoryPeriod.month:
       case HistoryPeriod.year:
@@ -206,7 +231,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   String _runsCountLabel() {
     switch (_period) {
-      case HistoryPeriod.today: return 'RUNS TODAY';
+      case HistoryPeriod.today: return _anchorIsToday ? 'RUNS TODAY' : 'RUNS THAT DAY';
       case HistoryPeriod.week: return 'RUNS · 7 DAYS';
       case HistoryPeriod.month: return 'RUNS · 1 MONTH';
       case HistoryPeriod.year: return 'RUNS · 1 YEAR';
@@ -233,11 +258,11 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       _totalCount = data['count'] as int? ?? _records.length;
       _loading = false;
     });
-    // Only auto-refresh while looking at "Today" (a live view); historical
-    // periods don't change once loaded.
-    if (showSpinner && _period == HistoryPeriod.today) {
+    // Only auto-refresh while looking at a live "Today" view (anchor is
+    // actually today); historical periods/days don't change once loaded.
+    if (showSpinner && _period == HistoryPeriod.today && _anchorIsToday) {
       Future.delayed(const Duration(milliseconds: 2800), () {
-        if (mounted && _period == HistoryPeriod.today) _load(showSpinner: false);
+        if (mounted && _period == HistoryPeriod.today && _anchorIsToday) _load(showSpinner: false);
       });
     }
   }
@@ -449,27 +474,45 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
           Expanded(child: _periodChip(p)),
         ],
       ]),
-      if (_period != HistoryPeriod.today) ...[
-        const SizedBox(height: 10),
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      const SizedBox(height: 10),
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        _navArrow(Icons.chevron_left, _canGoBack ? () => _shiftPeriod(-1) : null),
+        const SizedBox(width: 16),
+        Column(mainAxisSize: MainAxisSize.min, children: [
           GestureDetector(
-            onTap: () => _openPeriodPicker(initialSegment: _period),
+            onTap: _period == HistoryPeriod.today ? null : () => _openPeriodPicker(initialSegment: _period),
             child: Text(_rangeLabel(),
-                style: TextStyle(color: _txt, fontSize: 12.5, fontWeight: FontWeight.w600)),
+                style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w700)),
           ),
-          Row(children: [
-            _navArrow(Icons.chevron_left, _canGoBack ? () => _shiftPeriod(-1) : null),
-            const SizedBox(width: 10),
-            _navArrow(Icons.chevron_right, _canGoForward ? () => _shiftPeriod(1) : null),
-          ]),
+          const SizedBox(height: 3),
+          GestureDetector(
+            onTap: _pickDate,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text('choose date',
+                  style: TextStyle(color: _lbl, fontSize: 10.5, decoration: TextDecoration.underline)),
+              const SizedBox(width: 4),
+              Icon(Icons.calendar_today, size: 11, color: _lbl),
+            ]),
+          ),
         ]),
-      ],
+        const SizedBox(width: 16),
+        _navArrow(Icons.chevron_right, _canGoForward ? () => _shiftPeriod(1) : null),
+      ]),
     ]);
   }
 
   Widget _navArrow(IconData icon, VoidCallback? onTap) => GestureDetector(
         onTap: onTap,
-        child: Icon(icon, color: onTap != null ? _lbl : _lbl.withValues(alpha: 0.3), size: 20),
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _card2,
+            border: Border.all(color: _bd),
+          ),
+          child: Icon(icon, color: onTap != null ? _txt : _lbl.withValues(alpha: 0.3), size: 19),
+        ),
       );
 
   Widget _periodChip(HistoryPeriod p) {

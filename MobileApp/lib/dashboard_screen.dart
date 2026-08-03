@@ -1768,12 +1768,13 @@ class _UpdateBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = accentGreen(context);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: _green.withOpacity(0.1),
-        border: Border.all(color: _green),
+        color: color.withValues(alpha: 0.1),
+        border: Border.all(color: color),
         borderRadius: BorderRadius.circular(8),
       ),
       child: downloading
@@ -1781,12 +1782,12 @@ class _UpdateBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Downloading v$latestVersion…',
-                    style: const TextStyle(color: _green, fontSize: 13)),
+                    style: TextStyle(color: color, fontSize: 13)),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: _green.withOpacity(0.2),
-                  color: _green,
+                  backgroundColor: color.withValues(alpha: 0.2),
+                  color: color,
                 ),
                 if (progress != null)
                   Padding(
@@ -1798,12 +1799,12 @@ class _UpdateBanner extends StatelessWidget {
             )
           : Row(
               children: [
-                const Icon(Icons.system_update, color: _green, size: 16),
+                Icon(Icons.system_update, color: color, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'Update available: v$latestVersion  (current v$mobileAppVersion)',
-                    style: const TextStyle(color: _green, fontSize: 13),
+                    style: TextStyle(color: color, fontSize: 13),
                   ),
                 ),
                 GestureDetector(
@@ -1811,12 +1812,12 @@ class _UpdateBanner extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: _green.withOpacity(0.15),
-                      border: Border.all(color: _green),
+                      color: color.withValues(alpha: 0.15),
+                      border: Border.all(color: color),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text('Update',
-                        style: TextStyle(color: _green, fontSize: 12, fontWeight: FontWeight.w600)),
+                    child: Text('Update',
+                        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],

@@ -1,7 +1,7 @@
 name: tank_monitor
 description: Tank Monitor - remote control app for ESP32 water tank system
 publish_to: none
-version: 2.20.0+52
+version: 2.20.1+53
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
