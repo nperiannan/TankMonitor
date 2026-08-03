@@ -23,6 +23,7 @@ export interface Status {
   oh_start_level:  number   // motor start threshold (1=EMPTY, 2=LOW, 3=HALF)
   oh_stop_level:   number   // motor stop threshold (2=LOW, 3=HALF, 4=FULL)
   oh_max_run_min:  number   // max motor runtime in minutes (5-60)
+  mqtt_watchdog_min: number // reboot if MQTT disconnected this many minutes (10-60)
   tx_fw:           string   // transmitter firmware version
   // Settings
   oh_disp_only:  boolean

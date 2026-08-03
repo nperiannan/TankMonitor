@@ -766,6 +766,41 @@ class _DashboardScreenState extends State<DashboardScreen>
                             ],
                           ),
                         ),
+                        // MQTT Watchdog reboot timeout
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text('Reboot if unreachable (min)',
+                                    style: TextStyle(color: textColor(context), fontSize: 13)),
+                              ),
+                              SizedBox(
+                                width: 70,
+                                child: TextField(
+                                  controller: TextEditingController(text: '${s?.mqttWatchdogMin ?? 15}'),
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: textColor(context), fontSize: 13),
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                    enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: cardBd(context))),
+                                    focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: accentBlue(context))),
+                                  ),
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  onSubmitted: (v) {
+                                    final val = int.tryParse(v);
+                                    if (val != null && val >= 10 && val <= 60) {
+                                      svc.sendControl({'cmd': 'set_setting', 'key': 'mqtt_watchdog_min', 'value': val});
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                         Divider(color: cardBd(context), height: 16),
                         // LCD Backlight mode
                         Padding(
@@ -912,7 +947,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   ),
                                 ] else if (_uploadError != null) ...[
                                   Text('❌ $_uploadError',
-                                    style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                                    style: TextStyle(color: accentRed(context), fontSize: 12)),
                                   const SizedBox(height: 6),
                                   _stageFirmwareButtons(),
                                 ] else if (_otaHasFirmware) ...[
@@ -965,15 +1000,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     ? Row(children: [
                                         Icon(Icons.check_circle, color: accentGreen(context), size: 14),
                                         const SizedBox(width: 6),
-                                        const Text('✅ Update successful! Device rebooted.',
-                                          style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                                        Text('✅ Update successful! Device rebooted.',
+                                          style: TextStyle(color: accentGreen(context), fontSize: 12)),
                                       ])
                                     : _otaPhase == 'failed'
                                       ? Row(children: [
                                           Icon(Icons.error_outline, color: accentRed(context), size: 14),
                                           const SizedBox(width: 6),
-                                          const Expanded(child: Text('❌ Update failed — timed out.',
-                                            style: TextStyle(color: Colors.redAccent, fontSize: 12))),
+                                          Expanded(child: Text('❌ Update failed — timed out.',
+                                            style: TextStyle(color: accentRed(context), fontSize: 12))),
                                         ])
                                       : Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1182,8 +1217,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                       style: TextStyle(
                                         fontFamily: 'monospace',
                                         fontSize: 10,
-                                        color: line.contains('[WARN]') ? Colors.orange
-                                             : line.contains('[ERROR]') ? Colors.red
+                                        color: line.contains('[WARN]') ? accentOrange(context)
+                                             : line.contains('[ERROR]') ? accentRed(context)
                                              : labelColor(context),
                                       ),
                                     )).toList(),
@@ -1273,8 +1308,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             : warns.isNotEmpty
                 ? Icons.warning_amber_outlined
                 : Icons.check_circle_outline,
-        color: errors.isNotEmpty ? Colors.redAccent
-             : warns.isNotEmpty  ? Colors.orange
+        color: errors.isNotEmpty ? accentRed(context)
+             : warns.isNotEmpty  ? accentOrange(context)
              : accentGreen(context),
         text: '${parts.join(' · ')}  (${logs.length} entries)',
         bold: true,
@@ -1285,7 +1320,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     for (final e in errors.reversed.take(2)) {
       items.add(_SummaryLine(
         icon: Icons.cancel_outlined,
-        color: Colors.redAccent,
+        color: accentRed(context),
         text: _trimLogLine(e),
       ));
     }
@@ -1295,7 +1330,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     for (final w in warns.reversed.take(warnSlots)) {
       items.add(_SummaryLine(
         icon: Icons.warning_amber_outlined,
-        color: Colors.orange,
+        color: accentOrange(context),
         text: _trimLogLine(w),
       ));
     }

@@ -56,6 +56,12 @@ static bool s_usingFallback   = false;        // true when using fallback port
 
 static unsigned long s_lastOtaPollMs = 0;     // HTTP OTA poll timer
 
+// MQTT watchdog: tracks the last time the client was actually connected, so
+// mqttLoop() can force a reboot if it's been disconnected too long (covers
+// both "WiFi up but broker/internet unreachable" and "WiFi itself dropped",
+// since it's checked before the WiFi-status early-return below).
+static unsigned long s_lastMqttSuccessMs = 0;
+
 // ---------------------------------------------------------------------------
 // NVS helpers
 // ---------------------------------------------------------------------------
@@ -230,6 +236,10 @@ static void processPendingMQTT() {
         else if (strcmp(key, "oh_max_run_min") == 0) {
             int v = doc["value"] | 20;
             if (v >= 5 && v <= 60) ohMaxRunMin = (uint8_t)v;
+        }
+        else if (strcmp(key, "mqtt_watchdog_min") == 0) {
+            int v = doc["value"] | MQTT_WATCHDOG_DEFAULT_MIN;
+            if (v >= MQTT_WATCHDOG_MIN_MIN && v <= MQTT_WATCHDOG_MAX_MIN) mqttWatchdogMin = (uint8_t)v;
         }
         else changed = false;
         if (ohStopLevel <= ohStartLevel) { ohStartLevel = TANK_STATE_EMPTY; ohStopLevel = TANK_STATE_FULL; }
@@ -545,6 +555,8 @@ void initMQTT() {
     s_mqtt.setSocketTimeout(10);
     s_mqtt.setBufferSize(4096);  // large enough for status + log payloads
 
+    s_lastMqttSuccessMs = millis();  // start the watchdog clock from boot
+
     Log(INFO, "[MQTT] Init. Broker=" + String(s_broker) + ":" + String(s_port) + " (topics built from MAC on first connect)");
 }
 
@@ -578,6 +590,25 @@ static void publishHeartbeatRequest() {
 }
 
 void mqttLoop() {
+    // Watchdog — reboot if MQTT has been disconnected for too long. Checked
+    // BEFORE the WiFi/AP-mode early-return below so it covers a dropped WiFi
+    // link too, not just "WiFi up but broker unreachable". Skipped in AP
+    // (initial setup) mode so a user configuring WiFi isn't rebooted mid-setup.
+    if (!isAPMode) {
+        if (s_mqtt.connected()) {
+            s_lastMqttSuccessMs = millis();
+        } else {
+            unsigned long downMs  = millis() - s_lastMqttSuccessMs;
+            unsigned long limitMs = (unsigned long)mqttWatchdogMin * 60000UL;
+            if (downMs >= limitMs) {
+                Log(WARN, "[MQTT] Watchdog: disconnected " + String(downMs / 60000) + "min (limit "
+                          + String(mqttWatchdogMin) + "min) — restarting");
+                delay(200); // let the log line publish/flush before reboot
+                esp_restart();
+            }
+        }
+    }
+
     if (WiFi.status() != WL_CONNECTED || isAPMode) return;
 
     // HTTP OTA poll — runs regardless of MQTT connection state
@@ -686,7 +717,7 @@ void publishMQTTStatus() {
         "\"oh_disp_only\":%s,\"ug_disp_only\":%s,"
         "\"ug_ignore\":%s,\"buzzer_delay\":%s,\"manual_auto_stop\":%s,"
         "\"lcd_bl_mode\":%u,"
-        "\"oh_start_level\":%u,\"oh_stop_level\":%u,\"oh_max_run_min\":%u,"
+        "\"oh_start_level\":%u,\"oh_stop_level\":%u,\"oh_max_run_min\":%u,\"mqtt_watchdog_min\":%u,"
         "\"log_level\":\"%s\","
         "\"buzzer_active\":%s,"
         "\"oh_buzzer\":%s,\"ug_buzzer\":%s,"
@@ -719,6 +750,7 @@ void publishMQTTStatus() {
         (unsigned)ohStartLevel,
         (unsigned)ohStopLevel,
         (unsigned)ohMaxRunMin,
+        (unsigned)mqttWatchdogMin,
         getLogLevel() == DEBUG ? "debug" : "info",
         isBuzzerActive()     ? "true" : "false",
         isOHBuzzerPending()  ? "true" : "false",

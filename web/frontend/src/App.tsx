@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.5.0'
+const WEB_APP_VERSION = '2.6.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -783,6 +783,28 @@ export default function App() {
                 ctrlSetting(
                   { cmd: 'set_setting', key: 'oh_max_run_min', value: v },
                   'oh_max_run_min', v,
+                )
+              }}
+            />
+          </div>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 0', borderBottom: `1px solid ${rowBd}`, fontSize: 13, gap: 8,
+          }}>
+            <span>Reboot if Unreachable</span>
+            <InputNumber
+              size="small"
+              style={{ width: 170 }}
+              disabled={!s}
+              min={10}
+              max={60}
+              addonAfter="min"
+              value={s?.mqtt_watchdog_min ?? 15}
+              onChange={(v) => {
+                if (v == null) return
+                ctrlSetting(
+                  { cmd: 'set_setting', key: 'mqtt_watchdog_min', value: v },
+                  'mqtt_watchdog_min', v,
                 )
               }}
             />

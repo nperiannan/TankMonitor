@@ -96,6 +96,7 @@ class DirectDeviceService {
       'oh_start_level': s['ohStartLevel'] as int? ?? 1,
       'oh_stop_level': s['ohStopLevel'] as int? ?? 4,
       'oh_max_run_min': s['ohMaxRunMin'] as int? ?? 20,
+      'mqtt_watchdog_min': s['mqttWatchdogMin'] as int? ?? 15,
     };
   }
 

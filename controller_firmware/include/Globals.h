@@ -79,6 +79,7 @@ extern uint8_t lcdBacklightMode;    // LCD_BL_AUTO / LCD_BL_ALWAYS_ON / LCD_BL_A
 extern TankState ohStartLevel;      // Start motor when OH <= this level (default EMPTY)
 extern TankState ohStopLevel;       // Stop motor when OH >= this level (default FULL)
 extern uint8_t   ohMaxRunMin;       // Max motor runtime in minutes (default 20, range 5-60)
+extern uint8_t   mqttWatchdogMin;   // Reboot if MQTT disconnected this many minutes (default 15, range 10-60)
 
 // Shared NVS preferences object (opened/closed per use in each module)
 extern Preferences preferences;

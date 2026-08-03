@@ -71,6 +71,9 @@ void loadMotorConfig() {
     ohMaxRunMin        = preferences.getUChar(NVS_KEY_OH_MAX_RUN, 20);
     if (ohMaxRunMin < 5)  ohMaxRunMin = 5;
     if (ohMaxRunMin > 60) ohMaxRunMin = 60;
+    mqttWatchdogMin    = preferences.getUChar(NVS_KEY_MQTT_WATCHDOG, MQTT_WATCHDOG_DEFAULT_MIN);
+    if (mqttWatchdogMin < MQTT_WATCHDOG_MIN_MIN) mqttWatchdogMin = MQTT_WATCHDOG_MIN_MIN;
+    if (mqttWatchdogMin > MQTT_WATCHDOG_MAX_MIN) mqttWatchdogMin = MQTT_WATCHDOG_MAX_MIN;
     preferences.end();
     Log(INFO, "[Motor] Config loaded: ohDisp=" + String(ohDisplayOnly)
               + " ugDisp=" + String(ugDisplayOnly)
@@ -80,7 +83,8 @@ void loadMotorConfig() {
               + " lcdBl=" + String(lcdBacklightMode)
               + " ohStart=" + tankStateStr(ohStartLevel)
               + " ohStop=" + tankStateStr(ohStopLevel)
-              + " ohMaxRun=" + String(ohMaxRunMin) + "min");
+              + " ohMaxRun=" + String(ohMaxRunMin) + "min"
+              + " mqttWatchdog=" + String(mqttWatchdogMin) + "min");
 }
 
 void saveMotorConfig() {
@@ -94,6 +98,7 @@ void saveMotorConfig() {
     preferences.putUChar(NVS_KEY_OH_START_LVL, (uint8_t)ohStartLevel);
     preferences.putUChar(NVS_KEY_OH_STOP_LVL,  (uint8_t)ohStopLevel);
     preferences.putUChar(NVS_KEY_OH_MAX_RUN,   ohMaxRunMin);
+    preferences.putUChar(NVS_KEY_MQTT_WATCHDOG, mqttWatchdogMin);
     preferences.end();
     Log(INFO, "[Motor] Config saved");
 }

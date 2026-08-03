@@ -58,6 +58,7 @@ class Status {
   final int  ohStartLevel; // motor start threshold (TankState enum)
   final int  ohStopLevel;  // motor stop threshold
   final int  ohMaxRunMin;  // max motor runtime in minutes
+  final int  mqttWatchdogMin; // reboot after this many minutes disconnected (10-60)
 
   const Status({
     required this.ohState,
@@ -95,6 +96,7 @@ class Status {
     required this.ohStartLevel,
     required this.ohStopLevel,
     required this.ohMaxRunMin,
+    required this.mqttWatchdogMin,
   });
 
   factory Status.fromJson(Map<String, dynamic> j) => Status(
@@ -135,6 +137,7 @@ class Status {
         ohStartLevel: j['oh_start_level'] as int? ?? 1,
         ohStopLevel:  j['oh_stop_level']  as int? ?? 4,
         ohMaxRunMin:  j['oh_max_run_min'] as int? ?? 20,
+        mqttWatchdogMin: j['mqtt_watchdog_min'] as int? ?? 15,
       );
 }
 

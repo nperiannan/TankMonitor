@@ -52,6 +52,7 @@ uint8_t        lcdBacklightMode      = LCD_BL_AUTO;
 TankState      ohStartLevel          = TANK_STATE_EMPTY;
 TankState      ohStopLevel           = TANK_STATE_FULL;
 uint8_t        ohMaxRunMin           = 20;
+uint8_t        mqttWatchdogMin       = MQTT_WATCHDOG_DEFAULT_MIN;
 
 Preferences    preferences;
 

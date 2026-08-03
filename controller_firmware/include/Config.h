@@ -4,7 +4,7 @@
 // =============================================================================
 //                              FIRMWARE VERSION
 // =============================================================================
-#define FW_VERSION "2.9.0"
+#define FW_VERSION "2.10.0"
 
 // Known transmitter firmware version (update here when transmitter is reflashed).
 #define TRANSMITTER_FW_VERSION "2.0.0"
@@ -190,6 +190,7 @@
 #define NVS_KEY_OH_START_LVL   "oh_start_lvl"   // TankState for motor start threshold
 #define NVS_KEY_OH_STOP_LVL    "oh_stop_lvl"    // TankState for motor stop threshold
 #define NVS_KEY_OH_MAX_RUN     "oh_max_run"     // Max motor runtime in minutes (5-60)
+#define NVS_KEY_MQTT_WATCHDOG   "mqtt_wd_min"    // MQTT watchdog: reboot after this many minutes disconnected (10-60)
 #define NVS_KEY_OH_MOTOR_INTENT "oh_intent"     // Motor was running before power loss
 #define NVS_KEY_UG_MOTOR_INTENT "ug_intent"     // Motor was running before power loss
 #define NVS_KEY_HEARTBEAT       "hb_epoch"      // Last-alive epoch (power-cut off-time estimate)
@@ -198,6 +199,11 @@
 #define LCD_BL_AUTO       0   // Off 7:00 AM – 5:30 PM, On at night (default)
 #define LCD_BL_ALWAYS_ON  1   // Always on
 #define LCD_BL_ALWAYS_OFF 2   // Always off
+
+// MQTT watchdog: esp_restart() if MQTT stays disconnected this long (minutes)
+#define MQTT_WATCHDOG_DEFAULT_MIN 15
+#define MQTT_WATCHDOG_MIN_MIN     10
+#define MQTT_WATCHDOG_MAX_MIN     60
 
 // =============================================================================
 //                              EEPROM (AT24C512 / 24T512) - I2C

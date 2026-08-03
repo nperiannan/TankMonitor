@@ -4,6 +4,20 @@ All notable changes to the Tank Monitor ESP32-S3 firmware are documented here.
 
 ---
 
+## [2.10.0] — 2026-08-04
+
+### Added
+- **MQTT watchdog reboot**: if the MQTT connection stays down for a configurable number of
+  minutes (`mqtt_watchdog_min`, range 10–60, default 15), the controller now calls
+  `esp_restart()` to recover on its own instead of staying silently unreachable. Checked
+  regardless of WiFi state (covers both "WiFi up but broker/internet unreachable" and a fully
+  dropped WiFi link) and skipped while in AP setup mode so initial WiFi configuration isn't
+  interrupted. Configurable from the mobile app and the web app's Device Settings (new
+  `set_setting` key `mqtt_watchdog_min`), persisted to NVS like the other motor settings, and
+  reported in both the MQTT and direct-mode HTTP status JSON.
+
+---
+
 ## [2.9.0] — 2026-07-30
 
 ### Added

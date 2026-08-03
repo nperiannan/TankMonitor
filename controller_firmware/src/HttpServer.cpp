@@ -249,6 +249,10 @@ input:checked+.sld::before{transform:translateX(18px)}
     <input id="oh_max_run" type="number" min="5" max="60" value="20" onchange="saveMotorThresholds()" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px;width:70px">
   </div>
   <div class="trow">
+    <span class="tlbl">MQTT Watchdog Reboot (min)</span>
+    <input id="mqtt_wd_min" type="number" min="10" max="60" value="15" onchange="saveMotorThresholds()" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px;width:70px">
+  </div>
+  <div class="trow">
     <span class="tlbl">LCD Backlight</span>
     <select id="lcd_bl_mode" onchange="setLcdMode(this.value)" style="background:var(--inp-bg);color:var(--tx);border:1px solid var(--bd2);border-radius:6px;padding:4px 8px;font-size:13px">
       <option value="auto">Auto (night on)</option>
@@ -501,6 +505,8 @@ function refreshStatus(){
     if(osl2&&d.ohStopLevel!==undefined)osl2.value=String(d.ohStopLevel);
     var omr=document.getElementById('oh_max_run');
     if(omr&&d.ohMaxRunMin!==undefined)omr.value=String(d.ohMaxRunMin);
+    var mwd=document.getElementById('mqtt_wd_min');
+    if(mwd&&d.mqttWatchdogMin!==undefined)mwd.value=String(d.mqttWatchdogMin);
     // Scheduler active alert
     var sa=document.getElementById('schedAlert');
     if(sa)sa.style.display=d.schedRunning?'flex':'none';
@@ -517,6 +523,7 @@ function saveSetting(){
   body.append('oh_start_level',document.getElementById('oh_start_lvl').value);
   body.append('oh_stop_level',document.getElementById('oh_stop_lvl').value);
   body.append('oh_max_run',document.getElementById('oh_max_run').value);
+  body.append('mqtt_watchdog_min',document.getElementById('mqtt_wd_min').value);
   fetch('/setconfig',{method:'POST',body:body})
     .then(function(){toast('Settings saved','ok');refreshStatus();})
     .catch(function(){toast('Save failed','err');});
@@ -881,6 +888,7 @@ static void handleStatus() {
     doc["ohStartLevel"]      = (int)ohStartLevel;
     doc["ohStopLevel"]       = (int)ohStopLevel;
     doc["ohMaxRunMin"]       = (int)ohMaxRunMin;
+    doc["mqttWatchdogMin"]   = (int)mqttWatchdogMin;
     doc["loraOk"]            = isLoraOperational();
     doc["txLost"]            = isTransmitterLost();
     doc["loraRSSI"]          = getLoraRSSI();
@@ -1044,6 +1052,10 @@ static void handleSetConfig() {
     if (server.hasArg("oh_max_run")) {
         int v = server.arg("oh_max_run").toInt();
         if (v >= 5 && v <= 60) ohMaxRunMin = (uint8_t)v;
+    }
+    if (server.hasArg("mqtt_watchdog_min")) {
+        int v = server.arg("mqtt_watchdog_min").toInt();
+        if (v >= MQTT_WATCHDOG_MIN_MIN && v <= MQTT_WATCHDOG_MAX_MIN) mqttWatchdogMin = (uint8_t)v;
     }
     saveMotorConfig();
     sendOk();

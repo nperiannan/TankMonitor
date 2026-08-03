@@ -81,6 +81,7 @@ Published by `publishMQTTStatus()`:
   "oh_start_level": 1,            // TankState enum value (start pump)
   "oh_stop_level": 4,             // TankState enum value (stop pump)
   "oh_max_run_min": 20,
+  "mqtt_watchdog_min": 15,       // reboot (esp_restart) if MQTT disconnected this many minutes (10-60)
   "log_level": "info",            // "info" | "debug"
 
   "buzzer_active": false,
@@ -192,7 +193,7 @@ out of the MQTT callback into a small queue and processed from the main
 | `sched_add` | `motor`(0=OH/1=UG), `time`("HH:MM"), `duration`(min) | Adds to first free schedule slot | — |
 | `sched_remove` | `index` | Disables that schedule slot | — |
 | `sched_clear` | — | Clears all schedules | — |
-| `set_setting` | `key`, `value` | Updates one runtime setting (`oh_disp_only`, `ug_disp_only`, `ug_ignore`, `buzzer_delay`, `manual_auto_stop`, `oh_start_level`, `oh_stop_level`, `oh_max_run_min`) | — |
+| `set_setting` | `key`, `value` | Updates one runtime setting (`oh_disp_only`, `ug_disp_only`, `ug_ignore`, `buzzer_delay`, `manual_auto_stop`, `oh_start_level`, `oh_stop_level`, `oh_max_run_min`, `mqtt_watchdog_min`) | — |
 | `set_lcd_mode` | `mode` (`auto`/`always_on`/`always_off`) | Sets LCD backlight mode | — |
 | `sync_ntp` | — | Forces NTP resync | — |
 | `get_logs` | — | Publishes log snapshot immediately (`tm/{mac}/logs`) | — |
@@ -216,6 +217,7 @@ Example command payloads:
 ```json
 { "cmd": "oh_on" }
 { "cmd": "set_setting", "key": "oh_max_run_min", "value": 25 }
+{ "cmd": "set_setting", "key": "mqtt_watchdog_min", "value": 15 }
 { "cmd": "ota_start", "url": "http://backend:1880/firmware/controller_2.6.2.bin" }
 { "cmd": "wifi_add", "ssid": "Office", "pass": "secret" }
 ```
