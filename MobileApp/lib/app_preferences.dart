@@ -22,11 +22,13 @@ const _kPrefsVersion     = 'prefs_version';
 const _kMotorNotify      = 'motor_notifications';
 const _kOhFlowLPM        = 'oh_flow_lpm';
 const _kUgFlowLPM        = 'ug_flow_lpm';
+const _kShowOhWater      = 'show_oh_water_banner';
+const _kShowUgWater      = 'show_ug_water_banner';
 
 /// Current prefs schema version.
 /// Bump this when adding new keys — the migration guard ensures smooth
 /// upgrades without crashing existing installs.
-const _currentPrefsVersion = 3;
+const _currentPrefsVersion = 4;
 
 /// Default estimated pump flow rates (litres/minute), used for the History
 /// screen's water-volume estimate until the user calibrates their own pump.
@@ -41,6 +43,8 @@ class AppPreferences extends ChangeNotifier {
   bool   _motorNotify = false;
   double _ohFlowLPM = kDefaultOhFlowLPM;
   double _ugFlowLPM = kDefaultUgFlowLPM;
+  bool   _showOhWater = true;
+  bool   _showUgWater = false;
 
   DashboardConcept get concept   => _concept;
   AppThemeMode     get themeMode => _themeMode;
@@ -49,6 +53,8 @@ class AppPreferences extends ChangeNotifier {
   bool   get motorNotify => _motorNotify;
   double get ohFlowLPM => _ohFlowLPM;
   double get ugFlowLPM => _ugFlowLPM;
+  bool   get showOhWater => _showOhWater;
+  bool   get showUgWater => _showUgWater;
 
   /// Load saved preferences with migration guard.
   Future<void> load() async {
@@ -75,6 +81,12 @@ class AppPreferences extends ChangeNotifier {
       if (!prefs.containsKey(_kUgFlowLPM)) {
         await prefs.setDouble(_kUgFlowLPM, kDefaultUgFlowLPM);
       }
+      if (!prefs.containsKey(_kShowOhWater)) {
+        await prefs.setBool(_kShowOhWater, true);
+      }
+      if (!prefs.containsKey(_kShowUgWater)) {
+        await prefs.setBool(_kShowUgWater, false);
+      }
       await prefs.setInt(_kPrefsVersion, _currentPrefsVersion);
     }
 
@@ -95,6 +107,8 @@ class AppPreferences extends ChangeNotifier {
     _motorNotify = prefs.getBool(_kMotorNotify) ?? false;
     _ohFlowLPM = prefs.getDouble(_kOhFlowLPM) ?? kDefaultOhFlowLPM;
     _ugFlowLPM = prefs.getDouble(_kUgFlowLPM) ?? kDefaultUgFlowLPM;
+    _showOhWater = prefs.getBool(_kShowOhWater) ?? true;
+    _showUgWater = prefs.getBool(_kShowUgWater) ?? false;
 
     notifyListeners();
   }
@@ -146,6 +160,21 @@ class AppPreferences extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(motor == 'UG' ? _kUgFlowLPM : _kOhFlowLPM, lpm);
+  }
+
+  /// Toggles whether the History screen shows the OH/UG water-pumped
+  /// estimate banner. [motor] is 'OH' or 'UG'.
+  Future<void> setShowWaterBanner(String motor, bool v) async {
+    if (motor == 'UG') {
+      if (_showUgWater == v) return;
+      _showUgWater = v;
+    } else {
+      if (_showOhWater == v) return;
+      _showOhWater = v;
+    }
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(motor == 'UG' ? _kShowUgWater : _kShowOhWater, v);
   }
 
   /// Resolve effective ThemeMode for MaterialApp.

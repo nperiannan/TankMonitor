@@ -693,6 +693,9 @@ class _DashboardScreenState extends State<DashboardScreen>
                     // ── Notifications ──
                     _NotificationSettings(),
                     const SizedBox(height: 10),
+                    // ── Water Volume Display (History screen banners) ──
+                    _WaterVolumeSettings(),
+                    const SizedBox(height: 10),
                     // ── Device Settings ──
                     _SectionCard(
                       title: 'DEVICE SETTINGS',
@@ -1641,6 +1644,48 @@ class _NotificationSettings extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _WaterVolumeSettings extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final prefs = context.watch<AppPreferences>();
+    return _SectionCard(
+      title: 'WATER VOLUME DISPLAY',
+      child: Column(children: [
+        _waterToggleRow(context, 'Show OH water pumped',
+          'Display the estimated litres banner on the History screen',
+          prefs.showOhWater, (v) => prefs.setShowWaterBanner('OH', v)),
+        Divider(color: cardBd(context), height: 20),
+        _waterToggleRow(context, 'Show UG water drawn',
+          'Display the estimated litres banner on the History screen',
+          prefs.showUgWater, (v) => prefs.setShowWaterBanner('UG', v)),
+      ]),
+    );
+  }
+
+  Widget _waterToggleRow(BuildContext context, String title, String subtitle, bool value, ValueChanged<bool> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(color: textColor(context), fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(subtitle, style: TextStyle(color: labelColor(context), fontSize: 11)),
+            ],
+          ),
+        ),
+        Switch(
+          value: value,
+          activeColor: accentGreen(context),
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 }

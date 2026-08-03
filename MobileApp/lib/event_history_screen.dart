@@ -44,7 +44,7 @@ class _Run {
 const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /// Selectable history time periods.
-enum HistoryPeriod { today, day, week, month, year }
+enum HistoryPeriod { today, week, month, year }
 
 class EventHistoryScreen extends StatefulWidget {
   final bool initialGraph;
@@ -87,23 +87,14 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   DateTime get _earliestAllowed =>
       DateTime.now().subtract(const Duration(days: _kMaxHistoryDays));
 
-  DateTime _startOfWeek(DateTime d) {
-    final day = DateTime(d.year, d.month, d.day);
-    return day.subtract(Duration(days: day.weekday - 1)); // Monday-start
-  }
-
   DateTime _normalize(DateTime d, HistoryPeriod p) {
     switch (p) {
       case HistoryPeriod.today:
         return DateTime.now();
-      case HistoryPeriod.day:
-        return DateTime(d.year, d.month, d.day);
       case HistoryPeriod.week:
-        return _startOfWeek(d);
       case HistoryPeriod.month:
-        return DateTime(d.year, d.month, 1);
       case HistoryPeriod.year:
-        return DateTime(d.year, 1, 1);
+        return DateTime(d.year, d.month, d.day);
     }
   }
 
@@ -118,21 +109,20 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
         start = DateTime(now.year, now.month, now.day);
         end = now;
         break;
-      case HistoryPeriod.day:
-        start = DateTime(_anchor.year, _anchor.month, _anchor.day);
-        end = start.add(const Duration(days: 1));
-        break;
+      // Week/Month/Year are rolling windows ending on (and including) the
+      // anchor date — e.g. Week = the 7 days up to and including the anchor —
+      // rather than a calendar-aligned Mon–Sun/1st–31st/Jan–Dec window.
       case HistoryPeriod.week:
-        start = _startOfWeek(_anchor);
-        end = start.add(const Duration(days: 7));
+        start = DateTime(_anchor.year, _anchor.month, _anchor.day - 6);
+        end = DateTime(_anchor.year, _anchor.month, _anchor.day + 1);
         break;
       case HistoryPeriod.month:
-        start = DateTime(_anchor.year, _anchor.month, 1);
-        end = DateTime(_anchor.year, _anchor.month + 1, 1);
+        start = DateTime(_anchor.year, _anchor.month - 1, _anchor.day);
+        end = DateTime(_anchor.year, _anchor.month, _anchor.day + 1);
         break;
       case HistoryPeriod.year:
-        start = DateTime(_anchor.year, 1, 1);
-        end = DateTime(_anchor.year + 1, 1, 1);
+        start = DateTime(_anchor.year - 1, _anchor.month, _anchor.day);
+        end = DateTime(_anchor.year, _anchor.month, _anchor.day + 1);
         break;
     }
     if (end.isAfter(now)) end = now;
@@ -170,18 +160,18 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     _load();
   }
 
+  // Each arrow tap pages the whole rolling window by exactly one window
+  // size — 7 days for Week, 1 month for Month, 1 year for Year.
   DateTime _shiftAnchorFor(HistoryPeriod p, DateTime anchor, int dir) {
     switch (p) {
       case HistoryPeriod.today:
         return anchor;
-      case HistoryPeriod.day:
-        return anchor.add(Duration(days: dir));
       case HistoryPeriod.week:
         return anchor.add(Duration(days: 7 * dir));
       case HistoryPeriod.month:
-        return DateTime(anchor.year, anchor.month + dir, 1);
+        return DateTime(anchor.year, anchor.month + dir, anchor.day);
       case HistoryPeriod.year:
-        return DateTime(anchor.year + dir, 1, 1);
+        return DateTime(anchor.year + dir, anchor.month, anchor.day);
     }
   }
 
@@ -190,24 +180,24 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     switch (_period) {
       case HistoryPeriod.today:
         return 'Today';
-      case HistoryPeriod.day:
-        return '${b.start.day} ${_months[b.start.month - 1]} ${b.start.year}';
       case HistoryPeriod.week:
-        final endIncl = b.end.subtract(const Duration(days: 1));
-        final sameMonth = b.start.month == endIncl.month;
-        final startStr = sameMonth ? '${b.start.day}' : '${b.start.day} ${_months[b.start.month - 1]}';
-        return '$startStr – ${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
       case HistoryPeriod.month:
-        return '${_months[b.start.month - 1]} ${b.start.year}';
       case HistoryPeriod.year:
-        return '${b.start.year}';
+        final endIncl = DateTime(_anchor.year, _anchor.month, _anchor.day);
+        final sameMonth = b.start.month == endIncl.month && b.start.year == endIncl.year;
+        final sameYear = b.start.year == endIncl.year;
+        final startStr = sameMonth
+            ? '${b.start.day}'
+            : sameYear
+                ? '${b.start.day} ${_months[b.start.month - 1]}'
+                : '${b.start.day} ${_months[b.start.month - 1]} ${b.start.year}';
+        return '$startStr – ${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
     }
   }
 
   String _periodChipLabel(HistoryPeriod p) {
     switch (p) {
       case HistoryPeriod.today: return 'Today';
-      case HistoryPeriod.day: return 'Day';
       case HistoryPeriod.week: return 'Week';
       case HistoryPeriod.month: return 'Month';
       case HistoryPeriod.year: return 'Year';
@@ -217,10 +207,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   String _runsCountLabel() {
     switch (_period) {
       case HistoryPeriod.today: return 'RUNS TODAY';
-      case HistoryPeriod.day: return 'RUNS THAT DAY';
-      case HistoryPeriod.week: return 'RUNS THIS WEEK';
-      case HistoryPeriod.month: return 'RUNS THIS MONTH';
-      case HistoryPeriod.year: return 'RUNS THIS YEAR';
+      case HistoryPeriod.week: return 'RUNS · 7 DAYS';
+      case HistoryPeriod.month: return 'RUNS · 1 MONTH';
+      case HistoryPeriod.year: return 'RUNS · 1 YEAR';
     }
   }
 
@@ -327,7 +316,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   String _two(int n) => n.toString().padLeft(2, '0');
   String _hhmm(int ts) {
     final d = DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
-    return '${_two(d.hour)}:${_two(d.minute)}';
+    final period = d.hour >= 12 ? 'PM' : 'AM';
+    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    return '$h12:${_two(d.minute)} $period';
   }
 
   String _durLong(int sec) {
@@ -408,7 +399,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               backgroundColor: _card,
               onRefresh: () => _load(),
               child: ListView(
-                padding: const EdgeInsets.all(12),
+                // Bottom inset accounts for the system nav bar (3-button or
+                // gesture pill) so the last card never sits underneath it.
+                padding: EdgeInsets.fromLTRB(12, 12, 12, 12 + MediaQuery.of(context).padding.bottom),
                 children: [
                   _periodBar(),
                   const SizedBox(height: 12),
@@ -426,9 +419,21 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                     child: Column(children: [
                       _headerRow(),
                       const SizedBox(height: 12),
-                      if (_showGraph) _graphView(runs) else _tableView(runs),
+                      if (_showGraph) _graphView(runs) else _tableSummary(runs),
                     ]),
                   ),
+                  if (!_showGraph) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: _card,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _bd),
+                      ),
+                      child: _tableRunsList(runs),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -520,19 +525,18 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
             case HistoryPeriod.today:
               label = 'Today';
               break;
-            case HistoryPeriod.day:
-              label = '${bounds.start.day} ${_months[bounds.start.month - 1]} ${bounds.start.year}';
-              break;
             case HistoryPeriod.week:
-              final endIncl = bounds.end.subtract(const Duration(days: 1));
-              label = '${bounds.start.day} ${_months[bounds.start.month - 1]} – '
-                  '${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
-              break;
             case HistoryPeriod.month:
-              label = '${_months[bounds.start.month - 1]} ${bounds.start.year}';
-              break;
             case HistoryPeriod.year:
-              label = '${bounds.start.year}';
+              final endIncl = DateTime(tempAnchor.year, tempAnchor.month, tempAnchor.day);
+              final sameMonth = bounds.start.month == endIncl.month && bounds.start.year == endIncl.year;
+              final sameYear = bounds.start.year == endIncl.year;
+              final startStr = sameMonth
+                  ? '${bounds.start.day}'
+                  : sameYear
+                      ? '${bounds.start.day} ${_months[bounds.start.month - 1]}'
+                      : '${bounds.start.day} ${_months[bounds.start.month - 1]} ${bounds.start.year}';
+              label = '$startStr – ${endIncl.day} ${_months[endIncl.month - 1]} ${endIncl.year}';
               break;
           }
 
@@ -556,8 +560,8 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
               ),
               const SizedBox(height: 12),
               Row(children: [
-                for (final seg in [HistoryPeriod.day, HistoryPeriod.week, HistoryPeriod.month, HistoryPeriod.year]) ...[
-                  if (seg != HistoryPeriod.day) const SizedBox(width: 6),
+                for (final seg in [HistoryPeriod.week, HistoryPeriod.month, HistoryPeriod.year]) ...[
+                  if (seg != HistoryPeriod.week) const SizedBox(width: 6),
                   Expanded(
                     child: GestureDetector(
                       onTap: () => setSheetState(() {
@@ -583,18 +587,15 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 ],
               ]),
               const SizedBox(height: 16),
-              if (segment == HistoryPeriod.day)
-                _dayPickerRow(ctx, tempAnchor, (d) => setSheetState(() => tempAnchor = _normalize(d, segment)))
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(12)),
-                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    _navArrow(Icons.chevron_left, backOk ? () => shift(-1) : null),
-                    Text(label, style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w600)),
-                    _navArrow(Icons.chevron_right, fwdOk ? () => shift(1) : null),
-                  ]),
-                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(12)),
+                child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  _navArrow(Icons.chevron_left, backOk ? () => shift(-1) : null),
+                  Text(label, style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w600)),
+                  _navArrow(Icons.chevron_right, fwdOk ? () => shift(1) : null),
+                ]),
+              ),
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(10),
@@ -637,29 +638,6 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
           );
         });
       },
-    );
-  }
-
-  Widget _dayPickerRow(BuildContext ctx, DateTime selected, ValueChanged<DateTime> onPick) {
-    return GestureDetector(
-      onTap: () async {
-        final picked = await showDatePicker(
-          context: ctx,
-          initialDate: selected,
-          firstDate: _earliestAllowed,
-          lastDate: DateTime.now(),
-        );
-        if (picked != null) onPick(picked);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(color: _card2, borderRadius: BorderRadius.circular(12)),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('${selected.day} ${_months[selected.month - 1]} ${selected.year}',
-              style: TextStyle(color: _txt, fontSize: 13, fontWeight: FontWeight.w600)),
-          Icon(Icons.calendar_today, color: _lbl, size: 15),
-        ]),
-      ),
     );
   }
 
@@ -801,12 +779,15 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     }
     if (ohSec == 0 && ugSec == 0) return const SizedBox.shrink();
     final prefs = context.watch<AppPreferences>();
+    final showOh = ohSec > 0 && prefs.showOhWater;
+    final showUg = ugSec > 0 && prefs.showUgWater;
+    if (!showOh && !showUg) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Column(children: [
-        if (ohSec > 0) _waterBanner('OH', ohSec, prefs.ohFlowLPM, _blue),
-        if (ohSec > 0 && ugSec > 0) const SizedBox(height: 8),
-        if (ugSec > 0) _waterBanner('UG', ugSec, prefs.ugFlowLPM, _purple),
+        if (showOh) _waterBanner('OH', ohSec, prefs.ohFlowLPM, _blue),
+        if (showOh && showUg) const SizedBox(height: 8),
+        if (showUg) _waterBanner('UG', ugSec, prefs.ugFlowLPM, _purple),
       ]),
     );
   }
@@ -904,8 +885,9 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
   }
 
   // ── TABLE (T1★ Enhanced) ─────────────────────────────────────────────────
-  Widget _tableView(List<_Run> runs) {
-    if (runs.isEmpty) return _empty('No motor runs in this period');
+  /// Shared per-run aggregation (OH/UG seconds, max duration, day groups)
+  /// used by both the summary card and the runs-list card below.
+  ({int ohSec, int ugSec, int maxDur, Map<String, List<_Run>> groups, List<String> order}) _tableData(List<_Run> runs) {
     final nowTs = _nowTs();
     final bounds = _periodBounds();
     final periodFrom = _epoch(bounds.start);
@@ -933,19 +915,34 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       groups[k]!.add(r);
     }
 
+    return (ohSec: ohSec, ugSec: ugSec, maxDur: maxDur, groups: groups, order: order);
+  }
+
+  /// Card 1 content: run-count/OH/UG stats + water banners.
+  Widget _tableSummary(List<_Run> runs) {
+    final d = _tableData(runs);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       Row(children: [
         _stat('${runs.length}', _runsCountLabel(), null),
         const SizedBox(width: 8),
-        _stat(_durLong(ohSec + ugSec), 'TOTAL RUN', null),
+        _stat(_durLong(d.ohSec), 'TOTAL OH RUN', _blue),
         const SizedBox(width: 8),
-        _stat(_durShort(ohSec), 'OH · UG ${_durShort(ugSec)}', _green),
+        _stat(_durLong(d.ugSec), 'TOTAL UG RUN', _purple),
       ]),
       const SizedBox(height: 10),
       _waterBanners(runs),
-      for (final k in order) ...[
-        _dateHeader(groups[k]!, nowTs),
-        for (final r in groups[k]!) _runRow(r, maxDur, nowTs),
+    ]);
+  }
+
+  /// Card 2 content: day-grouped run rows (or the empty-state message).
+  Widget _tableRunsList(List<_Run> runs) {
+    if (runs.isEmpty) return _empty('No motor runs in this period');
+    final nowTs = _nowTs();
+    final d = _tableData(runs);
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      for (final k in d.order) ...[
+        _dateHeader(d.groups[k]!, nowTs),
+        for (final r in d.groups[k]!) _runRow(r, d.maxDur, nowTs),
       ],
     ]);
   }
@@ -964,7 +961,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
 
   Widget _runRow(_Run r, int maxDur, int nowTs) {
     final isOH = r.motor == 'OH';
-    final c = isOH ? _green : _purple;
+    final c = isOH ? _blue : _purple;
     final dur = r.durSec(nowTs);
     final rsn = _reason(r);
     return Container(
@@ -1027,10 +1024,10 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                 color: solid ? _runFg : color, fontSize: 9, fontWeight: bold ? FontWeight.w800 : FontWeight.w600)),
       );
 
-  // ── GRAPH (per-run for Today/Day, aggregated per day/month otherwise) ────
+  // ── GRAPH (per-run for Today, aggregated per day/month otherwise) ────────
   Widget _graphView(List<_Run> runs) {
     if (runs.isEmpty) return _empty('No motor runs to chart yet');
-    if (_period == HistoryPeriod.today || _period == HistoryPeriod.day) {
+    if (_period == HistoryPeriod.today) {
       return _perRunGraph(runs);
     }
     return _aggregatedGraph(runs);
@@ -1074,7 +1071,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       const SizedBox(height: 10),
       _waterBanners(runs),
       Row(children: [
-        _legend(_green, 'OH'),
+        _legend(_blue, 'OH'),
         const SizedBox(width: 14),
         _legend(_purple, 'UG'),
         const Spacer(),
@@ -1220,7 +1217,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       const SizedBox(height: 10),
       _waterBanners(runs),
       Row(children: [
-        _legend(_green, 'OH'),
+        _legend(_blue, 'OH'),
         const SizedBox(width: 14),
         _legend(_purple, 'UG'),
         const Spacer(),
@@ -1240,7 +1237,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 1),
                     height: (plotH * (ohMin[i] / maxY)).clamp(0.0, plotH),
                     decoration: BoxDecoration(
-                      color: _green,
+                      color: _blue,
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
                     ),
                   ),
@@ -1282,7 +1279,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
     final isOH = r.motor == 'OH';
     final grad = isOH
         ? const LinearGradient(
-            begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF5CFFA8), Color(0xFF00C853)])
+            begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF82B1FF), Color(0xFF2962FF)])
         : const LinearGradient(
             begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFFB39DFF), Color(0xFF651FFF)]);
     final barH = (plotH * (durMin / maxY)).clamp(3.0, plotH - 18);
@@ -1290,7 +1287,7 @@ class _EventHistoryScreenState extends State<EventHistoryScreen> {
       decoration: dayStart ? BoxDecoration(border: Border(left: BorderSide(color: _bd))) : null,
       child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
         Text('${durMin.round()}',
-            style: TextStyle(color: isOH ? _green : _purple, fontSize: 9, fontWeight: FontWeight.w800)),
+            style: TextStyle(color: isOH ? _blue : _purple, fontSize: 9, fontWeight: FontWeight.w800)),
         const SizedBox(height: 3),
         // Cap the bar's width so a chart with only one or two runs (whose
         // Expanded slot spans most/all of the plot area) doesn't stretch
