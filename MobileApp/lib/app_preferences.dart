@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum DashboardConcept {
   hybrid,      // F — Arc gauges + grid motors  (default)
   nova,        // Elder-friendly next-gen: big glass tanks, plain language, every action visible
-  flow,        // Vertical schematic of the real plumbing
   clean,       // Minimal tank+motor unit cards
   console,     // Dense, everything above the fold
 }

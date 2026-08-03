@@ -57,7 +57,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
       appBar: AppBar(
         backgroundColor: cardBg(context),
         elevation: 0,
-        leading: BackButton(color: kDarkLabel.withOpacity(0.8)),
+        leading: BackButton(color: labelColor(context).withValues(alpha: 0.8)),
         title: Text('Claim Device',
             style: TextStyle(color: textColor(context), fontWeight: FontWeight.w600, fontSize: 17)),
       ),
@@ -90,10 +90,10 @@ class _ClaimScreenState extends State<ClaimScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       decoration: BoxDecoration(
                         color: _typeId == t.id
-                            ? kBlue.withOpacity(0.12)
+                            ? accentBlue(context).withValues(alpha: 0.12)
                             : cardBg(context),
                         border: Border.all(
-                          color: _typeId == t.id ? kBlue : kDarkCardBd,
+                          color: _typeId == t.id ? accentBlue(context) : cardBd(context),
                           width: _typeId == t.id ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -101,11 +101,11 @@ class _ClaimScreenState extends State<ClaimScreen> {
                       child: Column(
                         children: [
                           Icon(t.icon,
-                            color: _typeId == t.id ? kBlue : kDarkLabel, size: 26),
+                            color: _typeId == t.id ? accentBlue(context) : labelColor(context), size: 26),
                           const SizedBox(height: 4),
                           Text(t.label,
                             style: TextStyle(
-                              color: _typeId == t.id ? kBlue : kDarkLabel,
+                              color: _typeId == t.id ? accentBlue(context) : labelColor(context),
                               fontSize: 12, fontWeight: FontWeight.w600)),
                         ],
                       ),
@@ -121,17 +121,17 @@ class _ClaimScreenState extends State<ClaimScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2A1215),
-                  border: Border.all(color: const Color(0xFF58181C)),
+                  color: accentRed(context).withValues(alpha: 0.1),
+                  border: Border.all(color: accentRed(context).withValues(alpha: 0.3)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: kRed, size: 16),
+                    Icon(Icons.error_outline, color: accentRed(context), size: 16),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(_error!,
-                          style: const TextStyle(color: kRed, fontSize: 13)),
+                          style: TextStyle(color: accentRed(context), fontSize: 13)),
                     ),
                   ],
                 ),
@@ -185,7 +185,7 @@ class _ClaimScreenState extends State<ClaimScreen> {
   InputDecoration _inputDec(String hint, IconData icon) => InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(color: labelColor(context)),
-        prefixIcon: Icon(icon, color: kDarkLabel, size: 20),
+        prefixIcon: Icon(icon, color: labelColor(context), size: 20),
         filled: true,
         fillColor: cardBg(context),
         border: OutlineInputBorder(

@@ -123,7 +123,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove', style: TextStyle(color: kRed)),
+            child: Text('Remove', style: TextStyle(color: accentRed(context))),
           ),
         ],
       ),
@@ -174,7 +174,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         actions: [
           if (svc.isAdmin)
             IconButton(
-              icon: const Icon(Icons.admin_panel_settings, color: kOrange, size: 22),
+              icon: Icon(Icons.admin_panel_settings, color: accentOrange(context), size: 22),
               tooltip: 'Admin: Users & Devices',
               onPressed: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const AdminScreen()),
@@ -252,7 +252,7 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
         ),
         child: Row(
           children: [
-            Icon(typeIcon, color: d.online ? kGreen : kDarkLabel, size: 36),
+            Icon(typeIcon, color: d.online ? accentGreen(context) : labelColor(context), size: 36),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -273,18 +273,18 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
                           color: d.online
-                              ? const Color(0xFF162312)
+                              ? accentGreen(context).withValues(alpha: 0.12)
                               : subtleBg(context),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                               color: d.online
-                                  ? const Color(0xFF274916)
-                                  : const Color(0xFF434343)),
+                                  ? accentGreen(context).withValues(alpha: 0.4)
+                                  : cardBd(context)),
                         ),
                         child: Text(
                           d.online ? '● Online' : '○ Offline',
                           style: TextStyle(
-                              color: d.online ? kGreen : kDarkLabel, fontSize: 11),
+                              color: d.online ? accentGreen(context) : labelColor(context), fontSize: 11),
                         ),
                       ),
                     ],
@@ -337,15 +337,15 @@ class _DeviceListScreenState extends State<DeviceListScreen> {
                     color: textColor(context), fontWeight: FontWeight.w600, fontSize: 16),
               ),
             ),
-            Divider(color: kDarkCardBd, height: 1),
+            Divider(color: cardBd(context), height: 1),
             ListTile(
               leading: Icon(Icons.drive_file_rename_outline, color: textColor(context)),
               title: Text('Rename', style: TextStyle(color: textColor(context))),
               onTap: () { Navigator.pop(context); _rename(d); },
             ),
             ListTile(
-              leading: const Icon(Icons.link_off, color: kRed),
-              title: const Text('Remove from account', style: TextStyle(color: kRed)),
+              leading: Icon(Icons.link_off, color: accentRed(context)),
+              title: Text('Remove from account', style: TextStyle(color: accentRed(context))),
               onTap: () { Navigator.pop(context); _unclaim(d); },
             ),
             const SizedBox(height: 8),

@@ -247,14 +247,15 @@ class ConceptFDashboard extends StatelessWidget {
 // Eye-pleasing Material palette colors — same meaning on both themes.
 // "Full" is blue on both themes (matches the rest of the app's blue accent —
 // running dot, POWER ON in light theme, OH identity color in History).
-// HALF/LOW/EMPTY keep their amber → orange → red ramp on both themes so
-// "needs attention" still stands out.
+// HALF/LOW/EMPTY keep their amber → orange → red ramp on both themes, using
+// darker/more saturated tones on light theme for contrast against the pale
+// #F0F4F8 background (plain Yellow/Orange 400-600 washes out and is hard to read).
 const _kHalfDark  = Color(0xFFfdd835); // Yellow 600
-const _kHalfLight = Color(0xFFF9A825); // Yellow 800
+const _kHalfLight = Color(0xFFF57F17); // Yellow 900
 const _kLowDark   = Color(0xFFffa726); // Orange 400
-const _kLowLight  = Color(0xFFef6c00); // Orange 800
+const _kLowLight  = Color(0xFFE65100); // Orange 900
 const _kEmptyDark = Color(0xFFef5350); // Red 400
-const _kEmptyLight= Color(0xFFd32f2f); // Red 700
+const _kEmptyLight= Color(0xFFC62828); // Red 800
 const _kUnknown   = Color(0xFF9e9e9e); // Grey 500
 
 Color _stateColor(String state, BuildContext context) {
@@ -680,7 +681,7 @@ class _RfAntennaIcon extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = loraOk
         ? (isDark ? const Color(0xFF66bb6a) : const Color(0xFF43a047))
-        : kRed;
+        : accentRed(context);
     return GestureDetector(
       onTap: () {
         // RF data is otherwise event/keep-alive driven — request a fresh
@@ -702,7 +703,7 @@ class _RfAntennaIcon extends StatelessWidget {
     final Color qualityClr;
     if (!loraOk) {
       quality = 'No Signal';
-      qualityClr = kRed;
+      qualityClr = accentRed(ctx);
     } else if (loraRssi > -80) {
       quality = 'Excellent';
       qualityClr = isDark ? const Color(0xFF66bb6a) : const Color(0xFF43a047);
@@ -714,7 +715,7 @@ class _RfAntennaIcon extends StatelessWidget {
       qualityClr = isDark ? const Color(0xFFffa726) : const Color(0xFFef6c00);
     } else {
       quality = 'Very Weak';
-      qualityClr = kRed;
+      qualityClr = accentRed(ctx);
     }
 
     showDialog(
@@ -771,7 +772,7 @@ class _RfAntennaIcon extends StatelessWidget {
               _rfRow(ctx, 'Last Received', last, isDark),
               const SizedBox(height: 8),
               _rfRow(ctx, 'Link', loraOk ? 'Connected' : 'Lost', isDark,
-                  valueColor: loraOk ? qualityClr : kRed),
+                  valueColor: loraOk ? qualityClr : accentRed(ctx)),
             ],
           ),
         ),
@@ -812,20 +813,21 @@ class _LostBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext _) {
+    final red = accentRed(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: kRed.withOpacity(0.1),
-        border: Border.all(color: kRed.withOpacity(0.3)),
+        color: red.withValues(alpha: 0.1),
+        border: Border.all(color: red.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(children: [
-        const Icon(Icons.warning_amber_rounded, color: kRed, size: 18),
+        Icon(Icons.warning_amber_rounded, color: red, size: 18),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             'OH Transmitter lost${lastKnown.isNotEmpty ? ' — last: $lastKnown' : ''}',
-            style: const TextStyle(color: kRed, fontSize: 12, fontWeight: FontWeight.w600),
+            style: TextStyle(color: red, fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ),
       ]),
@@ -1034,7 +1036,7 @@ class _GridMotorButton extends StatelessWidget {
           // Shrinking countdown bar while the buzzer is sounding.
           if (buzzer && !sending) ...[
             const SizedBox(height: 10),
-            _CountdownBar(seconds: cd, color: kOrange),
+            _CountdownBar(seconds: cd, color: accentOrange(context)),
           ],
         ],
       ),
@@ -1237,7 +1239,7 @@ class _GearIconState extends State<_GearIcon> with SingleTickerProviderStateMixi
     final greenC = accentGreen(context);
     final iconColor = widget.motorOn
         ? greenC
-        : widget.buzzer ? kOrange : labelColor(context);
+        : widget.buzzer ? accentOrange(context) : labelColor(context);
 
     return AnimatedBuilder(
       animation: _ctrl,
@@ -1247,7 +1249,7 @@ class _GearIconState extends State<_GearIcon> with SingleTickerProviderStateMixi
             : widget.buzzer
                 ? (0.5 - _ctrl.value) * 0.3
                 : 0.0;
-        final baseColor = widget.motorOn ? greenC : widget.buzzer ? kOrange : labelColor(context);
+        final baseColor = widget.motorOn ? greenC : widget.buzzer ? accentOrange(context) : labelColor(context);
         return Container(
           width: widget.size, height: widget.size,
           decoration: BoxDecoration(
@@ -1666,7 +1668,7 @@ class _ProTankCard extends StatelessWidget {
                             ),
                             if (buzzer) ...[
                               const SizedBox(width: 6),
-                              Icon(Icons.notifications_active, color: kOrange, size: 14),
+                              Icon(Icons.notifications_active, color: accentOrange(context), size: 14),
                             ],
                           ]),
                         ],
@@ -1684,7 +1686,7 @@ class _ProTankCard extends StatelessWidget {
                   // Shrinking countdown bar while the buzzer is sounding.
                   if (buzzer && !sending) ...[
                     const SizedBox(height: 10),
-                    _CountdownBar(seconds: cd, color: kOrange),
+                    _CountdownBar(seconds: cd, color: accentOrange(context)),
                   ],
                   // Failed-delivery banner (auto-clears after 10s).
                   if (failed && !sending) ...[
@@ -1815,7 +1817,7 @@ class _ProToggleButton extends StatelessWidget {
       icon = Icons.sync;
     } else if (buzzer) {
       action = onOff;
-      bg = kOrange;
+      bg = accentOrange(context);
       fg = Colors.white;
       text = 'Cancel';
       icon = Icons.cancel_outlined;
@@ -1864,280 +1866,6 @@ class _ProToggleButton extends StatelessWidget {
               fontWeight: FontWeight.w700,
             ),
           ),
-        ]),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// Concept Flow — vertical schematic of the real plumbing
-//   House ← Overhead ← [OH motor] ← Underground ← [UG motor] ← Borewell
-// The layout itself explains the system, so "which way is water moving" is
-// answerable at a glance instead of having to map two abstract cards onto the
-// physical tanks.
-// ═══════════════════════════════════════════════════════════════════════════════
-class ConceptFlowDashboard extends StatelessWidget {
-  final DashboardData d;
-  const ConceptFlowDashboard({super.key, required this.d});
-
-  @override
-  Widget build(BuildContext context) {
-    final s = d.status;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Column(children: [
-      if (s?.txLost == true) ...[
-        _LostBanner(lastKnown: s?.ohLastKnown ?? '', context: context),
-        const SizedBox(height: 10),
-      ],
-      Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: cardBg(context),
-          border: Border.all(color: cardBd(context)),
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: isDark ? Colors.black38 : Colors.black.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Column(children: [
-          Row(children: [
-            Text('WATER SYSTEM',
-              style: TextStyle(color: labelColor(context), fontSize: 10,
-                  letterSpacing: 1.2, fontWeight: FontWeight.w700)),
-            const Spacer(),
-            _RfAntennaIcon(
-              loraOk: d.loraOk, loraRssi: d.loraRssi,
-              loraSNR: d.loraSNR, lastLoraReceived: d.lastLoraReceived,
-              size: 16, context: context,
-            ),
-          ]),
-          const SizedBox(height: 12),
-          // ── House ← Overhead tank ─────────────────────────────────────────
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            _FlowEndpoint(icon: Icons.shower, label: 'House', context: context),
-            const SizedBox(width: 10),
-            Expanded(child: _FlowTank(
-              label: 'Overhead',
-              state: s?.ohState ?? '',
-              height: 62,
-              context: context,
-            )),
-          ]),
-          _FlowPump(
-            name: d.ohMotorName,
-            motorOn: s?.ohMotor ?? false,
-            buzzer: d.ohBuzzer,
-            sending: d.ohCmdSending,
-            failed: d.ohCmdFailed,
-            rejection: d.ohCmdRejection,
-            cd: s?.ohCd ?? 0,
-            onOn: d.onOhOn,
-            onOff: d.onOhOff,
-            onClearFailed: d.onOhClearFailed,
-            context: context,
-          ),
-          // ── Underground tank ──────────────────────────────────────────────
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            const SizedBox(width: 44),
-            Expanded(child: _FlowTank(
-              label: 'Underground',
-              state: s?.ugState ?? '',
-              height: 50,
-              context: context,
-            )),
-          ]),
-          _FlowPump(
-            name: d.ugMotorName,
-            motorOn: s?.ugMotor ?? false,
-            buzzer: d.ugBuzzer,
-            sending: d.ugCmdSending,
-            failed: d.ugCmdFailed,
-            rejection: d.ugCmdRejection,
-            cd: s?.ugCd ?? 0,
-            onOn: d.onUgOn,
-            onOff: d.onUgOff,
-            onClearFailed: d.onUgClearFailed,
-            context: context,
-          ),
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.water_drop_outlined, size: 13, color: labelColor(context)),
-            const SizedBox(width: 5),
-            Text('Borewell source',
-              style: TextStyle(color: labelColor(context), fontSize: 11)),
-          ]),
-        ]),
-      ),
-    ]);
-  }
-}
-
-// ─── Flow: fixed endpoint marker (house / source) ────────────────────────────
-class _FlowEndpoint extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final BuildContext context;
-  const _FlowEndpoint({required this.icon, required this.label, required this.context});
-
-  @override
-  Widget build(BuildContext _) => SizedBox(
-    width: 44,
-    child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 17, color: labelColor(context)),
-      const SizedBox(height: 2),
-      Text(label, style: TextStyle(color: labelColor(context), fontSize: 9.5)),
-    ]),
-  );
-}
-
-// ─── Flow: horizontal tank with a bottom-up fill ─────────────────────────────
-class _FlowTank extends StatelessWidget {
-  final String label;
-  final String state;
-  final double height;
-  final BuildContext context;
-  const _FlowTank({
-    required this.label, required this.state,
-    required this.height, required this.context,
-  });
-
-  @override
-  Widget build(BuildContext _) {
-    final color = _stateColor(state, context);
-    final pct   = _statePct(state);
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Row(children: [
-        Text(label.toUpperCase(),
-          style: TextStyle(color: labelColor(context), fontSize: 9.5,
-              letterSpacing: 0.8, fontWeight: FontWeight.w700)),
-        const Spacer(),
-        Text(_stateLabel(state),
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
-      ]),
-      const SizedBox(height: 5),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(9),
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            color: subtleBg(context),
-            border: Border.all(color: cardBd(context)),
-            borderRadius: BorderRadius.circular(9),
-          ),
-          child: Stack(children: [
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: FractionallySizedBox(
-                heightFactor: pct == 0 ? 0.0001 : pct,
-                widthFactor: 1,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                      colors: [color.withOpacity(0.85), color.withOpacity(0.5)],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Center(
-              child: Text('~${(pct * 100).toInt()}%',
-                style: TextStyle(
-                  color: textColor(context),
-                  fontSize: height > 55 ? 16 : 14,
-                  fontWeight: FontWeight.w800,
-                )),
-            ),
-          ]),
-        ),
-      ),
-    ]);
-  }
-}
-
-// ─── Flow: inline pump row sitting between two tanks ─────────────────────────
-class _FlowPump extends StatelessWidget {
-  final String name;
-  final bool motorOn;
-  final bool buzzer;
-  final bool sending;
-  final bool failed;
-  final String? rejection;
-  final int cd;
-  final VoidCallback onOn;
-  final VoidCallback onOff;
-  final VoidCallback? onClearFailed;
-  final BuildContext context;
-
-  const _FlowPump({
-    required this.name, required this.motorOn, required this.buzzer,
-    required this.sending, required this.failed, required this.cd,
-    required this.onOn, required this.onOff, required this.context,
-    this.rejection,
-    this.onClearFailed,
-  });
-
-  @override
-  Widget build(BuildContext _) {
-    final green  = accentGreen(context);
-    final active = motorOn || buzzer;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-        decoration: BoxDecoration(
-          color: active ? green.withOpacity(0.07) : subtleBg(context),
-          border: Border.all(color: active ? green : cardBd(context)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(children: [
-          if ((failed || rejection != null) && !sending) ...[
-            _NotDeliveredBanner(onDismiss: onClearFailed, rejection: rejection),
-            const SizedBox(height: 8),
-          ],
-          Row(children: [
-            _GearIcon(motorOn: motorOn, buzzer: buzzer, size: 30),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(name,
-                    maxLines: 1, overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: textColor(context), fontSize: 12.5, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 1),
-                  Row(children: [
-                    if (motorOn) ...[
-                      Icon(Icons.arrow_upward, size: 11, color: green),
-                      const SizedBox(width: 3),
-                    ],
-                    Text(
-                      motorOn ? 'Pumping up' : (buzzer ? 'Starting…' : 'Idle'),
-                      style: TextStyle(
-                        color: active ? green : labelColor(context),
-                        fontSize: 10.5,
-                      ),
-                    ),
-                  ]),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            _PowerButton(
-              motorOn: motorOn, onOn: onOn, onOff: onOff,
-              buzzer: buzzer, sending: sending, cd: cd, compact: true,
-            ),
-          ]),
-          if (buzzer && !sending) ...[
-            const SizedBox(height: 9),
-            _CountdownBar(seconds: cd, color: kOrange),
-          ],
         ]),
       ),
     );
@@ -2336,7 +2064,7 @@ class _CleanUnitCard extends StatelessWidget {
                   ]),
                   if (buzzer && !sending) ...[
                     const SizedBox(height: 10),
-                    _CountdownBar(seconds: cd, color: kOrange),
+                    _CountdownBar(seconds: cd, color: accentOrange(context)),
                   ],
                 ]),
               ),
@@ -2568,7 +2296,7 @@ class _ConsoleRow extends StatelessWidget {
         ]),
         if (buzzer && !sending) ...[
           const SizedBox(height: 9),
-          _CountdownBar(seconds: cd, color: kOrange),
+          _CountdownBar(seconds: cd, color: accentOrange(context)),
         ],
       ]),
     );
@@ -2858,7 +2586,7 @@ class _NovaTankPumpCard extends StatelessWidget {
         ),
         if (buzzer && !sending) ...[
           const SizedBox(height: 11),
-          _CountdownBar(seconds: cd, color: kOrange),
+          _CountdownBar(seconds: cd, color: accentOrange(context)),
         ],
         if (autoStartNote) ...[
           const SizedBox(height: 13),

@@ -41,7 +41,7 @@ class _AdminScreenState extends State<AdminScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: kDarkLabel, size: 20),
+            icon: Icon(Icons.refresh, color: labelColor(context), size: 20),
             tooltip: 'Refresh',
             onPressed: _load,
           ),
@@ -81,8 +81,8 @@ class _AdminScreenState extends State<AdminScreen> {
         tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         collapsedBackgroundColor: Colors.transparent,
         backgroundColor: Colors.transparent,
-        iconColor: kDarkLabel,
-        collapsedIconColor: kDarkLabel,
+        iconColor: labelColor(context),
+        collapsedIconColor: labelColor(context),
         leading: CircleAvatar(
           backgroundColor: isAdmin
               ? const Color(0xFF391085)
@@ -115,8 +115,8 @@ class _AdminScreenState extends State<AdminScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: const Color(0xFF531DAB)),
                 ),
-                child: const Text('admin',
-                    style: TextStyle(color: kOrange, fontSize: 10)),
+                child: Text('admin',
+                    style: TextStyle(color: accentOrange(context), fontSize: 10)),
               ),
             ],
           ],
@@ -161,7 +161,7 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.memory, color: online ? kGreen : kDarkLabel, size: 28),
+          Icon(Icons.memory, color: online ? accentGreen(context) : labelColor(context), size: 28),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -185,26 +185,26 @@ class _AdminScreenState extends State<AdminScreen> {
                           horizontal: 6, vertical: 1),
                       decoration: BoxDecoration(
                         color: online
-                            ? const Color(0xFF162312)
+                            ? accentGreen(context).withValues(alpha: 0.12)
                             : subtleBg(context),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                             color: online
-                                ? const Color(0xFF274916)
-                                : const Color(0xFF434343)),
+                                ? accentGreen(context).withValues(alpha: 0.4)
+                                : cardBd(context)),
                       ),
                       child: Text(
                         online ? '● Online' : '○ Offline',
                         style: TextStyle(
-                            color: online ? kGreen : kDarkLabel, fontSize: 10),
+                            color: online ? accentGreen(context) : labelColor(context), fontSize: 10),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 3),
                 Text(mac,
-                    style: const TextStyle(
-                        color: kDarkLabel,
+                    style: TextStyle(
+                        color: labelColor(context),
                         fontSize: 10,
                         fontFamily: 'monospace')),
                 if (fw.isNotEmpty)

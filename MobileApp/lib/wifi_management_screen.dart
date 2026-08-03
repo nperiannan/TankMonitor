@@ -128,7 +128,7 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(color: kRed)),
+            child: Text('Remove', style: TextStyle(color: accentRed(ctx))),
           ),
         ],
       ),
@@ -193,11 +193,11 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
     return _section(
       'CURRENT CONNECTION',
       child: ListTile(
-        leading: Icon(Icons.wifi, color: kGreen, size: 28),
+        leading: Icon(Icons.wifi, color: accentGreen(context), size: 28),
         title: Text(net['ssid'] as String? ?? '',
             style: TextStyle(color: textColor(context), fontWeight: FontWeight.w600)),
         subtitle: Text('${net['ip'] ?? ''} • Connected',
-            style: TextStyle(color: kGreen, fontSize: 12)),
+            style: TextStyle(color: accentGreen(context), fontSize: 12)),
       ),
     );
   }
@@ -230,7 +230,7 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
                     fontWeight: isConn ? FontWeight.w600 : FontWeight.normal,
                   )),
                   subtitle: isConn
-                      ? Text('Connected', style: TextStyle(color: kGreen, fontSize: 11))
+                      ? Text('Connected', style: TextStyle(color: accentGreen(context), fontSize: 11))
                       : null,
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -253,7 +253,7 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
                         ),
                       IconButton(
                         icon: Icon(Icons.delete_outline,
-                            color: (isConn || _savedNetworks.length <= 1) ? labelColor(context).withValues(alpha: 0.35) : kRed,
+                            color: (isConn || _savedNetworks.length <= 1) ? labelColor(context).withValues(alpha: 0.35) : accentRed(context),
                             size: 18),
                         onPressed: (isConn || _savedNetworks.length <= 1) ? null : () => _deleteNetwork(ssid),
                         tooltip: isConn
@@ -325,7 +325,7 @@ class _WifiManagementScreenState extends State<WifiManagementScreen> {
             title: Text('TankMonitor', style: TextStyle(color: textColor(context))),
             subtitle: Text(
               _apEnabled ? 'IP: $_apIp • Active' : 'Inactive',
-              style: TextStyle(color: _apEnabled ? kGreen : labelColor(context), fontSize: 12),
+              style: TextStyle(color: _apEnabled ? accentGreen(context) : labelColor(context), fontSize: 12),
             ),
           ),
           if (_apClients.isNotEmpty) ...[

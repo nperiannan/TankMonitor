@@ -24,17 +24,12 @@ import 'push_service.dart';
 import 'haptics.dart';
 
 // ─── Colours (resolved from theme for backward-compat helpers) ──────────────
-const _blue    = kBlue;
-const _green   = kGreen;
-const _orange  = kOrange;
-const _red     = kRed;
 // These are still used by many helper widgets below.
 // They get the right dark-mode values; the theme-aware widgets in
 // dashboard_themes.dart use cardBg()/cardBd()/labelColor() instead.
 const _bg      = kDarkBg;
 const _cardBg  = kDarkCard;
 const _cardBd  = kDarkCardBd;
-const _label   = kDarkLabel;
 const _rowBd   = kDarkCardBd;
 // ─── Tank/Motor widgets are now in dashboard_themes.dart ─────────────────────
 
@@ -294,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             await svc.triggerOta();
             _startOtaPolling();
           },
-          child: const Text('Flash', style: TextStyle(color: _blue)),
+          child: Text('Flash', style: TextStyle(color: accentBlue(ctx))),
         ),
       ],
     ));
@@ -392,7 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             await svc.triggerRollback();
             if (mounted) setState(() => _otaBusy = false);
           },
-          child: const Text('Rollback', style: TextStyle(color: _red)),
+          child: Text('Rollback', style: TextStyle(color: accentRed(ctx))),
         ),
       ],
     ));
@@ -461,7 +456,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             Text(
               '💧 ${svc.currentDevice?.displayName ?? 'Tank Monitor'}',
               style: TextStyle(
-                  color: _blue, fontWeight: FontWeight.w700, fontSize: 17),
+                  color: accentBlue(context), fontWeight: FontWeight.w700, fontSize: 17),
               overflow: TextOverflow.ellipsis,
             ),
             if ((svc.currentDevice?.typeId ?? '').isNotEmpty)
@@ -477,7 +472,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             padding: const EdgeInsets.only(right: 4),
             child: Row(children: [
               Icon(Icons.circle, size: 8,
-                color: svc.connected ? accentGreen(context) : _orange),
+                color: svc.connected ? accentGreen(context) : accentOrange(context)),
               const SizedBox(width: 4),
               Text(
                 svc.connected ? 'Live' : 'Connecting…',
@@ -571,7 +566,6 @@ class _DashboardScreenState extends State<DashboardScreen>
                       switch (prefs.concept) {
                         case DashboardConcept.hybrid:    return ConceptFDashboard(d: data);
                         case DashboardConcept.nova:      return ConceptNovaDashboard(d: data);
-                        case DashboardConcept.flow:      return ConceptFlowDashboard(d: data);
                         case DashboardConcept.clean:     return ConceptCleanDashboard(d: data);
                         case DashboardConcept.console:   return ConceptConsoleDashboard(d: data);
                       }
@@ -838,7 +832,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                             _ActionButton(
                               label: 'Reboot',
                               icon: Icons.power_settings_new,
-                              accent: _orange,
+                              accent: accentOrange(context),
                               enabled: s != null,
                               onTap: () => _confirmReboot(context, svc),
                             ),
@@ -900,8 +894,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 if (_uploadProgress != null) ...[
                                   // Uploading…
                                   Row(children: [
-                                    const SizedBox(width: 12, height: 12,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
+                                    SizedBox(width: 12, height: 12,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: accentBlue(context))),
                                     const SizedBox(width: 8),
                                     Text('Uploading… ${(_uploadProgress! * 100).toStringAsFixed(0)}%',
                                       style: TextStyle(color: textColor(context).withOpacity(0.7), fontSize: 12)),
@@ -912,7 +906,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                     child: LinearProgressIndicator(
                                       value: _uploadProgress,
                                       backgroundColor: cardBd(context),
-                                      color: _blue,
+                                      color: accentBlue(context),
                                       minHeight: 4,
                                     ),
                                   ),
@@ -923,7 +917,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   _stageFirmwareButtons(),
                                 ] else if (_otaHasFirmware) ...[
                                   Row(children: [
-                                    const Icon(Icons.check_circle, color: _green, size: 14),
+                                    Icon(Icons.check_circle, color: accentGreen(context), size: 14),
                                     const SizedBox(width: 6),
                                     Expanded(child: Text(
                                       '${_otaStagedName.isEmpty ? 'firmware.bin' : _otaStagedName}'
@@ -941,8 +935,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                                   const SizedBox(height: 6),
                                   _stageFirmwareButtons(),
                                 ] else ...[
-                                  const Text('No firmware staged.',
-                                    style: TextStyle(color: _label, fontSize: 12)),
+                                  Text('No firmware staged.',
+                                    style: TextStyle(color: labelColor(context), fontSize: 12)),
                                   const SizedBox(height: 6),
                                   _stageFirmwareButtons(),
                                 ],
@@ -968,25 +962,25 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 // Phase message + countdown
                                 if (_otaBusy || (_otaPhase.isNotEmpty && _otaPhase != 'idle')) ...[
                                   _otaPhase == 'success'
-                                    ? Row(children: const [
-                                        Icon(Icons.check_circle, color: _green, size: 14),
-                                        SizedBox(width: 6),
-                                        Text('✅ Update successful! Device rebooted.',
+                                    ? Row(children: [
+                                        Icon(Icons.check_circle, color: accentGreen(context), size: 14),
+                                        const SizedBox(width: 6),
+                                        const Text('✅ Update successful! Device rebooted.',
                                           style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
                                       ])
                                     : _otaPhase == 'failed'
-                                      ? Row(children: const [
-                                          Icon(Icons.error_outline, color: _red, size: 14),
-                                          SizedBox(width: 6),
-                                          Expanded(child: Text('❌ Update failed — timed out.',
+                                      ? Row(children: [
+                                          Icon(Icons.error_outline, color: accentRed(context), size: 14),
+                                          const SizedBox(width: 6),
+                                          const Expanded(child: Text('❌ Update failed — timed out.',
                                             style: TextStyle(color: Colors.redAccent, fontSize: 12))),
                                         ])
                                       : Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Row(children: [
-                                              const SizedBox(width: 12, height: 12,
-                                                child: CircularProgressIndicator(strokeWidth: 2, color: _blue)),
+                                              SizedBox(width: 12, height: 12,
+                                                child: CircularProgressIndicator(strokeWidth: 2, color: accentBlue(context))),
                                               const SizedBox(width: 8),
                                               Text(
                                                 _otaPhase == 'triggered'    ? '⚡ OTA triggered — waiting for ESP32…'
@@ -1012,7 +1006,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                                               child: LinearProgressIndicator(
                                                 value: (_otaSecondsElapsed / 150).clamp(0.0, 1.0),
                                                 backgroundColor: cardBd(context),
-                                                color: _blue,
+                                                color: accentBlue(context),
                                                 minHeight: 6,
                                               ),
                                             ),
@@ -1073,7 +1067,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                         _InfoRow('Device IP',   s?.mgmtIp.isNotEmpty == true ? s!.mgmtIp : '—'),
                         const Divider(height: 16),
                         _InfoRow('User',        svc.currentUsername ?? '—'),
-                        _InfoRow('Access Level', _accessLevel(svc), last: true),
+                        _InfoRow('Access Level', _accessLevel(svc)),
+                        const Divider(height: 16),
+                        // Static — every unit shipped so far is the v2.0 PCB
+                        // (Config.h forces BOARD_V2 unconditionally).
+                        _InfoRow('Hardware Revision', 'v2.0 PCB', last: true),
                       ]),
                     ),
                     const SizedBox(height: 20),
@@ -1228,7 +1226,7 @@ class _DashboardScreenState extends State<DashboardScreen>
           }
         },
         backgroundColor: cardBg(context),
-        selectedItemColor: _blue,
+        selectedItemColor: accentBlue(context),
         unselectedItemColor: labelColor(context),
         items: const [
           BottomNavigationBarItem(
@@ -1277,7 +1275,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                 : Icons.check_circle_outline,
         color: errors.isNotEmpty ? Colors.redAccent
              : warns.isNotEmpty  ? Colors.orange
-             : _green,
+             : accentGreen(context),
         text: '${parts.join(' · ')}  (${logs.length} entries)',
         bold: true,
       ),
@@ -1325,7 +1323,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () { Navigator.pop(ctx); svc.sendControl({'cmd': 'sched_clear'}); },
-          child: const Text('Clear', style: TextStyle(color: _red)),
+          child: Text('Clear', style: TextStyle(color: accentRed(ctx))),
         ),
       ],
     ));
@@ -1339,7 +1337,7 @@ class _DashboardScreenState extends State<DashboardScreen>
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () { AppHaptics.confirm(); Navigator.pop(ctx); svc.sendControl({'cmd': 'reboot'}); },
-          child: const Text('Reboot', style: TextStyle(color: _red)),
+          child: Text('Reboot', style: TextStyle(color: accentRed(ctx))),
         ),
       ],
     ));
@@ -1360,7 +1358,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             final ds = svc.directService;
             if (ds != null) await ds.factoryReset();
           },
-          child: const Text('Reset', style: TextStyle(color: _red)),
+          child: Text('Reset', style: TextStyle(color: accentRed(ctx))),
         ),
       ],
     ));
@@ -1431,7 +1429,6 @@ class _DashboardThemePicker extends StatelessWidget {
     const items = [
       (DashboardConcept.hybrid,    '⚡', 'Hybrid',      'Arcs + grid motors'),
       (DashboardConcept.nova,      '✨', 'Nova',        'Big & simple, for everyone'),
-      (DashboardConcept.flow,      '🚰', 'Flow',        'System schematic'),
       (DashboardConcept.clean,     '🧊', 'Clean',       'Minimal cards'),
       (DashboardConcept.console,   '📟', 'Console',     'Dense, no scroll'),
     ];
@@ -1451,8 +1448,8 @@ class _DashboardThemePicker extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: selected ? _blue.withOpacity(0.12) : subtleBg(context),
-                border: Border.all(color: selected ? _blue : cardBd(context), width: selected ? 2 : 1),
+                color: selected ? accentBlue(context).withValues(alpha: 0.12) : subtleBg(context),
+                border: Border.all(color: selected ? accentBlue(context) : cardBd(context), width: selected ? 2 : 1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
@@ -1461,7 +1458,7 @@ class _DashboardThemePicker extends StatelessWidget {
                   Text(item.$2, style: const TextStyle(fontSize: 24)),
                   const SizedBox(height: 4),
                   Text(item.$3, style: TextStyle(
-                    color: selected ? _blue : textColor(context),
+                    color: selected ? accentBlue(context) : textColor(context),
                     fontSize: 11, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
@@ -1472,7 +1469,7 @@ class _DashboardThemePicker extends StatelessWidget {
                   ),
                   if (selected) ...[
                     const SizedBox(height: 4),
-                    Text('★', style: TextStyle(color: _blue, fontSize: 10, fontWeight: FontWeight.w700)),
+                    Text('★', style: TextStyle(color: accentBlue(context), fontSize: 10, fontWeight: FontWeight.w700)),
                   ],
                 ],
               ),
@@ -1506,8 +1503,8 @@ class _AppThemePicker extends StatelessWidget {
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color: selected ? _blue.withOpacity(0.12) : subtleBg(context),
-                  border: Border.all(color: selected ? _blue : cardBd(context), width: selected ? 2 : 1),
+                  color: selected ? accentBlue(context).withValues(alpha: 0.12) : subtleBg(context),
+                  border: Border.all(color: selected ? accentBlue(context) : cardBd(context), width: selected ? 2 : 1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
@@ -1515,12 +1512,12 @@ class _AppThemePicker extends StatelessWidget {
                     Text(item.$2, style: const TextStyle(fontSize: 22)),
                     const SizedBox(height: 4),
                     Text(item.$3, style: TextStyle(
-                      color: selected ? _blue : textColor(context),
+                      color: selected ? accentBlue(context) : textColor(context),
                       fontSize: 11, fontWeight: FontWeight.w600),
                     ),
                     if (selected) ...[
                       const SizedBox(height: 4),
-                      Text('★ SELECTED', style: TextStyle(color: _blue, fontSize: 9, fontWeight: FontWeight.w700)),
+                      Text('★ SELECTED', style: TextStyle(color: accentBlue(context), fontSize: 9, fontWeight: FontWeight.w700)),
                     ],
                   ],
                 ),
@@ -1577,7 +1574,7 @@ class _MotorNameRow extends StatelessWidget {
                 hintText: 'Motor name',
                 hintStyle: TextStyle(color: labelColor(context)),
                 enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: cardBd(context))),
-                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: kBlue)),
+                focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: accentBlue(context))),
               ),
             ),
             actions: [
@@ -1639,7 +1636,7 @@ class _NotificationSettings extends StatelessWidget {
           ),
           Switch(
             value: prefs.motorNotify,
-            activeColor: accentGreen(context),
+            activeColor: accentBlue(context),
             onChanged: (v) => prefs.setMotorNotify(v),
           ),
         ],
@@ -1682,7 +1679,7 @@ class _WaterVolumeSettings extends StatelessWidget {
         ),
         Switch(
           value: value,
-          activeColor: accentGreen(context),
+          activeColor: accentBlue(context),
           onChanged: onChanged,
         ),
       ],
@@ -1832,16 +1829,20 @@ class _Banner extends StatelessWidget {
   const _Banner(this.msg, {this.isError = true});
 
   @override
-  Widget build(BuildContext context) => Container(
-    margin: const EdgeInsets.only(bottom: 10),
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      color: isError ? _red.withOpacity(0.1) : _orange.withOpacity(0.1),
-      border: Border.all(color: isError ? _red : _orange),
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(msg, style: TextStyle(color: isError ? _red : _orange, fontSize: 13)),
-  );
+  Widget build(BuildContext context) {
+    final red = accentRed(context);
+    final orange = accentOrange(context);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isError ? red.withValues(alpha: 0.1) : orange.withValues(alpha: 0.1),
+        border: Border.all(color: isError ? red : orange),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(msg, style: TextStyle(color: isError ? red : orange, fontSize: 13)),
+    );
+  }
 }
 
 class _SummaryLine extends StatelessWidget {
@@ -1959,7 +1960,7 @@ class _ActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color? ac = accent ?? (danger ? _red : null);
+    final Color? ac = accent ?? (danger ? accentRed(context) : null);
     return Expanded(
       child: SizedBox(
         height: 46,
@@ -2077,7 +2078,7 @@ class _SchedulerModal extends StatelessWidget {
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         TextButton(
           onPressed: () { Navigator.pop(ctx); svc.sendControl({'cmd': 'sched_clear'}); },
-          child: const Text('Clear', style: TextStyle(color: kRed)),
+          child: Text('Clear', style: TextStyle(color: accentRed(ctx))),
         ),
       ],
     ));
@@ -2245,7 +2246,7 @@ class _SettingRow extends StatelessWidget {
       Switch(
         value: value ?? false,
         onChanged: value == null ? null : onChange,
-        activeColor: _blue,
+        activeColor: accentBlue(context),
       ),
     ]),
   );

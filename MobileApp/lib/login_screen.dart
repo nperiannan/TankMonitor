@@ -149,18 +149,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: kRed.withOpacity(0.1),
-                      border: Border.all(color: kRed.withOpacity(0.3)),
+                      color: accentRed(context).withValues(alpha: 0.1),
+                      border: Border.all(color: accentRed(context).withValues(alpha: 0.3)),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, color: kRed, size: 16),
+                        Icon(Icons.error_outline, color: accentRed(context), size: 16),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _error!,
-                            style: const TextStyle(color: kRed, fontSize: 13),
+                            style: TextStyle(color: accentRed(context), fontSize: 13),
                           ),
                         ),
                       ],

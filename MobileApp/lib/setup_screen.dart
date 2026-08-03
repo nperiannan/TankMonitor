@@ -269,7 +269,7 @@ class _UrlField extends StatelessWidget {
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(color: accentBlue(context))),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: kRed)),
+        borderSide: BorderSide(color: accentRed(context))),
     ),
     validator: (v) {
       if (v == null || v.trim().isEmpty) return 'Required';
