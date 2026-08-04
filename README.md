@@ -73,7 +73,7 @@ flowchart LR
 
     subgraph OCI["Oracle Cloud VM · 150.230.129.215"]
         MQ["Mosquitto\nMQTT Broker\n:1883"]
-        GO["Go Backend\n:8080\nweb v2.7.0"]
+        GO["Go Backend\n:8080\nweb v2.8.0"]
         STATIC["React Frontend\nserved as static"]
         DB[("SQLite\n/data/tankmonitor.db")]
         GO --- MQ
@@ -138,7 +138,7 @@ TankMonitor/
 | --- | --- |
 | Controller Firmware | v2.10.0 |
 | Transmitter Firmware | v2.1.0 |
-| Web App | v2.7.0 |
+| Web App | v2.8.0 |
 | Mobile App | v2.21.0 |
 
 ---

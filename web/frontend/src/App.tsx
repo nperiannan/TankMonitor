@@ -9,7 +9,7 @@ import {
 import {
   WifiOutlined, ClockCircleOutlined, HistoryOutlined,
   PlusOutlined, DeleteOutlined, ClearOutlined, EditOutlined,
-  BulbOutlined, BulbFilled, SyncOutlined, PoweroffOutlined,
+  SyncOutlined, PoweroffOutlined,
   UserOutlined, LockOutlined, LogoutOutlined,
   UploadOutlined, ThunderboltOutlined, RollbackOutlined,
 } from '@ant-design/icons'
@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.7.0'
+const WEB_APP_VERSION = '2.8.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -32,6 +32,10 @@ function LoginPage({ onLogin }: LoginPageProps) {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [form] = Form.useForm<{ username: string; password: string }>()
+  const T = THEMES[loadTheme()]
+  const cardStyle: React.CSSProperties = {
+    background: T.cardBg, border: `1px solid ${T.cardBd}`, borderRadius: T.cardRadius, clipPath: T.clipPath,
+  }
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true)
@@ -48,23 +52,28 @@ function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <ConfigProvider theme={{ algorithm: antTheme.darkAlgorithm, token: { colorPrimary: '#6366f1', borderRadius: 12 } }}>
+    <ConfigProvider theme={{ algorithm: antTheme.darkAlgorithm, token: { colorPrimary: T.accent, borderRadius: T.cardRadius > 10 ? 14 : 6, fontFamily: T.bodyFont } }}>
       <div style={{
-        minHeight: '100vh', background: '#0b0b0e',
+        minHeight: '100vh', background: T.bg,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 24,
+        padding: 24, fontFamily: T.bodyFont,
       }}>
         <div style={{
-          background: '#131317', border: '1px solid #201f26', borderRadius: 20,
-          padding: '32px 28px', width: '100%', maxWidth: 360,
+          ...cardStyle, padding: '32px 28px', width: '100%', maxWidth: 360,
         }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 40 }}>💧</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#6366f1', marginTop: 8 }}>
-              Tank Monitor
+            <div style={{
+              width: 14, height: 14, margin: '0 auto', background: T.accent,
+              boxShadow: `0 0 14px ${T.accent}`, clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)',
+            }} />
+            <div style={{
+              fontSize: 18, fontWeight: 700, color: T.accent, marginTop: 12,
+              fontFamily: T.headingFont, letterSpacing: 1.5, textShadow: `0 0 12px ${T.accent}90`,
+            }}>
+              TANK MONITOR
             </div>
-            <div style={{ fontSize: 12, color: '#7a7a85', marginTop: 4 }}>
-              Sign in to continue
+            <div style={{ fontSize: 11.5, color: T.labelClr, marginTop: 6, fontFamily: T.monoFont, letterSpacing: 0.5 }}>
+              SIGN IN TO CONTINUE
             </div>
           </div>
 
@@ -80,8 +89,11 @@ function LoginPage({ onLogin }: LoginPageProps) {
               <Input.Password prefix={<LockOutlined />} placeholder="Password" autoComplete="current-password" />
             </Form.Item>
             <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="primary" htmlType="submit" loading={loading} block>
-                Sign In
+              <Button
+                type="primary" htmlType="submit" loading={loading} block
+                style={{ fontFamily: T.monoFont, fontWeight: 700, letterSpacing: 1 }}
+              >
+                SIGN IN
               </Button>
             </Form.Item>
           </Form>
@@ -133,23 +145,92 @@ function getNextSchedIdx(schedules: Schedule[], motor: string, currentTime: stri
 }
 
 // ---------------------------------------------------------------------------
+// Sci-fi theme tokens — user picks between two full re-skins via a switcher
+// ---------------------------------------------------------------------------
+
+type ThemeName = 'hud' | 'quantum'
+
+interface ThemeTokens {
+  label:       string
+  accent:      string
+  bg:          string
+  cardBg:      string
+  cardBd:      string
+  rowBd:       string
+  labelClr:    string
+  textClr:     string
+  heroBg:      string
+  cardRadius:  number
+  clipPath?:   string
+  scanline?:   boolean
+  headingFont: string
+  bodyFont:    string
+  monoFont:    string
+}
+
+const THEMES: Record<ThemeName, ThemeTokens> = {
+  hud: {
+    label: 'HUD',
+    accent: '#5eead4',
+    bg: 'linear-gradient(rgba(4,14,16,.94),rgba(4,14,16,.97)), repeating-linear-gradient(0deg, rgba(94,234,212,.035) 0px, rgba(94,234,212,.035) 1px, transparent 1px, transparent 3px), #040e10',
+    cardBg: 'rgba(8,22,25,.85)',
+    cardBd: '#1c3b42',
+    rowBd: '#12282d',
+    labelClr: '#5a8a90',
+    textClr: '#e8f7f5',
+    heroBg: 'rgba(8,22,25,.85)',
+    cardRadius: 4,
+    clipPath: 'polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px)',
+    scanline: true,
+    headingFont: "'Orbitron', sans-serif",
+    bodyFont: "'Rajdhani', Arial, sans-serif",
+    monoFont: "'Share Tech Mono', monospace",
+  },
+  quantum: {
+    label: 'Quantum',
+    accent: '#4d8dff',
+    bg: 'radial-gradient(ellipse 900px 500px at 50% -10%, rgba(77,141,255,.16), transparent 60%), #04060d',
+    cardBg: 'rgba(255,255,255,.03)',
+    cardBd: 'rgba(77,141,255,.22)',
+    rowBd: 'rgba(77,141,255,.14)',
+    labelClr: '#6d84a8',
+    textClr: '#ffffff',
+    heroBg: 'linear-gradient(160deg, rgba(77,141,255,.10), rgba(139,92,246,.05))',
+    cardRadius: 20,
+    scanline: false,
+    headingFont: "'Orbitron', sans-serif",
+    bodyFont: "'Rajdhani', Arial, sans-serif",
+    monoFont: "'Share Tech Mono', monospace",
+  },
+}
+
+const THEME_STORAGE_KEY = 'tm_theme'
+
+function loadTheme(): ThemeName {
+  const v = typeof localStorage !== 'undefined' ? localStorage.getItem(THEME_STORAGE_KEY) : null
+  return v === 'hud' || v === 'quantum' ? v : 'quantum'
+}
+
+// ---------------------------------------------------------------------------
 // SVG arc tank level circle (mirrors ESP32 webserver UI)
 // ---------------------------------------------------------------------------
 
-function TankCircle({ state, darkMode, size = 110 }: { state: string; darkMode: boolean; size?: number }) {
+function TankCircle({ state, darkMode, size = 110, accent = '#6366f1', trackColor }: {
+  state: string; darkMode: boolean; size?: number; accent?: string; trackColor?: string
+}) {
   const r    = size / 110 * 45
   const circ = 2 * Math.PI * r  // ≈ 283 at size=110
 
   let pct   = 0
   let color = '#8c8c8c'
 
-  if      (state === 'FULL')  { pct = 1.0; color = '#6366f1' }
-  else if (state === 'HALF')  { pct = 0.6; color = '#6366f1' }
+  if      (state === 'FULL')  { pct = 1.0; color = accent }
+  else if (state === 'HALF')  { pct = 0.6; color = accent }
   else if (state === 'LOW')   { pct = 0.3; color = '#fa8c16' }
   else if (state === 'EMPTY') { pct = 0.0; color = '#ff4d4f' }
 
   const dash   = pct * circ
-  const arcBg  = darkMode ? '#201f26' : '#e8e8e8'
+  const arcBg  = trackColor ?? (darkMode ? '#201f26' : '#e8e8e8')
   const cx = size / 2, cy = size / 2
   const strokeW = size / 110 * 9
 
@@ -161,7 +242,7 @@ function TankCircle({ state, darkMode, size = 110 }: { state: string; darkMode: 
           cx={cx} cy={cy} r={r} fill="none"
           stroke={color} strokeWidth={strokeW} strokeLinecap="round"
           strokeDasharray={`${dash} ${circ}`}
-          style={{ transition: 'stroke-dasharray 0.5s, stroke 0.5s' }}
+          style={{ transition: 'stroke-dasharray 0.5s, stroke 0.5s', filter: `drop-shadow(0 0 6px ${color}88)` }}
         />
       </svg>
       <div style={{
@@ -190,9 +271,12 @@ interface BentoTankRowProps {
   onOff:     () => void
   darkMode:  boolean
   divider:   boolean
+  accent?:   string
+  labelFont?: string
+  nameFont?:  string
 }
 
-function BentoTankRow({ title, tankState, motorOn, onOn, onOff, darkMode, divider }: BentoTankRowProps) {
+function BentoTankRow({ title, tankState, motorOn, onOn, onOff, darkMode, divider, accent = '#6366f1', labelFont, nameFont }: BentoTankRowProps) {
   const rowBd  = darkMode ? '#211f2c' : '#ece9f5'
   const nameCl = darkMode ? '#ffffff' : '#1a1a2e'
   const subCl  = darkMode ? '#7a7a85' : '#8a8a95'
@@ -202,18 +286,18 @@ function BentoTankRow({ title, tankState, motorOn, onOn, onOff, darkMode, divide
       marginTop: divider ? 16 : 6, paddingTop: divider ? 14 : 0,
       borderTop: divider ? `1px solid ${rowBd}` : 'none',
     }}>
-      <TankCircle state={tankState} darkMode={darkMode} size={52} />
+      <TankCircle state={tankState} darkMode={darkMode} size={52} accent={accent} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: nameCl }}>{title}</div>
-        <div style={{ fontSize: 10.5, color: subCl, marginTop: 1 }}>
-          {tankState || '—'} · Motor {motorOn ? 'on' : 'off'}
+        <div style={{ fontSize: 14, fontWeight: 700, color: nameCl, fontFamily: nameFont }}>{title}</div>
+        <div style={{ fontSize: 10.5, color: subCl, marginTop: 2, fontFamily: labelFont, letterSpacing: .5 }}>
+          {(tankState || '—').toUpperCase()} · MOTOR {motorOn ? 'ON' : 'OFF'}
         </div>
       </div>
       <Button
         size="small"
         type={motorOn ? 'default' : 'primary'}
         danger={motorOn}
-        style={!motorOn ? { background: '#6366f1', borderColor: '#6366f1' } : undefined}
+        style={!motorOn ? { background: accent, borderColor: accent, color: '#04060d', fontWeight: 700 } : { fontWeight: 700 }}
         onClick={motorOn ? onOff : onOn}
       >
         {motorOn ? 'Power Off' : 'Power On'}
@@ -247,7 +331,8 @@ export default function App() {
   const [addOpen,    setAddOpen]    = useState(false)
   const [editRow,    setEditRow]    = useState<Schedule | null>(null)
   const [ctrlError,  setCtrlError]  = useState<string | null>(null)
-  const [darkMode,   setDarkMode]   = useState(true)
+  const [themeName,  setThemeName]  = useState<ThemeName>(loadTheme)
+  const darkMode = true   // both sci-fi themes are dark-only
   const [form]     = Form.useForm<AddForm>()
   const [editForm] = Form.useForm<EditForm>()
   // OTA state
@@ -290,6 +375,8 @@ export default function App() {
   }, [token])
 
   useEffect(() => { loadOtaStatus() }, [loadOtaStatus])
+
+  useEffect(() => { localStorage.setItem(THEME_STORAGE_KEY, themeName) }, [themeName])
 
   const loadDeviceLogs = useCallback(() => {
     if (!token) return
@@ -519,75 +606,91 @@ export default function App() {
     ['Last update', lastUpdate ? lastUpdate.toLocaleTimeString() : '—'],
   ]
 
-  const bg       = darkMode ? '#0b0b0e' : '#f4f4f7'
-  const cardBg   = darkMode ? '#131317' : '#ffffff'
-  const cardBd   = darkMode ? '#201f26' : '#e6e6ea'
-  const rowBd    = darkMode ? '#1c1b22' : '#eeeef2'
-  const labelClr = darkMode ? '#7a7a85' : '#6b6b78'
-  const accent   = '#6366f1'
-  const heroCardStyle: React.CSSProperties = {
-    background: darkMode ? 'linear-gradient(160deg,#171522,#101014)' : 'linear-gradient(160deg,#f0f0fb,#ffffff)',
-    border: `1px solid ${darkMode ? '#262435' : '#e2e0f5'}`,
-    borderRadius: 20,
+  const T        = THEMES[themeName]
+  const bg       = T.bg
+  const cardBg   = T.cardBg
+  const cardBd   = T.cardBd
+  const rowBd    = T.rowBd
+  const labelClr = T.labelClr
+  const accent   = T.accent
+  const cardStyle: React.CSSProperties = {
+    background: cardBg, border: `1px solid ${cardBd}`, borderRadius: T.cardRadius,
+    clipPath: T.clipPath, fontFamily: T.bodyFont,
   }
-  const statCardStyle: React.CSSProperties = {
-    background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20,
+  const cardTitleStyle: React.CSSProperties = {
+    fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1.5, fontFamily: T.monoFont,
   }
+  const heroCardStyle: React.CSSProperties = { ...cardStyle, background: T.heroBg }
+  const statCardStyle: React.CSSProperties = { ...cardStyle }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <ConfigProvider theme={{
-      algorithm: darkMode ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
-      token: { colorPrimary: accent, borderRadius: 12 },
+      algorithm: antTheme.darkAlgorithm,
+      token: { colorPrimary: accent, borderRadius: T.cardRadius > 10 ? 14 : 6, fontFamily: T.bodyFont },
     }}>
-      <div style={{ minHeight: '100vh', background: bg, padding: '16px 20px' }}>
+      <div style={{ minHeight: '100vh', background: bg, padding: '16px 14px', fontFamily: T.bodyFont }}>
+        <div style={{ maxWidth: 560, margin: '0 auto', position: 'relative' }}>
 
-        {/* ── Header: brand + section nav pills + live/theme/logout ── */}
+        {/* ── Header: brand + theme switcher + section nav pills + live/logout ── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginBottom: 20, paddingBottom: 12, flexWrap: 'wrap', gap: 10,
           borderBottom: `1px solid ${cardBd}`,
         }}>
-          <span style={{ fontSize: 18, fontWeight: 800, color: accent, display: 'flex', alignItems: 'center', gap: 8 }}>
-            💧 Tank Monitor
+          <span style={{
+            fontSize: 14, fontWeight: 700, color: accent, display: 'flex', alignItems: 'center', gap: 8,
+            fontFamily: T.headingFont, letterSpacing: 1.5, textShadow: `0 0 12px ${accent}90`,
+          }}>
+            <span style={{ width: 8, height: 8, background: accent, boxShadow: `0 0 10px ${accent}`, clipPath: 'polygon(50% 0,100% 50%,50% 100%,0 50%)' }} />
+            TANK MONITOR
           </span>
           <div style={{
-            display: 'flex', gap: 2, background: darkMode ? '#17171b' : '#eceCF2',
-            border: `1px solid ${cardBd}`, borderRadius: 12, padding: 3,
+            display: 'flex', gap: 2, background: cardBg,
+            border: `1px solid ${cardBd}`, borderRadius: 10, padding: 3,
           }}>
             {(['dashboard', 'history', 'settings', 'system'] as const).map(sec => (
               <a
                 key={sec}
                 href={`#${sec}`}
                 style={{
-                  padding: '6px 13px', borderRadius: 9, fontSize: 11.5, fontWeight: 700,
-                  textTransform: 'capitalize', textDecoration: 'none',
-                  color: darkMode ? '#e5e5ea' : '#3a3a45',
+                  padding: '6px 11px', borderRadius: 7, fontSize: 10, fontWeight: 700,
+                  textTransform: 'uppercase', textDecoration: 'none', letterSpacing: 0.5,
+                  color: labelClr, fontFamily: T.monoFont,
                 }}
               >
                 {sec}
               </a>
             ))}
           </div>
-          <Space size={12}>
+          <Space size={10}>
             {s?.time && (
-              <Text style={{ color: labelClr, fontSize: 12 }}>
+              <Text style={{ color: labelClr, fontSize: 11.5, fontFamily: T.monoFont }}>
                 <ClockCircleOutlined /> {to12hr(s.time)}
               </Text>
             )}
             <Badge
               status={connected ? 'success' : 'error'}
-              text={<span style={{ color: labelClr, fontSize: 12 }}>{connected ? 'Live' : 'Offline'}</span>}
+              text={<span style={{ color: labelClr, fontSize: 11.5, fontFamily: T.monoFont, letterSpacing: 0.5 }}>{connected ? 'LIVE' : 'OFFLINE'}</span>}
             />
-            <Button
-              size="small"
-              type="text"
-              icon={darkMode ? <BulbFilled style={{ color: '#faad14' }} /> : <BulbOutlined />}
-              onClick={() => setDarkMode(d => !d)}
-              title={darkMode ? 'Switch to Light' : 'Switch to Dark'}
-            >
-              {darkMode ? 'Light' : 'Dark'}
-            </Button>
+            <div style={{ display: 'flex', gap: 2, background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 8, padding: 2 }}>
+              {(Object.keys(THEMES) as ThemeName[]).map(k => (
+                <button
+                  key={k}
+                  onClick={() => setThemeName(k)}
+                  style={{
+                    border: 'none', cursor: 'pointer', padding: '4px 10px', borderRadius: 6,
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+                    fontFamily: T.monoFont,
+                    background: themeName === k ? THEMES[k].accent : 'transparent',
+                    color: themeName === k ? '#04060d' : labelClr,
+                  }}
+                  title={`Switch to ${THEMES[k].label} theme`}
+                >
+                  {THEMES[k].label}
+                </button>
+              ))}
+            </div>
             <Button
               size="small"
               type="text"
@@ -616,26 +719,56 @@ export default function App() {
           />
         )}
 
-        {/* ── Dashboard: bento grid — hero tank card + compact stat tiles ── */}
-        <div id="dashboard" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridTemplateRows: 'auto auto', gap: 12, marginBottom: 12 }}>
-          <div style={{ ...heroCardStyle, gridRow: 'span 2', padding: 18 }}>
-            <div style={{ fontSize: 10.5, color: accent, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>
-              Tanks
+        {/* ── Dashboard: hero orbit ring for Overhead + compact row for Underground + stat tiles ── */}
+        <div id="dashboard" style={{ marginBottom: 12 }}>
+          <div style={{ ...heroCardStyle, padding: 22, textAlign: 'center', position: 'relative', overflow: 'hidden', marginBottom: 12 }}>
+            {T.scanline && (
+              <div style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none', opacity: .5,
+                background: 'linear-gradient(180deg,transparent,rgba(94,234,212,.06) 50%,transparent)',
+              }} />
+            )}
+            <div style={{
+              fontSize: 10, color: accent, fontWeight: 700, letterSpacing: 2, textTransform: 'uppercase',
+              fontFamily: T.monoFont, marginBottom: 14, position: 'relative',
+            }}>
+              Overhead Tank
             </div>
-            <BentoTankRow
-              title="Overhead Tank"
-              tankState={s?.oh_state ?? ''}
-              motorOn={s?.oh_motor ?? false}
-              onOn={()  => ctrl({ cmd: 'oh_on'  })}
-              onOff={() => ctrl({ cmd: 'oh_off' })}
-              darkMode={darkMode}
-              divider={false}
-            />
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              {themeName === 'quantum' && (
+                <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: `1px dashed ${accent}55` }} />
+              )}
+              <TankCircle
+                state={s?.oh_state ?? ''}
+                darkMode={darkMode}
+                accent={accent}
+                trackColor={themeName === 'hud' ? 'rgba(94,234,212,.10)' : 'rgba(255,255,255,.08)'}
+                size={140}
+              />
+            </div>
+            <div style={{ fontSize: 13, color: T.textClr, fontFamily: T.bodyFont, marginTop: 4 }}>
+              Motor {s?.oh_motor ? 'ON' : 'OFF'}
+            </div>
             {s?.tx_lost && s?.oh_last_known && s.oh_last_known !== 'UNKNOWN' && (
-              <div style={{ fontSize: 10.5, color: '#fa8c16', marginTop: 4, marginLeft: 64 }}>
+              <div style={{ fontSize: 10.5, color: '#fa8c16', marginTop: 6, fontFamily: T.monoFont }}>
                 Last known: {s.oh_last_known}
               </div>
             )}
+            <div style={{ marginTop: 14, position: 'relative' }}>
+              <Button
+                style={
+                  s?.oh_motor
+                    ? { borderColor: '#ff6b6b', color: '#ff6b6b', fontFamily: T.monoFont, fontWeight: 700, letterSpacing: 1 }
+                    : { background: accent, borderColor: accent, color: '#04060d', fontFamily: T.monoFont, fontWeight: 700, letterSpacing: 1 }
+                }
+                onClick={() => ctrl({ cmd: s?.oh_motor ? 'oh_off' : 'oh_on' })}
+              >
+                {s?.oh_motor ? 'POWER OFF' : 'POWER ON'}
+              </Button>
+            </div>
+          </div>
+
+          <div style={{ ...statCardStyle, padding: 16, marginBottom: 12 }}>
             <BentoTankRow
               title="Underground Tank"
               tankState={s?.ug_state ?? ''}
@@ -643,25 +776,31 @@ export default function App() {
               onOn={()  => ctrl({ cmd: 'ug_on'  })}
               onOff={() => ctrl({ cmd: 'ug_off' })}
               darkMode={darkMode}
-              divider={true}
+              divider={false}
+              accent={accent}
+              labelFont={T.monoFont}
+              nameFont={T.bodyFont}
             />
           </div>
-          <div style={{ ...statCardStyle, padding: 16 }}>
-            <div style={{ fontSize: 10, color: labelClr, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>System</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: s?.tx_lost ? '#fa8c16' : '#34d399', marginTop: 8 }}>
-              {s?.tx_lost ? 'Signal Lost' : 'OK'}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ ...statCardStyle, padding: 16 }}>
+              <div style={cardTitleStyle}>System</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: s?.tx_lost ? '#fa8c16' : '#34d399', marginTop: 8, fontFamily: T.headingFont }}>
+                {s?.tx_lost ? 'ALERT' : 'NOMINAL'}
+              </div>
+              <div style={{ fontSize: 10.5, color: labelClr, marginTop: 4, fontFamily: T.monoFont }}>
+                LoRa {s?.lora_ok ? 'OK' : 'LOST'} · WiFi {s?.wifi_rssi ?? '—'}dBm
+              </div>
             </div>
-            <div style={{ fontSize: 10.5, color: darkMode ? '#4f4f5a' : '#a0a0aa', marginTop: 2 }}>
-              LoRa {s?.lora_ok ? 'OK' : 'Lost'} · WiFi {s?.wifi_rssi ?? '—'}dBm
-            </div>
-          </div>
-          <div style={{ ...statCardStyle, padding: 16 }}>
-            <div style={{ fontSize: 10, color: labelClr, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Uptime</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: darkMode ? '#fff' : '#1a1a2e', marginTop: 8 }}>
-              {s ? formatUptime(s.uptime_s) : '—'}
-            </div>
-            <div style={{ fontSize: 10.5, color: darkMode ? '#4f4f5a' : '#a0a0aa', marginTop: 2 }}>
-              FW v{s?.fw ?? '—'}
+            <div style={{ ...statCardStyle, padding: 16 }}>
+              <div style={cardTitleStyle}>Uptime</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: T.textClr, marginTop: 8, fontFamily: T.headingFont }}>
+                {s ? formatUptime(s.uptime_s) : '—'}
+              </div>
+              <div style={{ fontSize: 10.5, color: labelClr, marginTop: 4, fontFamily: T.monoFont }}>
+                FW v{s?.fw ?? '—'}
+              </div>
             </div>
           </div>
         </div>
@@ -669,8 +808,8 @@ export default function App() {
         {/* ── Schedules ── */}
         <Card
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Motor Scheduler</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}>Motor Scheduler</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
           extra={
             <Space>
               <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
@@ -705,8 +844,8 @@ export default function App() {
         <Card
           id="settings"
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Settings</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}>Settings</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
         >
           {([
             ['OH Display Only',          'oh_disp_only',  s?.oh_disp_only],
@@ -876,8 +1015,8 @@ export default function App() {
         {/* ── Actions ── */}
         <Card
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Actions</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}>Actions</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
         >
           <Space wrap>
             <Button
@@ -903,8 +1042,8 @@ export default function App() {
         {/* ── Firmware OTA ── */}
         <Card
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Firmware Update (OTA)</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}>Firmware Update (OTA)</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
         >
           {otaError && (
             <Alert message={otaError} type="error" showIcon closable style={{ marginBottom: 10 }}
@@ -1021,8 +1160,8 @@ export default function App() {
         <Card
           id="history"
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}><HistoryOutlined style={{ marginRight: 6 }} />History</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}><HistoryOutlined style={{ marginRight: 6 }} />History</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
           extra={
             <Popconfirm
               title="Clear history?"
@@ -1062,8 +1201,8 @@ export default function App() {
         {/* ── Device Logs ── */}
         <Card
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Device Logs</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
+          title={<span style={cardTitleStyle}>Device Logs</span>}
+          style={{ ...cardStyle, marginBottom: 12 }}
           extra={
             <Space size={6}>
               <Select
@@ -1118,8 +1257,8 @@ export default function App() {
         <Card
           id="system"
           size="small"
-          title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>System</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20 }}
+          title={<span style={cardTitleStyle}>System</span>}
+          style={cardStyle}
         >
           {sysRows.map(([label, value]) => (
             <div key={label} style={{
@@ -1198,6 +1337,7 @@ export default function App() {
           </Form>
         </Modal>
 
+        </div>
       </div>
     </ConfigProvider>
   )
