@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import {
-  Alert, Badge, Button, Card, Col, ConfigProvider, DatePicker, Form, Input, InputNumber,
-  Modal, Popconfirm, Progress, Row, Select, Space, Switch, Table, Tag, TimePicker,
+  Alert, Badge, Button, Card, ConfigProvider, DatePicker, Form, Input, InputNumber,
+  Modal, Popconfirm, Progress, Select, Space, Switch, Table, Tag, TimePicker,
   Typography, Upload, theme as antTheme, type TableColumnsType,
 } from 'antd'
 import {
@@ -18,7 +18,7 @@ import { login, sendControl, fetchOtaStatus, uploadFirmware, triggerOta, trigger
 
 const { Text } = Typography
 
-const WEB_APP_VERSION = '2.6.0'
+const WEB_APP_VERSION = '2.7.0'
 
 // ---------------------------------------------------------------------------
 // Login page
@@ -48,22 +48,22 @@ function LoginPage({ onLogin }: LoginPageProps) {
   }
 
   return (
-    <ConfigProvider theme={{ algorithm: antTheme.darkAlgorithm }}>
+    <ConfigProvider theme={{ algorithm: antTheme.darkAlgorithm, token: { colorPrimary: '#6366f1', borderRadius: 12 } }}>
       <div style={{
-        minHeight: '100vh', background: '#141414',
+        minHeight: '100vh', background: '#0b0b0e',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 24,
       }}>
         <div style={{
-          background: '#1f1f1f', border: '1px solid #303030', borderRadius: 12,
+          background: '#131317', border: '1px solid #201f26', borderRadius: 20,
           padding: '32px 28px', width: '100%', maxWidth: 360,
         }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <div style={{ fontSize: 40 }}>💧</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#1890ff', marginTop: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#6366f1', marginTop: 8 }}>
               Tank Monitor
             </div>
-            <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: '#7a7a85', marginTop: 4 }}>
               Sign in to continue
             </div>
           </div>
@@ -136,28 +136,30 @@ function getNextSchedIdx(schedules: Schedule[], motor: string, currentTime: stri
 // SVG arc tank level circle (mirrors ESP32 webserver UI)
 // ---------------------------------------------------------------------------
 
-function TankCircle({ state, darkMode }: { state: string; darkMode: boolean }) {
-  const r    = 45
-  const circ = 2 * Math.PI * r  // ≈ 283
+function TankCircle({ state, darkMode, size = 110 }: { state: string; darkMode: boolean; size?: number }) {
+  const r    = size / 110 * 45
+  const circ = 2 * Math.PI * r  // ≈ 283 at size=110
 
   let pct   = 0
   let color = '#8c8c8c'
 
-  if      (state === 'FULL')  { pct = 1.0; color = '#52c41a' }
-  else if (state === 'HALF')  { pct = 0.6; color = '#1890ff' }
+  if      (state === 'FULL')  { pct = 1.0; color = '#6366f1' }
+  else if (state === 'HALF')  { pct = 0.6; color = '#6366f1' }
   else if (state === 'LOW')   { pct = 0.3; color = '#fa8c16' }
   else if (state === 'EMPTY') { pct = 0.0; color = '#ff4d4f' }
 
   const dash   = pct * circ
-  const arcBg  = darkMode ? '#303030' : '#e8e8e8'
+  const arcBg  = darkMode ? '#201f26' : '#e8e8e8'
+  const cx = size / 2, cy = size / 2
+  const strokeW = size / 110 * 9
 
   return (
-    <div style={{ position: 'relative', display: 'inline-block', width: 110, height: 110, marginBottom: 8 }}>
-      <svg width="110" height="110" viewBox="0 0 110 110" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="55" cy="55" r={r} fill="none" stroke={arcBg} strokeWidth={9} />
+    <div style={{ position: 'relative', display: 'inline-block', width: size, height: size, marginBottom: size >= 100 ? 8 : 0 }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={arcBg} strokeWidth={strokeW} />
         <circle
-          cx="55" cy="55" r={r} fill="none"
-          stroke={color} strokeWidth={9} strokeLinecap="round"
+          cx={cx} cy={cy} r={r} fill="none"
+          stroke={color} strokeWidth={strokeW} strokeLinecap="round"
           strokeDasharray={`${dash} ${circ}`}
           style={{ transition: 'stroke-dasharray 0.5s, stroke 0.5s' }}
         />
@@ -165,7 +167,7 @@ function TankCircle({ state, darkMode }: { state: string; darkMode: boolean }) {
       <div style={{
         position: 'absolute', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        fontSize: 13, fontWeight: 700, color,
+        fontSize: size >= 100 ? 13 : 11, fontWeight: 700, color,
         textAlign: 'center', lineHeight: 1.2,
       }}>
         {state || '--'}
@@ -175,71 +177,47 @@ function TankCircle({ state, darkMode }: { state: string; darkMode: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Motor status pill (mirrors ESP32 webserver UI)
+// Bento hero row: compact horizontal tank layout (ring + name + Power button)
+// used inside the Dashboard hero card, replacing the old side-by-side
+// TankCard pair with the denser "bento grid" look.
 // ---------------------------------------------------------------------------
 
-function MotorPill({ on, darkMode }: { on: boolean; darkMode: boolean }) {
-  const onBg  = darkMode ? '#162312' : '#f6ffed'
-  const onClr = '#52c41a'
-  const onBd  = darkMode ? '#274916' : '#b7eb8f'
-  const offBg = darkMode ? '#2a1215' : '#fff1f0'
-  const offClr = '#ff4d4f'
-  const offBd  = darkMode ? '#58181c' : '#ffa39e'
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
-      background: on ? onBg  : offBg,
-      color:      on ? onClr : offClr,
-      border:     `1px solid ${on ? onBd : offBd}`,
-    }}>
-      ● {on ? 'ON' : 'OFF'}
-    </span>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Per-tank card: circle + motor pill + ON/OFF buttons
-// ---------------------------------------------------------------------------
-
-interface TankCardProps {
+interface BentoTankRowProps {
   title:     string
   tankState: string
   motorOn:   boolean
   onOn:      () => void
   onOff:     () => void
   darkMode:  boolean
+  divider:   boolean
 }
 
-function TankCard({ title, tankState, motorOn, onOn, onOff, darkMode }: TankCardProps) {
-  const cardBg  = darkMode ? '#1f1f1f' : '#ffffff'
-  const cardBd  = darkMode ? '#303030' : '#d9d9d9'
-  const rowBg   = darkMode ? '#262626' : '#f5f5f5'
-  const labelCl = darkMode ? '#8c8c8c' : '#8c8c8c'
+function BentoTankRow({ title, tankState, motorOn, onOn, onOff, darkMode, divider }: BentoTankRowProps) {
+  const rowBd  = darkMode ? '#211f2c' : '#ece9f5'
+  const nameCl = darkMode ? '#ffffff' : '#1a1a2e'
+  const subCl  = darkMode ? '#7a7a85' : '#8a8a95'
   return (
     <div style={{
-      background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12,
-      padding: 16, textAlign: 'center',
+      display: 'flex', alignItems: 'center', gap: 12,
+      marginTop: divider ? 16 : 6, paddingTop: divider ? 14 : 0,
+      borderTop: divider ? `1px solid ${rowBd}` : 'none',
     }}>
-      <div style={{ fontSize: 11, color: labelCl, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 }}>
-        {title}
+      <TankCircle state={tankState} darkMode={darkMode} size={52} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: nameCl }}>{title}</div>
+        <div style={{ fontSize: 10.5, color: subCl, marginTop: 1 }}>
+          {tankState || '—'} · Motor {motorOn ? 'on' : 'off'}
+        </div>
       </div>
-      <TankCircle state={tankState} darkMode={darkMode} />
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: rowBg, borderRadius: 8, padding: '6px 12px', marginBottom: 10,
-      }}>
-        <span style={{ fontSize: 11, color: labelCl }}>Motor</span>
-        <MotorPill on={motorOn} darkMode={darkMode} />
-      </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        <Button
-          type="primary" size="small"
-          style={{ flex: 1, background: '#1890ff', borderColor: '#1890ff' }}
-          onClick={onOn}
-        >ON</Button>
-        <Button danger size="small" style={{ flex: 1 }} onClick={onOff}>OFF</Button>
-      </div>
+      <Button
+        size="small"
+        type={motorOn ? 'default' : 'primary'}
+        danger={motorOn}
+        style={!motorOn ? { background: '#6366f1', borderColor: '#6366f1' } : undefined}
+        onClick={motorOn ? onOff : onOn}
+      >
+        {motorOn ? 'Power Off' : 'Power On'}
+      </Button>
     </div>
   )
 }
@@ -541,26 +519,56 @@ export default function App() {
     ['Last update', lastUpdate ? lastUpdate.toLocaleTimeString() : '—'],
   ]
 
-  const bg       = darkMode ? '#141414' : '#f0f2f5'
-  const cardBg   = darkMode ? '#1f1f1f' : '#ffffff'
-  const cardBd   = darkMode ? '#303030' : '#d9d9d9'
-  const rowBd    = darkMode ? '#303030' : '#f0f0f0'
-  const labelClr = darkMode ? '#8c8c8c' : '#8c8c8c'
+  const bg       = darkMode ? '#0b0b0e' : '#f4f4f7'
+  const cardBg   = darkMode ? '#131317' : '#ffffff'
+  const cardBd   = darkMode ? '#201f26' : '#e6e6ea'
+  const rowBd    = darkMode ? '#1c1b22' : '#eeeef2'
+  const labelClr = darkMode ? '#7a7a85' : '#6b6b78'
+  const accent   = '#6366f1'
+  const heroCardStyle: React.CSSProperties = {
+    background: darkMode ? 'linear-gradient(160deg,#171522,#101014)' : 'linear-gradient(160deg,#f0f0fb,#ffffff)',
+    border: `1px solid ${darkMode ? '#262435' : '#e2e0f5'}`,
+    borderRadius: 20,
+  }
+  const statCardStyle: React.CSSProperties = {
+    background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20,
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <ConfigProvider theme={{ algorithm: darkMode ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm }}>
+    <ConfigProvider theme={{
+      algorithm: darkMode ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
+      token: { colorPrimary: accent, borderRadius: 12 },
+    }}>
       <div style={{ minHeight: '100vh', background: bg, padding: '16px 20px' }}>
 
-        {/* ── Header ── */}
+        {/* ── Header: brand + section nav pills + live/theme/logout ── */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 20, paddingBottom: 12,
+          marginBottom: 20, paddingBottom: 12, flexWrap: 'wrap', gap: 10,
           borderBottom: `1px solid ${cardBd}`,
         }}>
-          <span style={{ fontSize: 18, fontWeight: 700, color: '#1890ff' }}>
+          <span style={{ fontSize: 18, fontWeight: 800, color: accent, display: 'flex', alignItems: 'center', gap: 8 }}>
             💧 Tank Monitor
           </span>
+          <div style={{
+            display: 'flex', gap: 2, background: darkMode ? '#17171b' : '#eceCF2',
+            border: `1px solid ${cardBd}`, borderRadius: 12, padding: 3,
+          }}>
+            {(['dashboard', 'history', 'settings', 'system'] as const).map(sec => (
+              <a
+                key={sec}
+                href={`#${sec}`}
+                style={{
+                  padding: '6px 13px', borderRadius: 9, fontSize: 11.5, fontWeight: 700,
+                  textTransform: 'capitalize', textDecoration: 'none',
+                  color: darkMode ? '#e5e5ea' : '#3a3a45',
+                }}
+              >
+                {sec}
+              </a>
+            ))}
+          </div>
           <Space size={12}>
             {s?.time && (
               <Text style={{ color: labelClr, fontSize: 12 }}>
@@ -608,40 +616,61 @@ export default function App() {
           />
         )}
 
-        {/* ── Tank Cards (2-column, mirrors ESP32 layout) ── */}
-        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
-          <Col xs={12}>
-            <TankCard
-              title="Underground Tank"
-              tankState={s?.ug_state ?? ''}
-              motorOn={s?.ug_motor ?? false}
-              onOn={()  => ctrl({ cmd: 'ug_on'  })}
-              onOff={() => ctrl({ cmd: 'ug_off' })}
-              darkMode={darkMode}
-            />
-          </Col>
-          <Col xs={12}>
-            <TankCard
+        {/* ── Dashboard: bento grid — hero tank card + compact stat tiles ── */}
+        <div id="dashboard" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridTemplateRows: 'auto auto', gap: 12, marginBottom: 12 }}>
+          <div style={{ ...heroCardStyle, gridRow: 'span 2', padding: 18 }}>
+            <div style={{ fontSize: 10.5, color: accent, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 4 }}>
+              Tanks
+            </div>
+            <BentoTankRow
               title="Overhead Tank"
               tankState={s?.oh_state ?? ''}
               motorOn={s?.oh_motor ?? false}
               onOn={()  => ctrl({ cmd: 'oh_on'  })}
               onOff={() => ctrl({ cmd: 'oh_off' })}
               darkMode={darkMode}
+              divider={false}
             />
             {s?.tx_lost && s?.oh_last_known && s.oh_last_known !== 'UNKNOWN' && (
-              <div style={{ textAlign: 'center', fontSize: 11, color: '#fa8c16', marginTop: 4 }}>
+              <div style={{ fontSize: 10.5, color: '#fa8c16', marginTop: 4, marginLeft: 64 }}>
                 Last known: {s.oh_last_known}
               </div>
             )}
-          </Col>
-        </Row>
+            <BentoTankRow
+              title="Underground Tank"
+              tankState={s?.ug_state ?? ''}
+              motorOn={s?.ug_motor ?? false}
+              onOn={()  => ctrl({ cmd: 'ug_on'  })}
+              onOff={() => ctrl({ cmd: 'ug_off' })}
+              darkMode={darkMode}
+              divider={true}
+            />
+          </div>
+          <div style={{ ...statCardStyle, padding: 16 }}>
+            <div style={{ fontSize: 10, color: labelClr, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>System</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s?.tx_lost ? '#fa8c16' : '#34d399', marginTop: 8 }}>
+              {s?.tx_lost ? 'Signal Lost' : 'OK'}
+            </div>
+            <div style={{ fontSize: 10.5, color: darkMode ? '#4f4f5a' : '#a0a0aa', marginTop: 2 }}>
+              LoRa {s?.lora_ok ? 'OK' : 'Lost'} · WiFi {s?.wifi_rssi ?? '—'}dBm
+            </div>
+          </div>
+          <div style={{ ...statCardStyle, padding: 16 }}>
+            <div style={{ fontSize: 10, color: labelClr, fontWeight: 700, letterSpacing: 0.4, textTransform: 'uppercase' }}>Uptime</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: darkMode ? '#fff' : '#1a1a2e', marginTop: 8 }}>
+              {s ? formatUptime(s.uptime_s) : '—'}
+            </div>
+            <div style={{ fontSize: 10.5, color: darkMode ? '#4f4f5a' : '#a0a0aa', marginTop: 2 }}>
+              FW v{s?.fw ?? '—'}
+            </div>
+          </div>
+        </div>
 
         {/* ── Schedules ── */}
         <Card
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Motor Scheduler</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
           extra={
             <Space>
               <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => setAddOpen(true)}>
@@ -674,9 +703,10 @@ export default function App() {
 
         {/* ── Settings ── */}
         <Card
+          id="settings"
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Settings</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
         >
           {([
             ['OH Display Only',          'oh_disp_only',  s?.oh_disp_only],
@@ -847,7 +877,7 @@ export default function App() {
         <Card
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Actions</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
         >
           <Space wrap>
             <Button
@@ -874,7 +904,7 @@ export default function App() {
         <Card
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Firmware Update (OTA)</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
         >
           {otaError && (
             <Alert message={otaError} type="error" showIcon closable style={{ marginBottom: 10 }}
@@ -989,9 +1019,10 @@ export default function App() {
 
         {/* ── History (date-range: day / week / month) ── */}
         <Card
+          id="history"
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}><HistoryOutlined style={{ marginRight: 6 }} />History</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
           extra={
             <Popconfirm
               title="Clear history?"
@@ -1032,7 +1063,7 @@ export default function App() {
         <Card
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>Device Logs</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12, marginBottom: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20, marginBottom: 12 }}
           extra={
             <Space size={6}>
               <Select
@@ -1085,9 +1116,10 @@ export default function App() {
 
         {/* ── System Info (bottom) ── */}
         <Card
+          id="system"
           size="small"
           title={<span style={{ fontSize: 11, color: labelClr, textTransform: 'uppercase', letterSpacing: 1 }}>System</span>}
-          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 12 }}
+          style={{ background: cardBg, border: `1px solid ${cardBd}`, borderRadius: 20 }}
         >
           {sysRows.map(([label, value]) => (
             <div key={label} style={{
